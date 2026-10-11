@@ -730,20 +730,14 @@
   overflow: visible;
 }
 .note-card-preview .markdown-preview .task-list {
-  padding-left: 2px;
+  padding-left: 18px;
   list-style: none;
 }
 .note-card-preview .markdown-preview .task-list li {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  position: relative;
+  display: list-item;
 }
 .note-card-preview .markdown-preview .task-list input {
-  position: static;
-  flex: 0 0 12px;
-  width: 12px;
-  height: 12px;
-  margin: 0;
   pointer-events: none;
   cursor: default;
 }
@@ -3178,7 +3172,7 @@
 }
 .note-card-preview .markdown-preview ul,
 .note-card-preview .markdown-preview ol {
-  padding-left: 14px;
+  padding-left: 18px;
   margin-bottom: 0;
 }
 .note-card-preview .markdown-preview li {
@@ -3379,14 +3373,14 @@
   cursor: default;
 }
 .editor-body-view .markdown-preview .task-list {
-  margin: 12px 0 18px;
+  margin: 0 0 18px;
   padding: 0 0 0 24px;
   list-style: none;
 }
 .editor-body-view .markdown-preview .task-list li {
   position: relative;
   display: list-item;
-  margin: 8px 0;
+  margin: 3px 0;
 }
 .editor-body-view .markdown-preview .task-checkbox {
   appearance: none;
@@ -3427,13 +3421,14 @@
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
-.note-card-preview .markdown-preview .task-checkbox {
+.note-card-preview .markdown-preview .task-list .task-checkbox {
   appearance: none;
   box-sizing: border-box;
-  position: static;
-  flex: 0 0 12px;
-  width: 12px;
-  height: 12px;
+  position: absolute;
+  left: -18px;
+  top: .3em;
+  width: 11px;
+  height: 11px;
   display: grid;
   place-items: center;
   margin: 0;
@@ -5290,6 +5285,12 @@
 .markdown-preview li {
   display: list-item;
   margin: 3px 0;
+}
+/* Adjacent task and ordinary lists share the normal item rhythm. */
+.markdown-preview ul:has(+ ul, + ol),
+.markdown-preview ol:has(+ ul, + ol),
+.editor-body-view .markdown-preview .task-list:has(+ ul, + ol) {
+  margin-bottom: 0;
 }
 .markdown-preview blockquote {
   margin: 0 0 16px;

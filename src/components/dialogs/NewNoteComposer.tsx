@@ -22,6 +22,7 @@ import type { NoteFolder } from "../../types/note";
 import { EditorToolbar, type MarkdownAction } from "../editor/EditorToolbar";
 import { applyMarkdownAction, continueMarkdownList } from "../editor/markdownFormatting";
 import { MarkdownPreview } from "../editor/MarkdownPreview";
+import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
 import { isMacOS } from "../../features/shortcuts/keyboardShortcuts";
 
 type NoteDraft = {
@@ -248,7 +249,9 @@ export function NewNoteComposer({
           />
           {preview ? (
             <div className="composer-content-preview">
-              <MarkdownPreview value={body} />
+              <MarkdownPreview value={body} onToggleTask={(lineIndex, checked) => {
+                setBody((current) => setMarkdownTaskCheckedAtLine(current, lineIndex, checked));
+              }} />
             </div>
           ) : (
             <textarea

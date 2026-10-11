@@ -106,7 +106,7 @@ export function MarkdownPreview({
   onToggleTask,
 }: {
   value: string;
-  onToggleTask?: (lineIndex: number) => void;
+  onToggleTask?: (lineIndex: number, checked: boolean) => void;
 }) {
   if (!value.trim())
     return (
@@ -118,13 +118,14 @@ export function MarkdownPreview({
     <div
       className="markdown-preview"
       dangerouslySetInnerHTML={{ __html: markdownToHtml(value, Boolean(onToggleTask)) }}
-      onChange={(event) => {
+      onClick={(event) => {
         const checkbox = (event.target as HTMLElement).closest<HTMLInputElement>(
           ".task-checkbox[data-task-line]",
         );
         if (!checkbox || !onToggleTask) return;
+        event.stopPropagation();
         const lineIndex = Number(checkbox.dataset.taskLine);
-        if (Number.isInteger(lineIndex)) onToggleTask(lineIndex);
+        if (Number.isInteger(lineIndex)) onToggleTask(lineIndex, checkbox.checked);
       }}
     />
   );

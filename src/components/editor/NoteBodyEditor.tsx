@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { Pencil } from "lucide-react";
 import { continueMarkdownList } from "./markdownFormatting";
+import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
 
 export function NoteBodyEditor({
   value,
@@ -32,14 +33,9 @@ export function NoteBodyEditor({
     onKeyDown(event);
     if (!readOnly) continueMarkdownList(event, onChange);
   };
-  const toggleTask = (lineIndex: number) => {
+  const toggleTask = (lineIndex: number, checked: boolean) => {
     if (readOnly) return;
-    const lines = value.split("\n");
-    const line = lines[lineIndex];
-    const task = line?.match(/^(\s*[-*+]\s+\[)([ xX])(\]\s+.*)$/);
-    if (!task) return;
-    lines[lineIndex] = `${task[1]}${task[2].toLowerCase() === "x" ? " " : "x"}${task[3]}`;
-    onChange(lines.join("\n"));
+    onChange(setMarkdownTaskCheckedAtLine(value, lineIndex, checked));
   };
   return (
     <div className="editor-scroll">
