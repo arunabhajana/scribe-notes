@@ -6304,3 +6304,85 @@
     animation: none;
   }
 }
+
+/* Provider sign-in and profile completion. */
+.auth-social-buttons {
+  display: grid;
+  gap: 9px;
+  margin-top: 22px;
+}
+.auth-social-buttons button {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 10px 15px;
+  border: 1px solid var(--auth-border);
+  border-radius: 9px;
+  color: var(--auth-text);
+  background: var(--auth-raised);
+  font: 600 12px/1.4 "DM Sans", "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+.auth-social-buttons button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.auth-social-buttons button:disabled { opacity: .5; cursor: default; }
+.auth-social-buttons button:focus-visible, .auth-back-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.auth-oauth-pending {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--auth-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.auth-back-button {
+  padding: 5px 0;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.auth-profile-screen { display: grid; place-items: center; }
+.auth-profile-screen .auth-panel {
+  box-sizing: border-box;
+  width: min(430px, 100%);
+  padding: 28px;
+  border: 1px solid var(--auth-border);
+  border-radius: 18px;
+  background: var(--auth-panel);
+}
+
+/* Shared async feedback */
+.loading-spinner { flex: none; color: var(--accent); animation: loading-spin .8s linear infinite; }
+@keyframes loading-spin { to { transform: rotate(360deg); } }
+.titlebar { position: relative; }
+.titlebar-loading-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; pointer-events: none; }
+.titlebar-loading-bar::after { content: ""; display: block; width: 30%; height: 100%; background: var(--accent); animation: loading-progress 1.5s ease-in-out infinite; }
+@keyframes loading-progress { from { transform: translateX(-100%); } to { transform: translateX(440%); } }
+.notes-skeleton { width: 100%; display: grid; gap: 9px; }
+.skeleton-card { padding: 16px 13px; border-radius: 10px; background: var(--surface-2); display: grid; gap: 11px; }
+.skeleton-block { display: block; width: 100%; height: 10px; border-radius: 5px; background: linear-gradient(100deg, var(--surface-3) 25%, color-mix(in srgb, var(--accent) 10%, var(--surface-3)) 45%, var(--surface-3) 65%); background-size: 240% 100%; animation: skeleton-shimmer 1.6s ease-in-out infinite; }
+.skeleton-title { width: 62%; height: 15px; margin-bottom: 5px; }
+.skeleton-short { width: 77%; }
+.skeleton-meta { width: 25%; height: 8px; margin-top: 8px; }
+.editor-skeleton { padding: 36px; gap: 17px; }
+.editor-skeleton .skeleton-title { width: 42%; height: 28px; margin-bottom: 24px; }
+@keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.status-toast-stack { position: fixed; z-index: 10001; right: 20px; bottom: 20px; width: min(410px, calc(100vw - 40px)); display: grid; gap: 10px; pointer-events: none; }
+.status-toast { position: relative; display: flex; align-items: flex-start; gap: 11px; padding: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-left: 3px solid var(--accent); border-radius: 12px; color: var(--text); background: var(--surface-2); box-shadow: 0 8px 28px #0003; font-size: 12px; line-height: 1.5; pointer-events: auto; animation: toast-appear .18s ease-out both; }
+.status-toast-icon { flex: none; color: var(--accent); padding-top: 1px; }
+.status-toast > span:nth-child(2) { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.status-toast button { flex: none; padding: 2px; border: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
+.status-toast button:hover { color: var(--accent); }
+@keyframes toast-appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner, .skeleton-block, .titlebar-loading-bar::after { animation: none; }
+  .status-toast { animation-duration: .01ms; }
+}

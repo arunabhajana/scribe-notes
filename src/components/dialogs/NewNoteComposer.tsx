@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import type { NoteFolder } from "../../types/note";
 import { EditorToolbar, type MarkdownAction } from "../editor/EditorToolbar";
-import { applyMarkdownAction } from "../editor/markdownFormatting";
+import { applyMarkdownAction, continueMarkdownList } from "../editor/markdownFormatting";
 import { MarkdownPreview } from "../editor/MarkdownPreview";
 import { isMacOS } from "../../features/shortcuts/keyboardShortcuts";
 
@@ -104,6 +104,7 @@ export function NewNoteComposer({
   const handleFormattingKeyDown = (
     event: ReactKeyboardEvent<HTMLTextAreaElement>,
   ) => {
+    continueMarkdownList(event, setBody);
     if (!(isMacOS() ? event.metaKey : event.ctrlKey)) return;
     const key = event.key.toLowerCase();
     const action: MarkdownAction | null =

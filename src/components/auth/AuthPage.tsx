@@ -10,6 +10,9 @@ import {
   UserRound,
 } from "lucide-react";
 import { Icon } from "../Icon";
+import { SocialSignInButtons } from "./SocialSignInButtons";
+import { LoadingSpinner } from "../feedback/LoadingFeedback";
+import type { SocialProvider } from "../../hooks/useAuth";
 
 type AuthMode = "signin" | "signup";
 
@@ -20,6 +23,9 @@ export function AuthPage({
   callbackError,
   notice,
   onAuthenticated,
+  onProviderSignIn,
+  oauthPending,
+  onCancelProviderSignIn,
 }: {
   configured: boolean;
   onSignIn: (email: string, password: string) => Promise<string | null>;
@@ -31,6 +37,9 @@ export function AuthPage({
   callbackError: string;
   notice: string;
   onAuthenticated: () => void;
+  onProviderSignIn: (provider: SocialProvider) => Promise<string | null>;
+  oauthPending: SocialProvider | null;
+  onCancelProviderSignIn: () => void;
 }) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [displayName, setDisplayName] = useState("");
@@ -42,6 +51,17 @@ export function AuthPage({
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const isSignUp = mode === "signup";
+  const signInWithProvider = async (provider: SocialProvider) => {
+    setError("");
+    setSubmitting(true);
+    try {
+      setError(await onProviderSignIn(provider) ?? "");
+    } catch {
+      setError("Could not start sign-in. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
@@ -51,6 +71,7 @@ export function AuthPage({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting || oauthPending) return;
     setError("");
     if (isSignUp && password !== confirmPassword) {
       setError("Your passwords do not match.");
@@ -215,6 +236,17 @@ export function AuthPage({
                     {notice}
                   </div>
                 )}
+                <SocialSignInButtons
+                  disabled={submitting || !configured || Boolean(oauthPending)}
+                  onSignIn={(provider) => void signInWithProvider(provider)}
+                />
+                {oauthPending && (
+                  <div className="auth-oauth-pending" role="status">
+                    <LoadingSpinner />
+                    <span>Finish signing in with {oauthPending === "google" ? "Google" : "GitHub"} in your browser, then return to Scribe.</span>
+                    <button type="button" className="auth-back-button" disabled={submitting} onClick={onCancelProviderSignIn}>Back to sign in</button>
+                  </div>
+                )}
                 <div className="auth-divider">
                   <span />
                   {isSignUp ? "create with email" : "continue with email"}
@@ -319,7 +351,7 @@ export function AuthPage({
                   <button
                     type="submit"
                     className="auth-submit"
-                    disabled={submitting || !configured}
+                    disabled={submitting || !configured || Boolean(oauthPending)}
                   >
                     {submitting
                       ? isSignUp
@@ -328,7 +360,7 @@ export function AuthPage({
                       : isSignUp
                         ? "Create account"
                         : "Sign in"}
-                    <ArrowRight size={15} />
+                    {submitting ? <LoadingSpinner /> : <ArrowRight size={15} />}
                   </button>
                 </form>
                 <div className="auth-mode-switch">

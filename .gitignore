@@ -39,3 +39,6 @@ Desktop.ini
 
 # Existing project-local tool data
 .sf/
+
+# Documents
+docs/

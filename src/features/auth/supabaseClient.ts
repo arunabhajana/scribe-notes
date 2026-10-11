@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { isTauri } from "@tauri-apps/api/core";
 
 export const authStorageKey = "com.scribe.notes.supabase.auth";
 
@@ -16,7 +17,8 @@ export const supabase = supabaseConfigured
   ? createClient(supabaseUrl!, supabasePublishableKey!, {
       auth: {
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: !isTauri(),
+        flowType: "pkce",
         persistSession: true,
         storageKey: authStorageKey,
       },

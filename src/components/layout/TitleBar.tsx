@@ -69,6 +69,7 @@ export function TitleBar({
       onDoubleClick={toggleMaximize}
       inert={inert}
     >
+      {syncStatus === "syncing" && <span className="titlebar-loading-bar" aria-hidden="true" />}
       <div className="titlebar-leading" data-tauri-drag-region>
         <span className={`titlebar-status-dot status-${syncStatus}`} />
         <span

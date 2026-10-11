@@ -1,4 +1,36 @@
 import type { MarkdownAction } from "./EditorToolbar";
+import type { KeyboardEvent } from "react";
+
+export function continueMarkdownList(event: KeyboardEvent<HTMLTextAreaElement>, onChange: (value: string) => void) {
+  if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented || event.nativeEvent.isComposing) return;
+  const input = event.currentTarget;
+  const value = input.value;
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const lineStart = start === 0 ? 0 : value.lastIndexOf("\n", start - 1) + 1;
+  const lineEndIndex = value.indexOf("\n", start);
+  const lineEnd = lineEndIndex < 0 ? value.length : lineEndIndex;
+  const line = value.slice(lineStart, lineEnd);
+  const match = line.match(/^([ \t]*)([-*+]|(\d+)([.)]))[ \t]+(?:\[([ xX])\][ \t]+)?(.*)$/);
+  if (!match || start < lineStart + match[0].length - match[6].length) return;
+  event.preventDefault();
+  let next: string;
+  let caret: number;
+  if (!match[6].trim()) {
+    next = value.slice(0, lineStart) + match[1] + value.slice(lineEnd);
+    caret = lineStart + match[1].length;
+  } else {
+    const marker = match[3] ? `${Number(match[3]) + 1}${match[4]}` : match[2];
+    const prefix = `\n${match[1]}${marker} ${match[5] !== undefined ? "[ ] " : ""}`;
+    next = value.slice(0, start) + prefix + value.slice(end);
+    caret = start + prefix.length;
+  }
+  onChange(next);
+  requestAnimationFrame(() => {
+    if (!input.isConnected) return;
+    input.setSelectionRange(caret, caret);
+  });
+}
 
 const inlineDelimiters: Partial<Record<MarkdownAction, [string, string]>> = {
   bold: ["**", "**"],

@@ -3,6 +3,7 @@ import type { NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
 import { EmptyNotes } from "./EmptyNotes";
 import { NoteCard } from "./NoteCard";
+import { NotesSkeleton } from "../feedback/LoadingFeedback";
 import {
   formatShortcut,
   type ShortcutBindings,
@@ -21,6 +22,7 @@ export function NotesPane({
   onCreateNote,
   shortcuts,
   syncStatus,
+  loading = false,
 }: {
   notes: Note[];
   folders: NoteFolder[];
@@ -34,6 +36,7 @@ export function NotesPane({
   onCreateNote: () => void;
   shortcuts: ShortcutBindings;
   syncStatus: "on-device" | "syncing" | "synced" | "offline" | "error";
+  loading?: boolean;
 }) {
   const title =
     section === "drafts"
@@ -51,7 +54,7 @@ export function NotesPane({
         <div>
           <h1>{title}</h1>
           <span className="pane-subtitle">
-            {notes.length} {notes.length === 1 ? "note" : "notes"}
+            {loading ? "Loading…" : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}
           </span>
         </div>
         <button
@@ -64,7 +67,7 @@ export function NotesPane({
         </button>
       </header>
       <div className="notes-scroll">
-        {notes.length === 0 ? (
+        {loading ? <NotesSkeleton /> : notes.length === 0 ? (
           <EmptyNotes
             search={search}
             isTrash={section === "trash"}

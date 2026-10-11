@@ -2,6 +2,7 @@ import { useEffect, type RefObject } from "react";
 import type { KeyboardEvent } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { Pencil } from "lucide-react";
+import { continueMarkdownList } from "./markdownFormatting";
 
 export function NoteBodyEditor({
   value,
@@ -29,25 +30,7 @@ export function NoteBodyEditor({
   }, [preview, readOnly, inputRef]);
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     onKeyDown(event);
-    if (event.key === "Enter" && !event.shiftKey && !event.defaultPrevented) {
-      const input = event.currentTarget;
-      const currentLineStart = value.lastIndexOf("\n", input.selectionStart - 1) + 1;
-      const currentLineEnd = value.indexOf("\n", input.selectionStart);
-      const currentLine = value.slice(currentLineStart, currentLineEnd < 0 ? value.length : currentLineEnd);
-      const listPrefix = currentLine.match(/^(\s*)([-*+]\s+|\d+[.)]\s+)$/);
-      if (listPrefix) {
-        event.preventDefault();
-        const before = value.slice(0, currentLineStart);
-        const after = value.slice(currentLineEnd < 0 ? value.length : currentLineEnd + 1);
-        const next = `${before}${listPrefix[1]}${after}`;
-        onChange(next);
-        requestAnimationFrame(() => {
-          const caret = before.length + listPrefix[1].length;
-          input.focus();
-          input.setSelectionRange(caret, caret);
-        });
-      }
-    }
+    if (!readOnly) continueMarkdownList(event, onChange);
   };
   const toggleTask = (lineIndex: number) => {
     if (readOnly) return;

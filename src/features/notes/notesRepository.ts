@@ -6,6 +6,7 @@ import type {
   NoteFolder,
 } from "../../types/note";
 import { supabase } from "../auth/supabaseClient";
+import { displayNameFromUser } from "../auth/accountProfile";
 import { documentToMarkdown, markdownToDocument } from "./richTextDocument";
 
 type FolderRow = {
@@ -177,18 +178,12 @@ export const notesRepository = {
     const client = requireClient();
     const userId = requireUserId(user);
     const metadata = user.user_metadata as Record<string, unknown>;
-    const displayName =
-      [
-        metadata.display_name,
-        metadata.full_name,
-        metadata.name,
-        metadata.username,
-      ]
-        .find(
-          (value): value is string =>
-            typeof value === "string" && value.trim().length > 0,
-        )
-        ?.trim() ?? null;
+    const displayName = displayNameFromUser(user);
+    if (!displayName) {
+      const existing = await query(client.from("profiles").select("display_name")
+        .eq("user_id", userId).maybeSingle());
+      return existing?.display_name ?? null;
+    }
     const profile = await query(
       client
         .from("profiles")

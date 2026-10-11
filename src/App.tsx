@@ -9,6 +9,8 @@ import { notesRepository } from "./features/notes/notesRepository";
 import type { Note } from "./types/note";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { AuthPage } from "./components/auth/AuthPage";
+import { CompleteProfile } from "./components/auth/CompleteProfile";
+import { EditorSkeleton, LoadingSpinner, SyncFeedback } from "./components/feedback/LoadingFeedback";
 import { useAuth } from "./hooks/useAuth";
 import { profileFromUser } from "./features/auth/accountProfile";
 import type { AccentColor } from "./features/settings/accentColors";
@@ -35,7 +37,7 @@ function App() {
   const [isDark, setIsDark] = useState(
     () => localStorage.getItem("scribe-theme") !== "light",
   );
-  const [profileName, setProfileName] = useState<string | null>(null);
+  const [loadedProfile, setLoadedProfile] = useState<{ userId: string; name: string | null } | null>(null);
   const [fontFamily, setFontFamily] = useState(
     () => localStorage.getItem("scribe-font-family") ?? "DM Sans",
   );
@@ -66,7 +68,7 @@ function App() {
       .loadProfileName(auth.user)
       .then((name) => {
         if (!active) return;
-        setProfileName(name);
+        setLoadedProfile({ userId: auth.user!.id, name });
       })
       .catch(() => undefined);
     return () => {
@@ -121,7 +123,7 @@ function App() {
     : { displayName: "Scribe user", email: "" };
   const accountProfile = {
     ...fallbackProfile,
-    displayName: profileName ?? fallbackProfile.displayName,
+    displayName: (loadedProfile?.userId === auth.user?.id ? loadedProfile?.name : null) ?? fallbackProfile.displayName,
   };
 
   const changeShortcuts = (value: ShortcutBindings) => {
@@ -227,7 +229,7 @@ function App() {
           className="auth-screen auth-loading"
           aria-label="Restoring session"
         >
-          <span className="auth-online-dot" />
+          <LoadingSpinner />
           <span>Restoring your session…</span>
         </main>
       </div>
@@ -252,13 +254,23 @@ function App() {
           callbackError={auth.authCallbackError}
           notice={auth.authNotice}
           onAuthenticated={() => setPage("notes")}
+          onProviderSignIn={auth.signInWithProvider}
+          oauthPending={auth.oauthPending}
+          onCancelProviderSignIn={auth.cancelProviderSignIn}
         />
+      </div>
+    );
+  if (auth.needsDisplayName)
+    return (
+      <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
+        <TitleBar dark={isDark} onToggleTheme={() => changeTheme(!isDark)} />
+        <CompleteProfile onSave={auth.completeDisplayName} onSignOut={auth.signOut} />
       </div>
     );
   if (page === "preferences")
     return (
       <div
-        className="desktop-frame"
+        className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}
         style={
           { "--accent": accentColors[accent].color } as React.CSSProperties
         }
@@ -266,6 +278,7 @@ function App() {
         <TitleBar
           dark={isDark}
           onToggleTheme={() => setIsDark((value) => !value)}
+          syncStatus={notesState.syncStatus}
         />
         <SettingsPage
           dark={isDark}
@@ -292,6 +305,7 @@ function App() {
             notesState.moveFolder("system:unfiled", offset)
           }
         />
+        <SyncFeedback error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
       </div>
     );
 
@@ -375,8 +389,9 @@ function App() {
           onCreateNote={openNewNote}
           shortcuts={shortcuts}
           syncStatus={notesState.syncStatus}
+          loading={notesState.loading && notesState.notes.length === 0}
         />
-        <EditorPane
+        {notesState.loading && notesState.notes.length === 0 ? <EditorSkeleton /> : <EditorPane
           note={notesState.selectedNote}
           folders={notesState.folders}
           onMoveToFolder={(noteId, folderId) =>
@@ -395,7 +410,7 @@ function App() {
           onDeleteNote={handleDeleteNote}
           pinShortcut={formatShortcut(shortcuts.togglePin)}
           newNoteShortcut={formatShortcut(shortcuts.newNote)}
-        />
+        />}
       </div>
       {isCreateFolderOpen && (
         <CreateFolderDialog
@@ -421,23 +436,7 @@ function App() {
           onModalActiveChange={setIsComposerModalActive}
         />
       )}
-      {notesState.error && (
-        <div className="sync-error" role="alert" key={notesState.error}>
-          <span>{notesState.error}</span>
-          <button
-            type="button"
-            aria-label="Dismiss database error"
-            onClick={() => notesState.clearError()}
-          >
-            ×
-          </button>
-        </div>
-      )}
-      {notesState.loading && (
-        <div className="sync-loading" role="status">
-          Loading your notes…
-        </div>
-      )}
+      <SyncFeedback error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
     </main>
   );
 }
