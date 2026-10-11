@@ -44,6 +44,7 @@ export function TooltipLayer() {
 
   useEffect(() => {
     let timer = 0;
+    let activeTarget: Element | null = null;
     const show = (target: Element) => {
       const text = target.getAttribute("data-tooltip");
       if (!text) return;
@@ -60,25 +61,27 @@ export function TooltipLayer() {
         placement: collapsedSidebar && rect.right + 131 <= window.innerWidth - 8 ? "right" : "top",
       });
     };
-    const schedule = (event: Event) => {
-      const target = (event.target as Element | null)?.closest(
-        "[data-tooltip]",
-      );
-      if (!target) return;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => show(target), 350);
-    };
     const hide = () => {
       window.clearTimeout(timer);
+      activeTarget = null;
       setTooltip(null);
     };
+    const schedule = (event: Event) => {
+      const target = (event.target as Element | null)?.closest("[data-tooltip]");
+      if (!target) { hide(); return; }
+      if (target === activeTarget) return;
+      window.clearTimeout(timer);
+      setTooltip(null);
+      activeTarget = target;
+      timer = window.setTimeout(() => { if (target.isConnected) show(target); }, 250);
+    };
     const move = (event: Event) => {
-      const target = (event.target as Element | null)?.closest(
-        "[data-tooltip]",
-      );
-      if (!target) hide();
+      const next = (event as PointerEvent).relatedTarget;
+      if (next instanceof Node && activeTarget?.contains(next)) return;
+      hide();
     };
     document.addEventListener("pointerover", schedule);
+    document.addEventListener("pointermove", schedule);
     document.addEventListener("pointerout", move);
     document.addEventListener("focusin", schedule);
     document.addEventListener("focusout", hide);
@@ -87,6 +90,7 @@ export function TooltipLayer() {
     return () => {
       window.clearTimeout(timer);
       document.removeEventListener("pointerover", schedule);
+      document.removeEventListener("pointermove", schedule);
       document.removeEventListener("pointerout", move);
       document.removeEventListener("focusin", schedule);
       document.removeEventListener("focusout", hide);
@@ -99,8 +103,9 @@ export function TooltipLayer() {
   return createPortal(
     <div
       ref={tooltipElement}
+      role="tooltip"
       className={`app-tooltip app-tooltip-${tooltip.placement}`}
-      style={{ left: tooltip.left, top: tooltip.top }}
+      style={{ left: tooltip.left, top: tooltip.top, "--accent": getComputedStyle(tooltip.target).getPropertyValue("--accent") || "#37c994" } as React.CSSProperties}
     >
       {tooltip.text}
     </div>,

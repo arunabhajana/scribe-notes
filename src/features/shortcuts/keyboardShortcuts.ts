@@ -1,15 +1,15 @@
 export const shortcutActions = [
-  { id: "newNote", label: "New note", description: "Start a new note." },
-  { id: "search", label: "Search notes", description: "Focus note search." },
+  { id: "newNote", label: "New Note", description: "Start a new Note." },
+  { id: "search", label: "Search Notes", description: "Focus Note search." },
   {
     id: "allNotes",
-    label: "Show all notes",
+    label: "Show all Notes",
     description: "Switch to All Notes.",
   },
   { id: "drafts", label: "Show drafts", description: "Switch to Drafts." },
   {
     id: "pinnedNotes",
-    label: "Show pinned notes",
+    label: "Show pinned Notes",
     description: "Switch to Pinned Notes.",
   },
   { id: "trash", label: "Show trash", description: "Switch to Trash." },
@@ -20,8 +20,8 @@ export const shortcutActions = [
   },
   {
     id: "togglePin",
-    label: "Pin selected note",
-    description: "Toggle the selected note’s pinned state.",
+    label: "Pin selected Note",
+    description: "Toggle the selected Note’s pinned state.",
   },
   {
     id: "openSettings",

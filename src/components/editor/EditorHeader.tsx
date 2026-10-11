@@ -62,9 +62,9 @@ export function EditorHeader({
             className={`editor-title-view ${titleEditable ? "is-clickable" : ""}`}
             onClick={() => titleEditable && setTitleEditing(true)}
             disabled={!titleEditable}
-            aria-label={titleEditable ? "Edit note title" : undefined}
+            aria-label={titleEditable ? "Edit Note title" : undefined}
           >
-            <h1>{note.title || "Untitled note"}</h1>
+            <h1>{note.title || "Untitled Note"}</h1>
             {titleEditable && (
               <span className="editor-edit-hint" aria-hidden="true">
                 <Pencil size={14} />
@@ -83,7 +83,7 @@ export function EditorHeader({
               aria-label={`Folder: ${currentFolder?.name ?? "No folder"}`}
               aria-haspopup="listbox"
               aria-expanded={folderMenuOpen}
-              data-tooltip="Change note folder"
+              data-tooltip="Change Note folder"
               onClick={() => setFolderMenuOpen((open) => !open)}
             >
               <Folder
@@ -108,7 +108,7 @@ export function EditorHeader({
                 <div
                   className="editor-folder-menu"
                   role="listbox"
-                  aria-label="Move note to folder"
+                  aria-label="Move Note to folder"
                 >
                   <button
                     type="button"
@@ -169,7 +169,7 @@ export function EditorHeader({
           <button
             className={`action-button ${note.pinned ? "pinned" : ""}`}
             onClick={onTogglePinned}
-            data-tooltip={`${note.pinned ? "Unpin note" : "Pin note"} · ${pinShortcut}`}
+            data-tooltip={`${note.pinned ? "Unpin Note" : "Pin Note"} · ${pinShortcut}`}
           >
             <Icon name="pin" size={15} />
             <span>{note.pinned ? "Pinned" : "Pin"}</span>
@@ -179,7 +179,7 @@ export function EditorHeader({
           <button
             className="action-button"
             onClick={onRestore}
-            data-tooltip="Restore note"
+            data-tooltip="Restore Note"
           >
             <RotateCcw size={15} />
             <span>Restore</span>

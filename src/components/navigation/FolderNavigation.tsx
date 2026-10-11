@@ -73,10 +73,11 @@ export function FolderNavigation({
           const name = folder?.name ?? "Unfiled";
           return (
             <button
+              data-context-folder={id}
               key={id}
               {...dragProps(id)}
               data-tooltip={name}
-              aria-label={`${name}, ${folder ? (folderCounts[id] ?? 0) : unfiledCount} notes`}
+              aria-label={`${name}, ${folder ? (folderCounts[id] ?? 0) : unfiledCount} Notes`}
               onClick={() => onSelectFolder(id)}
             >
               <span

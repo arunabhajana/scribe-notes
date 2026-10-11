@@ -163,7 +163,7 @@ export function AuthPage({
             </span>
             <div>
               <strong>Make room for ideas.</strong>
-              <span>Your notes are waiting.</span>
+              <span>Your Notes are waiting.</span>
             </div>
             <span className="auth-note-spark">✦</span>
           </div>
@@ -222,7 +222,7 @@ export function AuthPage({
                     <ShieldCheck size={15} />
                     <span>
                       Sign-in is unavailable until a Supabase project is
-                      configured. Your notes stay protected.
+                      configured. Your Notes stay protected.
                     </span>
                   </div>
                 )}

@@ -54,16 +54,16 @@ export function NotesPane({
         <div>
           <h1>{title}</h1>
           <span className="pane-subtitle">
-            {loading ? "Loading…" : `${notes.length} ${notes.length === 1 ? "note" : "notes"}`}
+            {loading ? "Loading…" : `${notes.length} ${notes.length === 1 ? "Note" : "Notes"}`}
           </span>
         </div>
         <button
           className="new-note-button"
           onClick={onCreateNote}
-          data-tooltip={`New note · ${formatShortcut(shortcuts.newNote)}`}
+          data-tooltip={`New Note · ${formatShortcut(shortcuts.newNote)}`}
         >
           <Icon name="plus" size={16} />
-          <span>New note</span>
+          <span>New Note</span>
         </button>
       </header>
       <div className="notes-scroll">
@@ -103,7 +103,7 @@ export function NotesPane({
                   ? "Sync issue"
                   : "On this device"}
         </span>
-        <span title="Search notes">{formatShortcut(shortcuts.search)}</span>
+        <span title="Search Notes">{formatShortcut(shortcuts.search)}</span>
       </footer>
     </section>
   );

@@ -111,7 +111,7 @@ export function MarkdownPreview({
   if (!value.trim())
     return (
       <div className="markdown-preview-empty">
-        Your formatted note preview will appear here.
+        Your formatted Note preview will appear here.
       </div>
     );
   return (

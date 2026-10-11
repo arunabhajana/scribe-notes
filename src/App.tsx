@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useContextMenu, type ContextMenuItem } from "./components/context-menu/contextMenuState";
+import { useWritingPreferences } from "./features/settings/writingPreferences";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { CreateFolderDialog } from "./components/dialogs/CreateFolderDialog";
 import { EditorPane } from "./components/editor/EditorPane";
@@ -30,6 +32,8 @@ type AppPage = "notes" | "preferences";
 
 function App() {
   const auth = useAuth();
+  const openContextMenu = useContextMenu();
+  const [writingPreferences] = useWritingPreferences();
   const [offlineMode, setOfflineMode] = useState(
     () => localStorage.getItem("scribe-offline-mode") === "true",
   );
@@ -76,10 +80,17 @@ function App() {
     };
   }, [auth.user, auth.configured, offlineMode]);
 
-  const storageMetrics = useMemo(() => {
+  useEffect(() => {
+    document.documentElement.style.setProperty("--note-font-family", ({ "DM Sans": '"DM Sans", sans-serif', "System default": "system-ui, sans-serif", Georgia: "Georgia, serif", Monospace: "monospace" } as Record<string, string>)[fontFamily] ?? '"DM Sans", sans-serif');
+    document.documentElement.style.setProperty("--note-text-size", ({ Small: "12px", Medium: "13px", Large: "16px" } as Record<string, string>)[writingPreferences.size] ?? "13px");
+  }, [writingPreferences.size, fontFamily]);
+
+  const storageMetrics = (() => {
     const bytes = (value: unknown) =>
       new TextEncoder().encode(JSON.stringify(value)).length;
     const settingsBytes = [
+      "scribe-writing-preferences",
+      "scribe-font-family",
       "scribe-accent",
       "scribe-keyboard-shortcuts",
       "scribe-sidebar-collapsed",
@@ -96,7 +107,7 @@ function App() {
       folderBytes: bytes(notesState.folders),
       settingsBytes,
     };
-  }, [notesState.notes, notesState.folders]);
+  })();
 
   const changeAccent = (value: AccentColor) => {
     setAccent(value);
@@ -311,6 +322,40 @@ function App() {
 
   return (
     <main
+      onContextMenu={(event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest("input, textarea, [contenteditable=true]") || window.getSelection()?.toString()) return;
+        const noteId = target.closest<HTMLElement>("[data-context-note]")?.dataset.contextNote;
+        const folderId = target.closest<HTMLElement>("[data-context-folder]")?.dataset.contextFolder;
+        const note = notesState.notes.find((item) => item.id === noteId);
+        let items: ContextMenuItem[] = [];
+        if (note) {
+          items = [
+            ...(!target.closest(".editor-pane") ? [{ label: "Open Note", action: () => notesState.setSelectedId(note.id) }] : []),
+            { label: "Copy Markdown", action: () => navigator.clipboard.writeText(note.body) },
+          ];
+          if (note.deletedAt) items.push(
+            { label: "Restore Note", separator: true, action: () => handleRestoreNote(note.id) },
+            { label: "Delete permanently", danger: true, action: () => handleDeleteNote(note) },
+          );
+          else {
+            items.push({ label: note.pinned ? "Unpin Note" : "Pin Note", action: () => notesState.togglePinned(note.id) });
+            if (note.isDraft) items.push({ label: "Save draft", action: () => notesState.updateNote(note.id, { isDraft: false }) });
+            items.push({ label: "Move to Unfiled", separator: true, disabled: note.folderId === null, action: () => notesState.updateNote(note.id, { folderId: null }) });
+            notesState.folders.forEach((folder) => items.push({ label: `Move to ${folder.name}`, disabled: note.folderId === folder.id, action: () => notesState.updateNote(note.id, { folderId: folder.id }) }));
+            items.push({ label: "Move to trash", separator: true, danger: true, action: () => handleDeleteNote(note) });
+          }
+        } else if (folderId) {
+          const index = notesState.folders.findIndex((folder) => folder.id === folderId);
+          items = [
+            { label: "Open folder", action: () => notesState.selectFolder(folderId) },
+            { label: "Create folder", action: () => setIsCreateFolderOpen(true) },
+            { label: "Move up", separator: true, disabled: folderId === "system:unfiled" ? notesState.unfiledPosition === 0 : index === 0, action: () => notesState.moveFolder(folderId, -1) },
+            { label: "Move down", disabled: folderId === "system:unfiled" ? notesState.unfiledPosition === notesState.folders.length : index === notesState.folders.length - 1, action: () => notesState.moveFolder(folderId, 1) },
+          ];
+        } else if (target.closest(".notes-pane") && !isComposerModalActive) items = [{ label: "New Note", action: openNewNote }];
+        if (items.length) { event.preventDefault(); event.stopPropagation(); openContextMenu(event.clientX, event.clientY, items, target.closest<HTMLElement>("[data-context-note], [data-context-folder]") ?? target); }
+      }}
       className={`app-shell ${isDark ? "theme-dark" : "theme-light"} accent-${accent}`}
       style={
         {

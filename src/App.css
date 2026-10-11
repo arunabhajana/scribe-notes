@@ -3483,7 +3483,7 @@
   z-index: 10000;
   max-width: min(360px, calc(100vw - 24px));
   padding: 8px 11px;
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, #ffffff30);
+  border: 1px solid #454650;
   border-radius: 9px;
   color: #fff;
   background: #202127;
@@ -3513,10 +3513,10 @@
   position: absolute;
   width: 6px;
   height: 6px;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid #454650;
+  border-bottom: 1px solid #454650;
   content: "";
-  background: var(--surface-2);
+  background: #202127;
   transform: rotate(45deg);
 }
 .app-tooltip-top::after {
@@ -6394,3 +6394,78 @@
   .loading-spinner, .skeleton-block, .titlebar-loading-bar::after { animation: none; }
   .status-toast { animation-duration: .01ms; }
 }
+
+/* Keep each section's cards aligned with its navigation icon. */
+.section-blue { --section-color: #4d9aff; }
+.section-violet { --section-color: #a578ff; }
+.section-green { --section-color: #37c994; }
+.section-amber { --section-color: #f6a623; }
+.section-cyan { --section-color: #25bfd1; }
+.section-purple { --section-color: #b45cff; }
+.section-pink { --section-color: #f05a9d; }
+.settings-content-scroll .settings-card { --category: var(--section-color); }
+.settings-content-scroll .settings-card::before { background: var(--category); opacity: .85; }
+.provider-setting-copy { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.provider-setting-copy > svg { flex-shrink: 0; color: var(--category); }
+.provider-setting-copy > div { min-width: 0; }
+.provider-setting-copy span { overflow-wrap: anywhere; }
+.provider-linked { display: inline-flex; align-items: center; gap: 5px; color: var(--category); font-size: 11px; flex-shrink: 0; }
+.storage-chart-layout { display: flex; align-items: center; gap: 25px; padding: 12px 0 20px; }
+.settings-donut { width: 138px; height: 138px; border-radius: 50%; padding: 10px; flex-shrink: 0; }
+.settings-donut > div { height: 100%; border-radius: 50%; background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+.settings-donut svg { color: var(--category); }
+.settings-donut strong { font-size: 18px; }
+.settings-donut small, .storage-chart-copy small, .storage-chart-copy p, .storage-chart-copy strong span { color: var(--muted); }
+.storage-chart-copy { min-width: 0; }
+.storage-chart-copy > strong { font-size: 20px; }
+.storage-chart-copy p { font-size: 12px; margin: 8px 0; }
+.storage-chart-copy small { display: block; font-size: 11px; line-height: 1.6; }
+.editor-body-view .markdown-preview, .note-body-input, .new-note-body { font-size: var(--note-text-size, 13px); }
+@media (max-width: 620px) { .storage-chart-layout { flex-direction: column; align-items: flex-start; gap: 15px; } .storage-chart-copy > strong { font-size: 17px; } }
+
+.editor-body-view .markdown-preview, .note-body-input, .new-note-body { font-family: var(--note-font-family, "DM Sans", sans-serif); }
+.composer-content-input, .composer-content-preview .markdown-preview { font-size: var(--note-text-size, 13px); font-family: var(--note-font-family, "DM Sans", sans-serif); }
+
+.account-connection-row { display: flex; align-items: center; gap: 14px; padding: 17px 0; border-top: 1px solid var(--border); }
+.account-icon-tile { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #ffffff0c; border-radius: 11px; background: linear-gradient(145deg, #363b41, #25282d); color: #f3f4f6; flex-shrink: 0; }
+.account-connection-info { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 5px; }
+.account-connection-info strong { color: var(--text); font-size: 12px; font-weight: 600; line-height: 1.4; }
+.account-connection-info > span, .account-connection-info > small { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.account-connection-info > .connection-status-linked { color: #37c994; }
+.device-name-line { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.device-current-badge { padding: 3px 7px; border: 1px solid #37c99435; border-radius: 6px; color: #37c994; background: #37c99412; font-size: 9px; line-height: 1.4; }
+.account-preview-action { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 6px 12px; border: 1px solid; border-radius: 7px; font-size: 11px; font-weight: 500; line-height: 1.4; }
+.account-preview-action.action-danger { color: #ef737b; border-color: #ef737b40; background: #ef737b0d; }
+.account-preview-action.action-link { color: #37c994; border-color: #37c99440; background: #37c9940d; }
+.account-preview-action:disabled { opacity: 1; cursor: not-allowed; }
+.device-actions-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 16px; border-top: 1px solid var(--border); }
+.device-actions-footer > span { font-size: 10px; color: var(--muted); line-height: 1.5; }
+@media (max-width: 600px) { .account-connection-row { flex-wrap: wrap; gap: 11px; } .account-connection-info { min-width: 130px; } .device-actions-footer { align-items: flex-start; flex-direction: column; } }
+
+.settings-tooltip-target { display: inline-flex; flex-shrink: 0; border-radius: 7px; }
+.settings-tooltip-target > button:disabled { pointer-events: none; }
+.settings-tooltip-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.settings-floating-menu { min-width: 0; z-index: 10002; right: auto; bottom: auto; overflow-y: auto; box-sizing: border-box; }
+.settings-floating-menu .setting-option-check { width: 14px; flex: 0 0 14px; display: inline-flex; }
+.folder-order-actions .settings-tooltip-target > button { height: 29px; min-width: 29px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 7px; color: var(--muted); background: transparent; }
+
+.settings-tooltip-boundary { display: contents; }
+.app-tooltip.settings-visible-tooltip { display: block; visibility: visible; transform: none; white-space: normal; overflow-wrap: anywhere; }
+.app-tooltip.settings-visible-tooltip.is-light { color: #252630; background: #fff; border-color: #dedee7; box-shadow: 0 10px 28px #2526302b; }
+
+.scribe-context-menu { position: fixed; z-index: 20000; width: 240px; max-width: calc(100vw - 16px); max-height: min(350px, calc(100vh - 16px)); overflow-y: auto; padding: 6px; border: 1px solid var(--border, #454650); border-radius: 10px; background: var(--surface-2, #202127); color: var(--text, #f8f8fb); box-shadow: 0 10px 30px #0005; }
+.scribe-context-menu button { display: block; width: 100%; min-height: 34px; padding: 8px 10px; border: none; border-radius: 5px; color: inherit; background: transparent; text-align: left; font-size: 12px; line-height: 1.5; cursor: pointer; overflow-wrap: anywhere; }
+.scribe-context-menu button:hover:not(:disabled), .scribe-context-menu button:focus-visible { outline: none; color: var(--accent, #37c994); background: var(--accent-soft, #37c99415); }
+.scribe-context-menu button.is-danger { color: #ed747d; }
+.scribe-context-menu button:disabled { opacity: .4; cursor: default; }
+.scribe-context-menu button.has-separator { border-top: 1px solid var(--border, #454650); border-radius: 0 0 5px 5px; margin-top: 4px; padding-top: 10px; }
+
+/* Let the preview card grow with its content inside the editor scroll area. */
+.editor-content.is-viewing { min-width: 0; }
+.editor-body-view { flex: 1 0 auto; min-width: 0; padding-bottom: 28px; }
+.editor-body-view .markdown-preview { min-height: 0; overflow-wrap: anywhere; }
+.editor-body-view .markdown-preview pre { max-width: 100%; overflow-x: auto; }
+.editor-preview-actions { display: flex; justify-content: flex-end; margin: -8px -10px 18px 0; }
+.editor-preview-actions .body-edit-hint { position: static; pointer-events: auto; flex-shrink: 0; border: 0; cursor: pointer; }
+.editor-preview-actions .body-edit-hint:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

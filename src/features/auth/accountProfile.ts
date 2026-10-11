@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 export type AccountProfile = {
   displayName: string;
   email: string;
+  linkedAccounts?: { provider: string; email?: string; name?: string }[];
 };
 
 export function displayNameFromUser(user: User): string | null {
@@ -28,5 +29,6 @@ export function profileFromUser(user: User): AccountProfile {
   return {
     displayName: name?.trim() ?? email.split("@")[0] ?? "Scribe user",
     email,
+    linkedAccounts: (user.identities ?? []).filter((identity) => ["google", "github"].includes(identity.provider)).map((identity) => ({ provider: identity.provider, email: identity.identity_data?.email, name: identity.identity_data?.full_name ?? identity.identity_data?.name ?? identity.identity_data?.user_name })),
   };
 }

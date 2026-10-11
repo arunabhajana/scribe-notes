@@ -1,3 +1,4 @@
+import { useWritingPreferences } from "../../features/settings/writingPreferences";
 import {
   useEffect,
   useMemo,
@@ -45,6 +46,7 @@ export function NewNoteComposer({
   onDiscard: (draft: NoteDraft) => void;
   onModalActiveChange: (active: boolean) => void;
 }) {
+  const [writingPreferences] = useWritingPreferences();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [folderId, setFolderId] = useState<string | null>(null);
@@ -136,7 +138,7 @@ export function NewNoteComposer({
         onSubmit={submit}
         role="dialog"
         aria-modal="true"
-        aria-label="Create a note"
+        aria-label="Create a Note"
       >
         <header className="composer-header">
           <div className="composer-heading">
@@ -147,7 +149,7 @@ export function NewNoteComposer({
               <strong>
                 {minimized
                   ? `Draft: ${title.trim() || "No title"}`
-                  : "New note"}
+                  : "New Note"}
               </strong>
               <span>{folder ? `In ${folder}` : "A new thought"}</span>
             </div>
@@ -238,7 +240,7 @@ export function NewNoteComposer({
             autoFocus
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Give your note a title"
+            placeholder="Give your Note a title"
             aria-label="Note title"
           />
           <EditorToolbar
@@ -262,7 +264,7 @@ export function NewNoteComposer({
               onKeyDown={handleFormattingKeyDown}
               placeholder="Start writing..."
               aria-label="Note content (Markdown)"
-              spellCheck
+              spellCheck={writingPreferences.spellcheck}
             />
           )}
         </div>
@@ -276,7 +278,7 @@ export function NewNoteComposer({
               data-tooltip={pinned ? "Unpin after saving" : "Pin after saving"}
             >
               {pinned ? <Pin size={14} /> : <PinOff size={14} />}
-              <span>{pinned ? "Pinned" : "Pin note"}</span>
+              <span>{pinned ? "Pinned" : "Pin Note"}</span>
             </button>
             <span className="composer-count">
               {wordCount} {wordCount === 1 ? "word" : "words"} <i />{" "}
@@ -296,9 +298,9 @@ export function NewNoteComposer({
             <button
               type="submit"
               className="composer-save"
-              data-tooltip="Save note"
+              data-tooltip="Save Note"
             >
-              <span>Save note</span>
+              <span>Save Note</span>
               <Send size={14} />
             </button>
           </div>

@@ -1,3 +1,4 @@
+import { useWritingPreferences } from "../../features/settings/writingPreferences";
 import { useEffect, type RefObject } from "react";
 import type { KeyboardEvent } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
@@ -22,6 +23,7 @@ export function NoteBodyEditor({
   readOnly?: boolean;
   onBeginEdit: () => void;
 }) {
+  const [writingPreferences] = useWritingPreferences();
   useEffect(() => {
     if (!preview && !readOnly && inputRef.current) {
       inputRef.current.focus();
@@ -53,7 +55,7 @@ export function NoteBodyEditor({
             onKeyDown={(event) => {
               if (
                 !readOnly &&
-                !(event.target as HTMLElement).closest("a, input") &&
+                !(event.target as HTMLElement).closest("a, input, button") &&
                 (event.key === "Enter" || event.key === " ")
               ) {
                 event.preventDefault();
@@ -61,16 +63,18 @@ export function NoteBodyEditor({
               }
             }}
           >
+            {!readOnly && (
+              <div className="editor-preview-actions">
+                <button type="button" className="editor-edit-hint body-edit-hint" onClick={onBeginEdit} data-tooltip="Edit Note content">
+                  <Pencil size={14} /><span>Click to edit</span>
+                </button>
+              </div>
+            )}
             <MarkdownPreview
               value={value}
               onToggleTask={readOnly ? undefined : toggleTask}
             />
-            {!readOnly && (
-              <span className="editor-edit-hint body-edit-hint" aria-hidden="true">
-                <Pencil size={14} />
-                <span>Click to edit</span>
-              </span>
-            )}
+
           </div>
         ) : (
           <textarea
@@ -81,8 +85,8 @@ export function NoteBodyEditor({
             readOnly={readOnly}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Start writing your note..."
-            spellCheck
+            placeholder="Start writing your Note..."
+            spellCheck={writingPreferences.spellcheck}
           />
         )}
       </article>

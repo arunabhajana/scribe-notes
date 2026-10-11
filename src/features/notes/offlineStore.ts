@@ -154,6 +154,21 @@ export const offlineStore = {
         const key = `${sent.entity}:${sent.entityId}`;
         const latest = pending.get(key);
         if (result.status === "conflict") {
+          // Equal content is already converged, even if revisions differ.
+          const comparable = (snapshot: Note | NoteFolder | null | undefined) => {
+            if (!snapshot) return null;
+            if (sent.entity === "note") {
+              const note = snapshot as Note;
+              return JSON.stringify([note.title, note.body, note.folderId, note.pinned, note.isDraft, note.deletedAt]);
+            }
+            const folder = snapshot as NoteFolder;
+            return JSON.stringify([folder.name, folder.icon, folder.color, folder.sortOrder]);
+          };
+          if (latest?.kind === "upsert" && result.snapshot && comparable(latest.snapshot) === comparable(result.snapshot)) {
+            pending.delete(key);
+            if (!reply.changes.some((change) => change.entity === sent.entity && change.id === sent.entityId)) apply(sent.entity, sent.entityId, result.snapshot);
+            continue;
+          }
           conflicts++;
           // Preserve the newest local edits in the SAME transaction that retires
           // their old queue entry. A crash cannot strand an unsaved conflict copy.
@@ -181,7 +196,7 @@ export const offlineStore = {
           if (!reply.changes.some((change) => change.entity === sent.entity && change.id === sent.entityId))
             apply(sent.entity, sent.entityId, result.snapshot);
         } else if (latest) {
-          pending.set(key, { ...latest, baseUpdatedAt: result.snapshot?.updatedAt ?? null, baseVersion: result.snapshot?.version });
+          pending.set(key, { ...latest, snapshot: latest.snapshot ? { ...latest.snapshot, version: result.snapshot?.version } : latest.snapshot, baseUpdatedAt: result.snapshot?.updatedAt ?? null, baseVersion: result.snapshot?.version });
         }
       }
       // Folder references in conflict copies/pending notes may have disappeared.
@@ -284,30 +299,26 @@ export const offlineStore = {
   ) {
     const db = await openDatabase();
     const tx = db.transaction(["notes", "outbox"], "readwrite", { durability: "strict" });
-    tx.objectStore("notes").put({
-      ...note,
-      userId,
-      key: rowKey(userId, note.id),
-    } satisfies CacheNote);
+    const cache = tx.objectStore("notes");
+    const cached = cache.get(rowKey(userId, note.id)) as IDBRequest<CacheNote | undefined>;
     const store = tx.objectStore("outbox");
     const key: OutboxOperation["key"] = [userId, "note", note.id];
     const get = store.get(key) as IDBRequest<OutboxOperation | undefined>;
-    get.onsuccess = () => {
+    let remaining = 2;
+    const ready = () => {
+      if (--remaining) return;
       const previous = get.result;
-      store.put({
-        key,
-        userId,
-        entity: "note",
-        entityId: note.id,
-        kind: "upsert",
-        snapshot: note,
-        baseUpdatedAt: previous ? previous.baseUpdatedAt : (created ? null : baseUpdatedAt),
-        baseVersion: previous ? previous.baseVersion : note.version,
-        queuedUpdatedAt: note.updatedAt,
-        revisionId: crypto.randomUUID(),
-        sequence: previous?.sequence ?? Date.now(),
+      // The durable cache can have a newer acknowledgement than the rendered
+      // editor. Never replace that server revision with stale UI metadata.
+      const version = previous ? previous.baseVersion : created ? undefined : cached.result?.version ?? note.version;
+      const snapshot = { ...note, version };
+      cache.put({ ...snapshot, userId, key: rowKey(userId, note.id) } satisfies CacheNote);
+      store.put({ key, userId, entity: "note", entityId: note.id, kind: "upsert", snapshot,
+        baseUpdatedAt: previous ? previous.baseUpdatedAt : created ? null : cached.result?.updatedAt ?? baseUpdatedAt,
+        baseVersion: version, queuedUpdatedAt: note.updatedAt, revisionId: crypto.randomUUID(), sequence: previous?.sequence ?? Date.now(),
       } satisfies OutboxOperation);
     };
+    get.onsuccess = cached.onsuccess = ready;
     await transactionDone(tx);
   },
 

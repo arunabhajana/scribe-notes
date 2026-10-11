@@ -82,6 +82,7 @@ export function NoteCard({
           : relativeTime.format(-Math.round(seconds / 86400), "day");
   return (
     <article
+      data-context-note={note.id}
       role="button"
       tabIndex={0}
       onClick={(event) => {
@@ -101,15 +102,15 @@ export function NoteCard({
       className={`note-card ${selected ? "selected" : ""}`}
     >
       <div className="note-card-title">
-        <h2>{note.title || "Untitled note"}</h2>
+        <h2>{note.title || "Untitled Note"}</h2>
         <button
           className={`card-pin ${note.pinned ? "is-pinned" : ""}`}
           onClick={(event) => {
             event.stopPropagation();
             onTogglePinned();
           }}
-          aria-label={note.pinned ? "Unpin note" : "Pin note"}
-          data-tooltip={note.pinned ? "Unpin note" : "Pin note"}
+          aria-label={note.pinned ? "Unpin Note" : "Pin Note"}
+          data-tooltip={note.pinned ? "Unpin Note" : "Pin Note"}
         >
           <Icon name="pin" size={14} />
         </button>

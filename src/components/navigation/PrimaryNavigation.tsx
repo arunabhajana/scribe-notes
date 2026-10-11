@@ -20,7 +20,7 @@ export function PrimaryNavigation({
         <nav className="primary-nav" aria-label="Note views">
             <button
                 data-tooltip={`All Notes · ${formatShortcut(shortcuts.allNotes)}`}
-                aria-label={`All Notes, ${noteCount} notes`}
+                aria-label={`All Notes, ${noteCount} Notes`}
                 className={`nav-item ${section === "all" ? "active" : ""}`}
                 onClick={() => onSelect("all")}
             >
@@ -30,7 +30,7 @@ export function PrimaryNavigation({
             </button>
             <button
                 data-tooltip={`Drafts · ${formatShortcut(shortcuts.drafts)}`}
-                aria-label={`Drafts, ${draftCount} notes`}
+                aria-label={`Drafts, ${draftCount} Notes`}
                 className={`nav-item ${section === "drafts" ? "active" : ""}`}
                 onClick={() => onSelect("drafts")}
             >

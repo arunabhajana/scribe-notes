@@ -1,3 +1,5 @@
+import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
@@ -6,7 +8,9 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Database,
+  Cloud,
+  Monitor,
+  Globe,
   FileText,
   Folder,
   Pencil,
@@ -33,6 +37,7 @@ import {
   type ShortcutId,
 } from "../../features/shortcuts/keyboardShortcuts";
 import type { AccountProfile } from "../../features/auth/accountProfile";
+import { useWritingPreferences } from "../../features/settings/writingPreferences";
 import type { Note, NoteFolder } from "../../types/note";
 
 type Category = {
@@ -62,14 +67,14 @@ const categories: Category[] = [
     label: "Folders",
     icon: "folder",
     color: "amber",
-    description: "Arrange, rename, and customize your note folders.",
+    description: "Arrange, rename, and customize your Note folders.",
   },
   {
     id: "appearance",
     label: "Appearance",
     icon: "appearance",
     color: "violet",
-    description: "Shape the look and feel of your notes.",
+    description: "Shape the look and feel of your Notes.",
   },
   {
     id: "editor",
@@ -97,7 +102,7 @@ const categories: Category[] = [
     label: "Storage",
     icon: "storage",
     color: "purple",
-    description: "Manage notes stored on this device.",
+    description: "Review local and cloud storage usage.",
   },
   {
     id: "about",
@@ -112,142 +117,35 @@ const settingId = (label: string) =>
   `setting-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 const settingSearchIndex = [
-  {
-    label: "Launch at startup",
-    detail: "Start Scribe when you sign in to your computer.",
-    category: "general",
-    terms: "startup launch windows start open",
-  },
-  {
-    label: "Autosave",
-    detail: "Choose when changes are saved while you write.",
-    category: "general",
-    terms: "save saving delay automatic",
-  },
-  {
-    label: "Dark appearance",
-    detail: "Use Scribe’s dark theme.",
-    category: "appearance",
-    terms: "theme night midnight dark",
-    targetId: "setting-color-mood",
-  },
-  {
-    label: "Light appearance",
-    detail: "Use Scribe’s light theme.",
-    category: "appearance",
-    terms: "theme day daylight light bright",
-    targetId: "setting-color-mood",
-  },
-  {
-    label: "Accent color",
-    detail: "Change the color used across the interface.",
-    category: "appearance",
-    terms: "colour accent purple violet blue pink",
-  },
-  {
-    label: "Font family",
-    detail: "Choose the typeface used in the editor.",
-    category: "editor",
-    terms: "font typography typeface",
-  },
-  {
-    label: "Text size",
-    detail: "Adjust the size of note text.",
-    category: "editor",
-    terms: "font size large small medium",
-  },
-  {
-    label: "Spell check",
-    detail: "Underline possible spelling mistakes.",
-    category: "editor",
-    terms: "spelling proofread",
-  },
-  {
-    label: "Smart quotes",
-    detail: "Use typographic quotation marks.",
-    category: "editor",
-    terms: "quotes punctuation curly",
-  },
-  {
-    label: "Note reminders",
-    detail: "Choose whether Scribe can send reminders.",
-    category: "notifications",
-    terms: "notification alert reminder",
-  },
-  {
-    label: "Product updates",
-    detail: "Choose whether to receive product updates.",
-    category: "notifications",
-    terms: "notification news announcements",
-  },
-  {
-    label: "Sounds",
-    detail: "Control subtle interface sounds.",
-    category: "notifications",
-    terms: "notification audio sound",
-  },
-  {
-    label: "Keyboard shortcuts",
-    detail: "Change shortcuts for common app actions.",
-    category: "shortcuts",
-    terms: "keys hotkey commands",
-  },
-  {
-    label: "Local storage",
-    detail: "View estimated space used by notes and settings.",
-    category: "storage",
-    terms: "space disk usage data files",
-  },
-  {
-    label: "Folder organization",
-    detail: "Reorder, rename, recolor, or delete your folders.",
-    category: "folders",
-    terms: "folders organize reorder rearrange rename edit delete icon color",
-    targetId: "setting-manage-folders",
-  },
-  {
-    label: "Profile photo",
-    detail: "Choose the image shown on your account.",
-    category: "account",
-    terms: "avatar picture image photo",
-  },
-  {
-    label: "Display name",
-    detail: "Change the name shown in Scribe.",
-    category: "account",
-    terms: "username name profile",
-  },
-  {
-    label: "Email address",
-    detail: "Manage the address linked to your account.",
-    category: "account",
-    terms: "email sign in login",
-  },
-  {
-    label: "Password & security",
-    detail: "Reset your password and review account security.",
-    category: "account",
-    terms: "password reset security two factor 2fa",
-  },
-  {
-    label: "Signed-in devices",
-    detail: "Review devices using your account.",
-    category: "account",
-    terms: "devices sessions login",
-  },
-  {
-    label: "Account data",
-    detail: "Export or delete account data.",
-    category: "account",
-    terms: "privacy export delete data",
-  },
-  {
-    label: "About Scribe",
-    detail: "View app version and product information.",
-    category: "about",
-    terms: "version information app",
-    targetId: "setting-scribe",
-  },
+  { label: "Launch at startup", detail: "Save your startup preference on this device.", category: "general", terms: "startup launch windows open boot" },
+  { label: "Offline mode", detail: "Keep changes locally and pause cloud sync.", category: "general", terms: "offline network internet sync pause local" },
+  { label: "Dark appearance", detail: "Use the Midnight dark theme.", category: "appearance", terms: "theme night midnight dark", targetId: "setting-color-mood" },
+  { label: "Light appearance", detail: "Use the Daylight light theme.", category: "appearance", terms: "theme day daylight light", targetId: "setting-color-mood" },
+  { label: "Accent color", detail: "Choose the accent used throughout Scribe.", category: "appearance", terms: "colour color swatches accent" },
+  { label: "Font family", detail: "Choose the typeface for Note content.", category: "appearance", terms: "typography font typeface georgia monospace dm sans" },
+  { label: "Text size", detail: "Adjust Note text size.", category: "appearance", terms: "typography font size small medium large" },
+  { label: "Spell check", detail: "Underline possible spelling mistakes as you type.", category: "editor", terms: "spelling writing proofread" },
+  { label: "Desktop notifications", detail: "Save your desktop alert preference.", category: "notifications", terms: "desktop notification alerts enable disable" },
+  { label: "Sounds", detail: "Save your sound preference for app interactions.", category: "notifications", terms: "audio sound notification mute" },
+  { label: "Note reminders", detail: "Save your preference for future Note reminders.", category: "notifications", terms: "reminder notification alert scheduled" },
+  { label: "Reminder lead time", detail: "Choose how many minutes before a reminder to notify; delivery is coming soon.", category: "notifications", terms: "before minutes time 5 10 15 30 60" },
+  { label: "Keyboard shortcuts", detail: "Customize app shortcuts or restore their defaults.", category: "shortcuts", terms: "keys keyboard hotkey commands bindings reset formatting" },
+  { label: "Local storage", detail: "View estimated local Notes, folders, and preferences usage.", category: "storage", terms: "device disk usage chart pie donut local offline", targetId: "setting-local-storage" },
+  { label: "Cloud storage", detail: "View estimated cloud content against a 15 MB allowance.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 15mb" },
+  { label: "Folder organization", detail: "Reorder, rename, recolor, or delete your folders.", category: "folders", terms: "organize folders reorder rename delete icon color unfiled", targetId: "setting-manage-folders" },
+  { label: "Profile photo", detail: "Profile photo controls are coming soon.", category: "account", terms: "avatar picture image photo" },
+  { label: "Display name", detail: "View your account display name; editing is coming soon.", category: "account", terms: "username profile name" },
+  { label: "Email address", detail: "View the email address associated with your account.", category: "account", terms: "email login address" },
+  { label: "Password & security", detail: "Review account security controls.", category: "account", terms: "security password verification" },
+  { label: "Reset password", detail: "Password reset controls are coming soon.", category: "account", terms: "password reset recovery" },
+  { label: "Two-step verification", detail: "Additional sign-in protection is coming soon.", category: "account", terms: "2fa mfa two factor authentication security" },
+  { label: "Linked accounts", detail: "View Google and GitHub profiles; Link and Unlink are preview controls.", category: "account", terms: "social provider google github link unlink connected" },
+  { label: "Signed-in devices", detail: "Preview sessions for this PC, Chrome extension, and mobile app.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout" },
+  { label: "Sign out from all devices", detail: "Preview the option to sign out every device.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
+  { label: "Account data", detail: "Review upcoming export and deletion controls.", category: "account", terms: "privacy export delete data" },
+  { label: "Export account data", detail: "Account export is coming soon.", category: "account", terms: "download backup export" },
+  { label: "Delete account", detail: "Account deletion is coming soon.", category: "account", terms: "delete remove account privacy" },
+  { label: "About Scribe", detail: "View version and product information.", category: "about", terms: "version information app", targetId: "setting-scribe" },
 ];
 
 function SettingToggle({
@@ -265,7 +163,7 @@ function SettingToggle({
 }) {
   return (
     <div className="setting-row" id={settingId(label)}>
-      <div className="setting-row-copy">
+      <div className="setting-row-copy" data-tooltip={detail}>
         <strong>{label}</strong>
         <span>{detail}</span>
       </div>
@@ -274,7 +172,7 @@ function SettingToggle({
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        title={detail}
+        data-tooltip={detail}
         onClick={() => onChange(!checked)}
       >
         <span />
@@ -296,64 +194,59 @@ function SettingSelect({
   options: string[];
   onChange: (value: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [menu, setMenu] = useState<{ left: number; top: number; width: number; maxHeight: number; variables: React.CSSProperties } | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const open = menu !== null;
+  const close = () => { setMenu(null); triggerRef.current?.focus(); };
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
-      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!pickerRef.current?.contains(target) && !menuRef.current?.contains(target)) setMenu(null);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") { setMenu(null); triggerRef.current?.focus(); }
+    };
+    const closeOnMove = (event: Event) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenu(null);
     };
     document.addEventListener("pointerdown", closeOutside);
     document.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("resize", closeOnMove);
+    window.addEventListener("scroll", closeOnMove, true);
     return () => {
       document.removeEventListener("pointerdown", closeOutside);
       document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", closeOnMove);
+      window.removeEventListener("scroll", closeOnMove, true);
     };
   }, [open]);
+  const toggleMenu = () => {
+    if (open) { setMenu(null); return; }
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const styles = getComputedStyle(trigger);
+    const below = window.innerHeight - rect.bottom - 16;
+    const above = rect.top - 16;
+    const height = Math.min(options.length * 34 + 12, 280, Math.max(below, above));
+    const width = Math.min(Math.max(rect.width, 160), window.innerWidth - 16);
+    const variables = Object.fromEntries(["--surface", "--surface-2", "--surface-3", "--text", "--muted", "--border", "--accent", "--accent-soft"].map((name) => [name, styles.getPropertyValue(name)])) as React.CSSProperties;
+    setMenu({ left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)), top: below >= height ? rect.bottom + 6 : Math.max(8, rect.top - height - 6), width, maxHeight: height, variables });
+  };
   return (
     <div className="setting-row" id={settingId(label)}>
-      <div className="setting-row-copy">
-        <strong>{label}</strong>
-        <span>{detail}</span>
-      </div>
+      <div className="setting-row-copy" data-tooltip={detail}><strong>{label}</strong><span>{detail}</span></div>
       <div className="setting-select-wrap" ref={pickerRef}>
-        <button
-          type="button"
-          className={`setting-select-trigger ${open ? "is-open" : ""}`}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          title={detail}
-          onClick={() => setOpen((current) => !current)}
-        >
-          <span>{value}</span>
-          <ChevronDown size={15} />
+        <button ref={triggerRef} type="button" className={`setting-select-trigger ${open ? "is-open" : ""}`} aria-label={`${label}: ${value}`} aria-haspopup="listbox" aria-expanded={open} data-tooltip={open ? undefined : detail} onClick={toggleMenu}>
+          <span>{value}</span><ChevronDown size={15} />
         </button>
-        {open && (
-          <div
-            className="setting-select-menu"
-            role="listbox"
-            aria-label={label}
-          >
-            {options.map((option) => (
-              <button
-                type="button"
-                key={option}
-                role="option"
-                aria-selected={option === value}
-                className={option === value ? "selected" : ""}
-                onClick={() => {
-                  onChange(option);
-                  setOpen(false);
-                }}
-              >
-                {option === value && <Check size={14} />}
-                <span>{option}</span>
-              </button>
-            ))}
-          </div>
+        {menu && createPortal(
+          <div ref={menuRef} className="setting-select-menu settings-floating-menu" role="listbox" aria-label={label} style={{ ...menu.variables, position: "fixed", left: menu.left, top: menu.top, width: menu.width, maxHeight: menu.maxHeight }}>
+            {options.map((option) => <button type="button" key={option} role="option" aria-selected={option === value} className={option === value ? "selected" : ""} onClick={() => { onChange(option); close(); }}><span className="setting-option-check">{option === value && <Check size={14} />}</span><span>{option}</span></button>)}
+          </div>, document.body,
         )}
       </div>
     </div>
@@ -397,7 +290,7 @@ type StorageMetrics = {
   settingsBytes: number;
 };
 const formatBytes = (bytes: number) =>
-  bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+  bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(2)} MB` : bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 
 function AccountSettingRow({
   id,
@@ -416,134 +309,51 @@ function AccountSettingRow({
         <strong>{label}</strong>
         <span>{detail}</span>
       </div>
-      <button type="button" disabled title={`${action} is not available yet`}>
+      <span className="settings-tooltip-target" tabIndex={0} data-tooltip={`${action} is not available yet`}><button type="button" disabled data-tooltip={`${action} is not available yet`}>
         {action}
         <ChevronRight size={15} />
-      </button>
+      </button></span>
     </div>
   );
 }
 
 function StorageSettings({ metrics }: { metrics: StorageMetrics }) {
-  const totalBytes =
-    metrics.noteBytes + metrics.folderBytes + metrics.settingsBytes;
-  const noteShare = totalBytes ? (metrics.noteBytes / totalBytes) * 100 : 0;
-  const folderShare = totalBytes ? (metrics.folderBytes / totalBytes) * 100 : 0;
-  const settingShare = totalBytes
-    ? (metrics.settingsBytes / totalBytes) * 100
-    : 0;
-  return (
-    <>
-      <SettingCard
-        title="Device storage"
-        description="An estimate based on the notes and preferences currently held by Scribe."
-        accent="purple"
-        id={settingId("Local storage")}
-      >
-        <div className="storage-overview">
-          <div className="storage-overview-icon">
-            <HardDrive size={18} />
-          </div>
-          <div className="storage-overview-copy">
-            <span>Estimated data in use</span>
-            <strong>{formatBytes(totalBytes)}</strong>
-            <small>Local content · calculated from current data</small>
-          </div>
-          <span className="storage-local-badge">
-            <span />
-            On this device
-          </span>
-        </div>
-        <div
-          className="storage-breakdown-bar"
-          role="img"
-          aria-label={`Storage breakdown: notes ${formatBytes(metrics.noteBytes)}, folders ${formatBytes(metrics.folderBytes)}, settings ${formatBytes(metrics.settingsBytes)}`}
-        >
-          <i style={{ width: `${noteShare}%` }} />
-          <i style={{ width: `${folderShare}%` }} />
-          <i style={{ width: `${settingShare}%` }} />
-        </div>
-        <div className="storage-breakdown-list">
-          <div>
-            <span className="storage-color-dot notes-dot" />
-            <span className="storage-breakdown-label">
-              <strong>Notes</strong>
-              <small>{metrics.noteCount} notes, including items in Trash</small>
-            </span>
-            <b>{formatBytes(metrics.noteBytes)}</b>
-          </div>
-          <div>
-            <span className="storage-color-dot folders-dot" />
-            <span className="storage-breakdown-label">
-              <strong>Folders</strong>
-              <small>{metrics.folderCount} folders and their names</small>
-            </span>
-            <b>{formatBytes(metrics.folderBytes)}</b>
-          </div>
-          <div>
-            <span className="storage-color-dot settings-dot" />
-            <span className="storage-breakdown-label">
-              <strong>Preferences</strong>
-              <small>Theme, accent, and keyboard shortcuts</small>
-            </span>
-            <b>{formatBytes(metrics.settingsBytes)}</b>
-          </div>
-        </div>
-      </SettingCard>
-      <div className="storage-metric-grid">
-        <SettingCard title="Your notes" accent="blue">
-          <div className="storage-metric">
-            <FileText size={17} />
-            <strong>{metrics.noteCount}</strong>
-            <span>notes</span>
-          </div>
-          <p className="storage-metric-foot">
-            Text content uses approximately {formatBytes(metrics.noteBytes)}.
-          </p>
-        </SettingCard>
-        <SettingCard title="Your folders" accent="green">
-          <div className="storage-metric">
-            <Folder size={17} />
-            <strong>{metrics.folderCount}</strong>
-            <span>folders</span>
-          </div>
-          <p className="storage-metric-foot">
-            Folder names and settings use approximately{" "}
-            {formatBytes(metrics.folderBytes)}.
-          </p>
-        </SettingCard>
+  const local = metrics.noteBytes + metrics.folderBytes + metrics.settingsBytes;
+  const cloud = metrics.noteBytes + metrics.folderBytes;
+  const limit = 15 * 1024 * 1024;
+  const percent = Math.min(100, cloud / limit * 100);
+  const noteShare = local ? metrics.noteBytes / local * 100 : 0;
+  const folderShare = local ? metrics.folderBytes / local * 100 : 0;
+  return <>
+    <SettingCard title="Cloud storage" description="15 MB allowance for synced Notes and folders." accent="purple" id={settingId("Cloud storage")}>
+      <div className="storage-chart-layout">
+        <div className="settings-donut" role="img" aria-label={`Estimated cloud usage ${formatBytes(cloud)} of 15 MB`} style={{ background: `conic-gradient(var(--category) ${percent}%, var(--border) 0)` }}><div><Cloud size={22} /><strong>{percent.toFixed(1)}%</strong><small>used</small></div></div>
+        <div className="storage-chart-copy"><strong>{formatBytes(cloud)} <span>/ 15 MB</span></strong><p>{formatBytes(Math.max(0, limit - cloud))} remaining</p><small>Estimated from current Notes and folders, including Trash and pending changes. Server usage may differ.</small></div>
       </div>
-      <SettingCard
-        title="Storage details"
-        description="Some storage metrics will appear after local database and cloud sync are connected."
-        accent="cyan"
-      >
-        <div className="storage-detail-row">
-          <Database size={16} />
-          <span>Database size</span>
-          <strong>Not connected</strong>
-        </div>
-        <div className="storage-detail-row">
-          <Smartphone size={16} />
-          <span>Offline attachments</span>
-          <strong>0 B</strong>
-        </div>
-        <div className="storage-detail-row">
-          <HardDrive size={16} />
-          <span>Cloud sync</span>
-          <strong>Not connected</strong>
-        </div>
-        <div className="settings-info-banner">
-          <span className="settings-info-icon">
-            <Icon name="info" size={17} />
-          </span>
-          <span>
-            Usage is estimated from in-memory demo content. It is not a
-            measurement of disk usage yet.
-          </span>
-        </div>
-      </SettingCard>
-    </>
+      <div className="storage-detail-row"><FileText size={16} /><span>Notes</span><strong>{formatBytes(metrics.noteBytes)}</strong></div>
+      <div className="storage-detail-row"><Folder size={16} /><span>Folders</span><strong>{formatBytes(metrics.folderBytes)}</strong></div>
+      {cloud > limit && <p className="settings-info-banner">Estimated content exceeds 15 MB. Remove unwanted Notes to reduce usage.</p>}
+    </SettingCard>
+    <SettingCard title="On this device" description="Your local copy keeps Notes available offline." accent="purple" id={settingId("Local storage")}>
+      <div className="storage-chart-layout">
+        <div className="settings-donut" role="img" aria-label={`Local content ${formatBytes(local)}`} style={{ background: local ? `conic-gradient(var(--category) ${noteShare}%, #25bfd1 ${noteShare}% ${noteShare + folderShare}%, #f6a623 0)` : 'var(--border)' }}><div><HardDrive size={22} /><strong>{formatBytes(local)}</strong><small>local content</small></div></div>
+        <div className="storage-chart-copy"><strong>{metrics.noteCount} Notes · {metrics.folderCount} folders</strong><p>Saved locally first, synced in batches.</p><small>Serialized content estimate. Disk usage, sync history, and database overhead are not included.</small></div>
+      </div>
+      <div className="storage-breakdown-list">{[['Notes', metrics.noteBytes, 'notes-dot'], ['Folders', metrics.folderBytes, 'folders-dot'], ['Preferences', metrics.settingsBytes, 'settings-dot']].map(([label, bytes, dot]) => <div key={String(label)}><span className={`storage-color-dot ${dot}`} /><span className="storage-breakdown-label"><strong>{label}</strong></span><b>{formatBytes(Number(bytes))}</b></div>)}</div>
+    </SettingCard>
+  </>;
+}
+
+function ProviderLogo({ provider }: { provider: "google" | "github" }) {
+  return provider === "google" ? (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.36Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.96-3.38.96-2.61 0-4.83-1.76-5.62-4.13H3.04v2.59A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.38 13.91a6 6 0 0 1 0-3.82V7.5H3.04a10 10 0 0 0 0 9l3.34-2.59Z" />
+      <path fill="#EA4335" d="M12 5.96c1.47 0 2.79.5 3.82 1.5l2.86-2.86A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.96 5.5l3.34 2.59C7.17 7.72 9.39 5.96 12 5.96Z" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="#fff" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.23c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.09 1.85 1.24 1.85 1.24 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.49 5.93.43.37.82 1.1.82 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z" /></svg>
   );
 }
 
@@ -560,14 +370,14 @@ function AccountSettings({ profile }: { profile: AccountProfile }) {
         <div className="account-profile-card">
           <div className="account-profile-avatar">
             {initials}
-            <button
+            <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Profile photos are not available yet"><button
               type="button"
               disabled
               aria-label="Change profile photo"
-              title="Profile photos are not available yet"
+              data-tooltip="Profile photos are not available yet"
             >
               <Camera size={14} />
-            </button>
+            </button></span>
           </div>
           <div className="account-profile-copy">
             <strong>{profile.displayName}</strong>
@@ -591,7 +401,7 @@ function AccountSettings({ profile }: { profile: AccountProfile }) {
       <SettingCard
         title="Password & security"
         description="Supabase protects sign-in and email verification. Additional account controls are planned."
-        accent="blue"
+        accent="pink"
         id={settingId("Password & security")}
       >
         <div className="account-security-intro">
@@ -599,7 +409,7 @@ function AccountSettings({ profile }: { profile: AccountProfile }) {
             <ShieldCheck size={18} />
           </span>
           <div>
-            <strong>Email and password sign-in is active</strong>
+            <strong>Account sign-in is protected by Supabase</strong>
             <small>
               Your session stays in this app’s local storage on this device.
               Sign out to remove it.
@@ -613,28 +423,57 @@ function AccountSettings({ profile }: { profile: AccountProfile }) {
           action="Coming soon"
         />
         <AccountSettingRow
-          id="Signed-in devices"
-          label="Signed-in devices"
-          detail="Review and sign out of other devices."
-          action="Coming soon"
-        />
-        <AccountSettingRow
           id="Two-step verification"
           label="Two-step verification"
           detail="Add another layer of sign-in protection."
           action="Coming soon"
         />
       </SettingCard>
+      <SettingCard title="Linked accounts" id={settingId("Linked accounts")} description="Connected sign-in providers. Link and unlink actions are previews." accent="pink">
+        {(["google", "github"] as const).map((provider) => {
+          const identity = profile.linkedAccounts?.find((item) => item.provider === provider);
+          return (
+            <div className="account-connection-row" key={provider}>
+              <div className="account-icon-tile"><ProviderLogo provider={provider} /></div>
+              <div className="account-connection-info">
+                <strong>{provider === "google" ? "Google" : "GitHub"}</strong>
+                {identity?.name && <span>{identity.name}</span>}
+                {identity?.email && <span>{identity.email}</span>}
+                <small className={identity ? "connection-status-linked" : ""}>{identity ? "Linked to your account" : "No account linked"}</small>
+              </div>
+              <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Preview only: account linking and unlinking are not implemented"><button type="button" className={`account-preview-action ${identity ? "action-danger" : "action-link"}`} disabled data-tooltip="Preview only: account linking and unlinking are not implemented">{identity ? "Unlink" : "Link"}</button></span>
+            </div>
+          );
+        })}
+      </SettingCard>
+      <SettingCard title="Signed-in devices" id={settingId("Signed-in devices")} description="Sample sessions · device management preview." accent="pink">
+        {[
+          { icon: Monitor, name: "This PC", platform: "Scribe for Windows · Windows 11", activity: "Active now", current: true },
+          { icon: Globe, name: "Chrome extension", platform: "Chrome · Windows 11", activity: "Last active 2 hours ago", current: false },
+          { icon: Smartphone, name: "Mobile app", platform: "Scribe Mobile · Android", activity: "Last active yesterday", current: false },
+        ].map(({ icon: Device, name, platform, activity, current }) => (
+          <div className="account-connection-row" key={name}>
+            <div className="account-icon-tile"><Device size={23} /></div>
+            <div className="account-connection-info">
+              <div className="device-name-line"><strong>{name}</strong>{current && <span className="device-current-badge">Current device</span>}</div>
+              <span>{platform}</span>
+              <small>{activity}</small>
+            </div>
+            {!current && <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Preview only: device sign-out is not implemented"><button type="button" className="account-preview-action action-danger" disabled data-tooltip="Preview only: device sign-out is not implemented">Sign out</button></span>}
+          </div>
+        ))}
+        <div className="device-actions-footer"><span>Session controls are coming soon.</span><span className="settings-tooltip-target" tabIndex={0} data-tooltip="Preview only: signing out all devices is not implemented"><button type="button" className="account-preview-action action-danger" disabled data-tooltip="Preview only: signing out all devices is not implemented">Sign out from all devices</button></span></div>
+      </SettingCard>
       <SettingCard
         title="Account data"
         description="Control your account and personal data."
-        accent="amber"
+        accent="pink"
         id={settingId("Account data")}
       >
         <AccountSettingRow
           id="Export account data"
           label="Export account data"
-          detail="Download a copy of your notes and account details."
+          detail="Download a copy of your Notes and account details."
           action="Coming soon"
         />
         <AccountSettingRow
@@ -708,6 +547,7 @@ function KeyboardShortcutSettings({
               <span>{action.description}</span>
             </div>
             <button
+              data-tooltip={`Change ${action.label} shortcut`}
               className={`shortcut-edit-button ${recording === action.id ? "is-recording" : ""}`}
               onClick={() => {
                 setError("");
@@ -758,6 +598,7 @@ function KeyboardShortcutSettings({
       </div>
       <button
         className="shortcut-reset-button"
+        data-tooltip="Restore all app shortcuts to their defaults"
         onClick={() => {
           onChange(defaultShortcutBindings);
           setRecording(null);
@@ -810,7 +651,7 @@ function FolderManagementSettings({
     <>
       <SettingCard
         title="Your folders"
-        description="Arrange the folders in your sidebar and update their name, icon, or color. Deleting a folder keeps its notes and moves them to All Notes."
+        description="Arrange the folders in your sidebar and update their name, icon, or color. Deleting a folder keeps its Notes and moves them to All Notes."
         accent="amber"
         id="setting-manage-folders"
       >
@@ -844,7 +685,7 @@ function FolderManagementSettings({
                             (note) => !note.deletedAt && note.folderId === null,
                           ).length
                         }{" "}
-                        notes
+                        Notes
                       </span>
                     </div>
                     <div className="folder-settings-actions">
@@ -901,32 +742,29 @@ function FolderManagementSettings({
                         className="folder-order-actions"
                         aria-label={`Reorder ${folder.name}`}
                       >
-                        <button
+                        <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Move folder up"><button
                           type="button"
                           aria-label={`Move ${folder.name} up`}
-                          title="Move up"
                           data-tooltip="Move folder up"
                           disabled={position === 0}
                           onClick={() => onMoveFolder(folder.id, -1)}
                         >
                           <ArrowUp size={14} />
-                        </button>
-                        <button
+                        </button></span>
+                        <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Move folder down"><button
                           type="button"
                           aria-label={`Move ${folder.name} down`}
-                          title="Move down"
                           data-tooltip="Move folder down"
                           disabled={position === folders.length}
                           onClick={() => onMoveFolder(folder.id, 1)}
                         >
                           <ArrowDown size={14} />
-                        </button>
+                        </button></span>
                       </div>
                       <button
                         type="button"
                         className="folder-edit-action"
                         aria-label={`Edit ${folder.name}`}
-                        title={`Edit ${folder.name}`}
                         data-tooltip={`Edit ${folder.name}`}
                         onClick={() => setEditingFolder(folder)}
                       >
@@ -936,7 +774,6 @@ function FolderManagementSettings({
                         type="button"
                         className="folder-delete-action"
                         aria-label={`Delete ${folder.name}`}
-                        title={`Delete ${folder.name}`}
                         data-tooltip={`Delete ${folder.name}`}
                         onClick={() => setPendingDelete(folder.id)}
                       >
@@ -951,7 +788,7 @@ function FolderManagementSettings({
                       aria-label={`Confirm deleting ${folder.name}`}
                     >
                       <span>
-                        Delete “{folder.name}”? Its notes will stay in All
+                        Delete “{folder.name}”? Its Notes will stay in All
                         Notes.
                       </span>
                       <button
@@ -1048,23 +885,11 @@ function CategoryContent({
   onMoveSystemFolder: (offset: -1 | 1) => void;
   unfiledPosition: number;
 }) {
-  const [toggles, setToggles] = useState({
-    launch: true,
-    spellcheck: true,
-    smartQuotes: false,
-    reminders: true,
-    updates: true,
-    sounds: false,
-  });
-  const [values, setValues] = useState({
-    font: fontFamily,
-    size: "Medium",
-    autosave: "Immediately",
-  });
-  const toggle = (key: keyof typeof toggles) => (value: boolean) =>
-    setToggles((current) => ({ ...current, [key]: value }));
-  const change = (key: keyof typeof values) => (value: string) =>
-    setValues((current) => ({ ...current, [key]: value }));
+  const [preferences, updatePreferences] = useWritingPreferences();
+  const toggles = preferences;
+  const values = { size: preferences.size };
+  const toggle = (key: "launch" | "spellcheck" | "reminders" | "desktop" | "sounds") => (value: boolean) => updatePreferences({ [key]: value });
+  const change = (key: "size" | "reminderLead") => (value: string) => updatePreferences({ [key]: value });
   switch (category.id) {
     case "general":
       return (
@@ -1088,27 +913,6 @@ function CategoryContent({
               onChange={onOfflineModeChange}
               color="blue"
             />
-            <SettingSelect
-              label="Autosave"
-              detail="Choose when Scribe saves your writing."
-              value={values.autosave}
-              options={["Immediately", "After 1 second", "After 5 seconds"]}
-              onChange={change("autosave")}
-            />
-          </SettingCard>
-          <SettingCard
-            title="Your preferences"
-            description="Scribe’s interface preferences are stored on this device."
-            accent="green"
-          >
-            <div className="settings-info-banner">
-              <span className="settings-info-icon">
-                <Icon name="check" size={17} />
-              </span>
-              <span>
-                Your settings stay on this device in the current preview.
-              </span>
-            </div>
           </SettingCard>
         </>
       );
@@ -1132,13 +936,14 @@ function CategoryContent({
         <>
           <SettingCard
             title="Color & mood"
-            description="Choose a canvas for your notes. Your choice updates the whole app."
+            description="Choose a canvas for your Notes. Your choice updates the whole app."
             accent="violet"
             id={settingId("Color & mood")}
           >
             <div className="theme-choice-row">
               <button
                 className={`theme-choice theme-choice-dark ${dark ? "chosen" : ""}`}
+                data-tooltip="Use the Midnight dark theme"
                 onClick={() => setDark(true)}
                 aria-pressed={dark}
               >
@@ -1152,6 +957,7 @@ function CategoryContent({
               </button>
               <button
                 className={`theme-choice theme-choice-light ${!dark ? "chosen" : ""}`}
+                data-tooltip="Use the Daylight light theme"
                 onClick={() => setDark(false)}
                 aria-pressed={!dark}
               >
@@ -1185,6 +991,22 @@ function CategoryContent({
               ))}
             </div>
           </SettingCard>
+          <SettingCard title="Typography" description="Choose a comfortable typeface and size for your Notes." accent="violet">
+            <SettingSelect
+              label="Font family"
+              detail="Choose the voice of your Notes."
+              value={fontFamily}
+              options={["DM Sans", "System default", "Georgia", "Monospace"]}
+              onChange={onFontFamilyChange}
+            />
+            <SettingSelect
+              label="Text size"
+              detail="Adjust editor text to your preference."
+              value={values.size}
+              options={["Small", "Medium", "Large"]}
+              onChange={change("size")}
+            />
+          </SettingCard>
         </>
       );
     case "editor":
@@ -1195,35 +1017,11 @@ function CategoryContent({
             description="Set up a calm, comfortable place to write."
             accent="green"
           >
-            <SettingSelect
-              label="Font family"
-              detail="Choose the voice of your notes."
-              value={fontFamily}
-              options={["DM Sans", "System default", "Georgia", "Monospace"]}
-              onChange={(value) => {
-                setValues((current) => ({ ...current, font: value }));
-                onFontFamilyChange(value);
-              }}
-            />
-            <SettingSelect
-              label="Text size"
-              detail="Adjust editor text to your preference."
-              value={values.size}
-              options={["Small", "Medium", "Large"]}
-              onChange={change("size")}
-            />
             <SettingToggle
               label="Spell check"
               detail="Underline possible spelling mistakes as you type."
               checked={toggles.spellcheck}
               onChange={toggle("spellcheck")}
-              color="green"
-            />
-            <SettingToggle
-              label="Smart quotes"
-              detail="Use typographic quotation marks while writing."
-              checked={toggles.smartQuotes}
-              onChange={toggle("smartQuotes")}
               color="green"
             />
           </SettingCard>
@@ -1245,12 +1043,13 @@ function CategoryContent({
               color="amber"
             />
             <SettingToggle
-              label="Product updates"
-              detail="Hear about new features and improvements."
-              checked={toggles.updates}
-              onChange={toggle("updates")}
+              label="Desktop notifications"
+              detail="Enable desktop alerts when notification delivery is available."
+              checked={toggles.desktop}
+              onChange={toggle("desktop")}
               color="amber"
             />
+            <SettingSelect label="Reminder lead time" detail="Notify before a reminder is due. Delivery is coming soon; your preference is saved." value={preferences.reminderLead} options={["At the time", "5 minutes", "10 minutes", "15 minutes", "30 minutes", "60 minutes"]} onChange={change("reminderLead")} />
             <SettingToggle
               label="Sounds"
               detail="Play subtle sounds for app interactions."
@@ -1292,7 +1091,7 @@ function CategoryContent({
                 <Icon name="info" size={17} />
               </span>
               <span>
-                Built for thoughtful notes. Cross-platform sync is coming soon.
+                Built for thoughtful Notes, with local saves and cloud sync.
               </span>
             </div>
           </SettingCard>
@@ -1437,7 +1236,7 @@ export function SettingsPage({
     () =>
       settingSearchIndex
         .filter((item) =>
-          `${item.label} ${item.detail} ${item.terms}`
+          `${item.label} ${item.detail} ${item.terms} ${categories.find((category) => category.id === item.category)?.label ?? ""}`
             .toLowerCase()
             .includes(normalizedQuery),
         )
@@ -1506,6 +1305,7 @@ export function SettingsPage({
       );
   };
   return (
+    <SettingsTooltipBoundary dark={dark}>
     <main
       className={`settings-page ${dark ? "settings-dark" : "settings-light"} accent-${accent}`}
       style={
@@ -1521,8 +1321,8 @@ export function SettingsPage({
           <button
             className="settings-nav-back"
             onClick={onClose}
-            aria-label="Back to notes"
-            title="Back to notes"
+            aria-label="Back to Notes"
+            data-tooltip="Back to Notes"
           >
             <Icon name="arrowLeft" size={14} />
             <span>Back</span>
@@ -1545,6 +1345,7 @@ export function SettingsPage({
                 setCategoryId(item.id);
                 setQuery("");
               }}
+              data-tooltip={item.description}
               className={`settings-nav-item ${categoryId === item.id && !normalizedQuery ? "active" : ""}`}
             >
               <span className={`settings-category-icon category-${item.color}`}>
@@ -1559,7 +1360,7 @@ export function SettingsPage({
         </nav>
         <div className="settings-nav-footer">
           <button onClick={onClose}>
-            <Icon name="note" size={15} /> Back to notes
+            <Icon name="note" size={15} /> Back to Notes
           </button>
           <span>Scribe · Preview</span>
         </div>
@@ -1583,7 +1384,7 @@ export function SettingsPage({
             </p>
           </div>
         </header>
-        <div className="settings-content-scroll">
+        <div className={`settings-content-scroll section-${activeCategory.color}`}>
           {normalizedQuery ? (
             <SettingsSearchResults
               results={searchResults}
@@ -1618,5 +1419,6 @@ export function SettingsPage({
         </div>
       </section>
     </main>
+    </SettingsTooltipBoundary>
   );
 }

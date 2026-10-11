@@ -210,9 +210,11 @@ export function useNotes(
     };
   }, []);
 
+  const editingInProgress = () => Boolean(document.querySelector('[data-sync-editing="true"], .editor-title-wrap.is-editing, .composer-window'));
+
   const flushOutbox = useCallback(async () => {
     if (!user || !configured || offlineMode || !online || !navigator.onLine ||
-      syncLock.current || refreshingRef.current || notesForUser !== user.id || Date.now() < retryAt.current) return;
+      editingInProgress() || syncLock.current || refreshingRef.current || notesForUser !== user.id || Date.now() < retryAt.current) return;
     if (!hasPendingSync && Date.now() - lastPullAt.current < CLOUD_PULL_INTERVAL_MS) return;
     if ([...localRetries.current.values()].some((task) => task.ownerId === user.id)) return;
     syncLock.current = true;
@@ -223,9 +225,16 @@ export function useNotes(
       hasLease = await offlineStore.acquireSyncLease(user.id, syncOwnerId.current, 60_000);
       if (!hasLease) return;
       const prepared = await offlineStore.prepareBatch(user.id);
-      if (activeUserId.current !== user.id) return;
+      if (activeUserId.current !== user.id || editingInProgress()) return;
       finishWrite = beginWrite();
       const reply = await notesRepository.sync(user, prepared.batch, prepared.cursor);
+      finishWrite();
+      finishWrite = undefined;
+      // A user may enter edit mode while the request is in flight. Keep its
+      // response away from the editor until that editing session has ended.
+      while (activeUserId.current === user.id && editingInProgress()) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
+      }
       // Always acknowledge this account's durable queue, even if it signed out.
       const local = await offlineStore.commitBatch(user.id, prepared.batch, reply);
       if (activeUserId.current !== user.id) return;
@@ -236,7 +245,7 @@ export function useNotes(
         for (const [key, generation] of editGeneration.current) if (key.startsWith("note:") && generation !== editsAtStart.get(key)) {
           const id = key.slice(5);
           const latest = current.find((note) => note.id === id);
-          if (latest) merged.set(id, latest); else merged.delete(id);
+          if (latest) merged.set(id, { ...latest, version: merged.get(id)?.version ?? latest.version }); else merged.delete(id);
         }
         return [...merged.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       });

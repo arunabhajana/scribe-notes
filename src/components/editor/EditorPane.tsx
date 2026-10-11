@@ -91,7 +91,7 @@ export function EditorPane({
       </section>
     );
   return (
-    <section className="editor-pane">
+    <section className="editor-pane" data-context-note={note.id} data-sync-editing={bodyEditing ? "true" : undefined}>
       <EditorHeader
         note={note}
         titleEditable={!isTrash}

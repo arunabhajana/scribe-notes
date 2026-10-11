@@ -6,7 +6,7 @@ export function LoadingSpinner() {
 }
 
 export function NotesSkeleton() {
-  return <div className="notes-skeleton" role="status" aria-label="Loading notes" aria-busy="true">
+  return <div className="notes-skeleton" role="status" aria-label="Loading Notes" aria-busy="true">
     {[0, 1, 2, 3].map((item) => <div className="skeleton-card" key={item} aria-hidden="true">
       <span className="skeleton-block skeleton-title" />
       <span className="skeleton-block" /><span className="skeleton-block skeleton-short" />
@@ -16,7 +16,7 @@ export function NotesSkeleton() {
 }
 
 export function EditorSkeleton() {
-  return <section className="editor-pane editor-skeleton" role="status" aria-label="Loading note content" aria-busy="true">
+  return <section className="editor-pane editor-skeleton" role="status" aria-label="Loading Note content" aria-busy="true">
     <span className="skeleton-block skeleton-title" />
     {[0, 1, 2, 3, 4].map((item) => <span className={`skeleton-block ${item === 4 ? "skeleton-short" : ""}`} key={item} aria-hidden="true" />)}
   </section>;
@@ -64,6 +64,6 @@ export function SyncFeedback({ error, syncing, loading, onDismiss }: {
   }, [syncing, error]);
   return <div className="status-toast-stack">
     {error && <StatusToast key={error} message={error} onDismiss={onDismiss} />}
-    {showSync && <StatusToast busy message={loading ? "Loading your notes…" : "Syncing your notes…"} />}
+    {showSync && <StatusToast busy message={loading ? "Loading your Notes…" : "Syncing your Notes…"} />}
   </div>;
 }

@@ -18,20 +18,20 @@ export function EmptyNotes({
             </div>
             <strong>
                 {search
-                    ? "No notes found"
+                    ? "No Notes found"
                     : isTrash
                         ? "Trash is empty"
-                        : "No notes here yet"}
+                        : "No Notes here yet"}
             </strong>
             <span>
-                {search ? "Try another search term." : "Create a note to get started."}
+                {search ? "Try another search term." : "Create a Note to get started."}
             </span>
             {!isTrash && (
                 <button
                     onClick={onCreateNote}
-                    data-tooltip={`Create a note · ${newNoteShortcut}`}
+                    data-tooltip={`Create a Note · ${newNoteShortcut}`}
                 >
-                    Create a note
+                    Create a Note
                 </button>
             )}
         </div>

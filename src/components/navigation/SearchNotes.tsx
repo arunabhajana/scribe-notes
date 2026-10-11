@@ -40,9 +40,9 @@ export function SearchNotes({
             <Icon name="search" size={15} />
             <input
                 ref={inputRef}
-                aria-label="Search notes"
-                placeholder="Search notes..."
-                title={`Search notes · ${shortcut}`}
+                aria-label="Search Notes"
+                placeholder="Search Notes..."
+                title={`Search Notes · ${shortcut}`}
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
             />
@@ -62,8 +62,8 @@ export function SearchNotes({
                     type="button"
                     className="collapsed-search-button"
                     onClick={expandSearch}
-                    aria-label="Expand sidebar to search notes"
-                    data-tooltip={`Search notes · ${shortcut}`}
+                    aria-label="Expand sidebar to search Notes"
+                    data-tooltip={`Search Notes · ${shortcut}`}
                 >
                     <Icon name="search" size={17} />
                 </button>

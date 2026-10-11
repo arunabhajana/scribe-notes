@@ -65,7 +65,7 @@ export function CreateFolderDialog({
         <div className="modal-heading">
           <div>
             <h2>{folder ? "Edit folder" : "Create a folder"}</h2>
-            <p>Keep related notes together.</p>
+            <p>Keep related Notes together.</p>
           </div>
           <button type="button" className="icon-button" onClick={onClose}>
             <Icon name="close" />
