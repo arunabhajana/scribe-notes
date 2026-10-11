@@ -1,4 +1,6 @@
 export type Note = {
+  /** Server revision; undefined only for caches created before versioned sync. */
+  version?: number;
   id: string;
   title: string;
   body: string;
@@ -33,6 +35,7 @@ export type FolderColor =
   | "rose"
   | "cyan";
 export type NoteFolder = {
+  version?: number;
   id: string;
   name: string;
   icon: FolderIconName;

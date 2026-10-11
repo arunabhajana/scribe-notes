@@ -1,75 +1,275 @@
-# React + TypeScript + Vite
+# Scribe for Windows
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**A modern, minimal, cross-platform notes app.**
 
-Currently, two official plugins are available:
+Scribe is a desktop note-taking application designed to help you capture ideas, organize information, and access your notes across devices. Built with Tauri and React, Scribe combines a lightweight desktop experience with cloud-backed synchronization powered by Supabase.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> **Project status:** In development
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Notes
+- Create and edit notes.
+- Organize notes into folders.
+- Pin important notes for quick access.
+- Move notes to Trash and restore them when needed.
+- Permanently delete notes.
+- View note previews and metadata.
+- Markdown-supported note content.
+- Automatic persistence and a responsive editing experience.
 
-## Expanding the ESLint configuration
+### Organization
+- All Notes — View your active notes.
+- Drafts — Find notes classified as drafts.
+- Pinned Notes — Access pinned notes quickly.
+- Trash — Manage deleted notes.
+- Unfiled — Find notes that do not belong to a folder.
+- Custom folders with names, icons, colors, and ordering.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Desktop experience
+- Dark-themed interface with a teal accent.
+- Three-pane layout with navigation, note list, and editor.
+- Search notes.
+- Keyboard shortcuts for common actions.
+- Windows-native desktop integration through Tauri.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Cloud and account support
+- Supabase authentication.
+- Cloud-backed notes and folder storage.
+- User-specific data access enforced through Row Level Security (RLS).
+- Optimistic UI updates with error handling and rollback.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Feature availability may vary as development progresses. Check the current application for the latest supported functionality.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Technology Stack
 
+| Technology | Purpose |
+|---|---|
+| React | User interface |
+| Vite | Development server and build tooling |
+| Tauri | Native desktop application |
+| TypeScript | Application logic, depending on the module |
+| Supabase Auth | Authentication |
+| Supabase PostgreSQL | Cloud data storage |
+| SQL | Schema, constraints, policies, and database functions |
+| ESLint | Code quality and linting |
+
+## Prerequisites
+
+Install the following before developing Scribe on Windows:
+
+- [Node.js](https://nodejs.org/) — use a version compatible with the project's dependencies.
+- npm — included with Node.js.
+- [Rust](https://www.rust-lang.org/tools/install) — required for Tauri's Rust backend.
+- Microsoft C++ Build Tools and the Windows SDK.
+- [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) — generally already present on modern Windows installations.
+- A Supabase project for cloud-backed functionality.
+
+See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for platform-specific setup instructions.
+
+## Getting Started
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/arunabhajana/scribe-windows
+cd scribe-windows
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Replace the placeholders with the actual repository URL and directory.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 2. Install dependencies
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
 ```
+
+### 3. Configure environment variables
+
+Create a `.env` file in the project root using the variable names expected by the existing Supabase client.
+
+For example:
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+```
+
+Use the exact variable names expected by your implementation. If your project uses a newer Supabase publishable key, configure that key rather than exposing any privileged credentials.
+
+**Security rules:**
+- Never commit `.env` files containing credentials.
+- Never include a Supabase service-role key in the desktop client.
+- Keep database access protected by RLS policies.
+- Provide an appropriate `.env.example` file without real secrets.
+
+### 4. Configure the Supabase database
+
+Scribe uses a hosted Supabase project. A local PostgreSQL instance or local Supabase server is not required.
+
+The initial database migration is maintained in the shared backend repository:
+
+```text
+scribe-backend/
+└── supabase/
+    └── migrations/
+        └── 20261009000000_initial_schema.sql
+```
+
+To configure a new environment:
+
+1. Open the Supabase Dashboard.
+2. Select the project's SQL Editor.
+3. Review and apply the initial migration if it has not already been applied.
+4. Verify the `profiles`, `folders`, `notes`, and `user_settings` tables.
+5. Verify RLS policies, foreign keys, indexes, and triggers.
+6. Test database access using an authenticated user.
+
+Do not apply the initial migration repeatedly to an existing database without checking its current schema and migration history.
+
+### 5. Run the application
+
+Start the frontend development server:
+
+```bash
+npm run dev
+```
+
+To run the desktop application through Tauri, use the project's configured Tauri script. In a standard Tauri setup, this is commonly:
+
+```bash
+npm run tauri dev
+```
+
+Check `package.json` if the project uses a different script name.
+
+### 6. Build the application
+
+Build the frontend:
+
+```bash
+npm run build
+```
+
+Build the Windows desktop application using the configured Tauri command, commonly:
+
+```bash
+npm run tauri build
+```
+
+Generated installers and bundles depend on the Tauri configuration.
+
+## Database Overview
+
+Scribe uses Supabase as its cloud database.
+
+### `notes`
+
+Stores the user's notes, including:
+
+- `id` — UUID primary key.
+- `user_id` — owner of the note.
+- `folder_id` — associated folder, nullable.
+- `title` — note title.
+- `content` — note body.
+- `is_pinned` — whether the note is pinned.
+- `created_at` — creation timestamp.
+- `updated_at` — last-update timestamp.
+- `deleted_at` — soft-deletion timestamp, nullable.
+
+The current implementation uses text-based note content. A migration to structured JSONB content may be introduced when the rich-text editor is ready.
+
+### `folders`
+
+Stores user-created folders and their presentation and ordering metadata, including ownership, name, icon, color, sort order, and timestamps.
+
+Deleting a folder should detach its notes rather than delete them.
+
+### `profiles`
+
+Stores application-level profile information associated with the authenticated Supabase user.
+
+### `user_settings`
+
+Reserved for account-level settings that should synchronize across clients, such as theme, accent color, and font family.
+
+The existence of a table does not necessarily mean every corresponding UI setting is already connected to it.
+
+### System views
+
+All Notes, Drafts, Pinned Notes, Trash, and Unfiled are logical views rather than rows in the `folders` table.
+
+- Unfiled notes have no folder assigned.
+- Trashed notes use `deleted_at`.
+- Restoring a note clears `deleted_at`.
+- Draft classification is derived from note content rather than requiring a dedicated database column.
+
+## Security
+
+Scribe uses Supabase authentication and database authorization.
+
+- RLS policies restrict access to user-owned records.
+- The authenticated user identity is used to associate records with their owner.
+- Client applications use publishable credentials.
+- Privileged database credentials must never be shipped in the desktop application.
+- Schema changes should be maintained as versioned SQL migrations.
+
+Always verify RLS policies and ownership constraints before deploying schema changes.
+
+## Development and Quality Checks
+
+Run the following checks before submitting changes:
+
+```bash
+npm run build
+npx eslint src
+```
+
+Use the repository's configured test commands if additional automated tests are available.
+
+When modifying database functionality, test note creation, editing, pinning, folder assignment, Trash, restoration, and permanent deletion.
+
+## Project Structure
+
+The exact structure may evolve, but a typical layout is:
+
+```text
+scribe-windows/
+├── src/                  # React application
+├── src-tauri/            # Tauri and Rust code
+├── public/               # Static assets
+├── package.json
+├── vite.config.*
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+Refer to the actual repository for the authoritative file layout.
+
+## Roadmap
+
+Potential improvements and planned features include:
+
+- Note reminders.
+- Attachments and image storage.
+- System tray behavior and startup integration.
+- Spellcheck and autocorrection.
+- Automated update delivery.
+- Improved cross-device synchronization with Android and the Chrome Extension.
+
+These items are planned or under consideration and should not be interpreted as already released.
+
+## Contributing
+
+Contributions and improvements are welcome.
+
+1. Create a feature branch.
+2. Make focused changes.
+3. Run the available build and lint checks.
+4. Test the affected functionality.
+5. Submit a pull request with a clear explanation of the change.
+
+For database changes, include a versioned migration and consider compatibility with other Scribe clients that may update independently.
+
+**Scribe** — Your notes, organized.

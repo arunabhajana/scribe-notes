@@ -7,9 +7,11 @@ import type {
 } from "../../types/note";
 import { supabase } from "../auth/supabaseClient";
 import { displayNameFromUser } from "../auth/accountProfile";
-import { documentToMarkdown, markdownToDocument } from "./richTextDocument";
+import { documentToMarkdown } from "./richTextDocument";
+import { encodeSyncOperations, type SyncBatch, type SyncReply } from "./syncProtocol";
 
 type FolderRow = {
+  version?: number;
   id: string;
   name: string;
   icon: string;
@@ -19,6 +21,7 @@ type FolderRow = {
 };
 
 type NoteRow = {
+  version?: number;
   id: string;
   title: string;
   content: unknown;
@@ -29,24 +32,6 @@ type NoteRow = {
   deleted_at: string | null;
   is_draft: boolean;
 };
-
-export class OfflineSyncConflictError extends Error {
-  readonly remote: Note | null;
-  constructor(remote: Note | null) {
-    super("The cloud note changed while this device was offline.");
-    this.name = "OfflineSyncConflictError";
-    this.remote = remote;
-  }
-}
-
-export class FolderSyncConflictError extends Error {
-  readonly remote: NoteFolder | null;
-  constructor(remote: NoteFolder | null) {
-    super("The cloud folder changed while this device was offline.");
-    this.name = "FolderSyncConflictError";
-    this.remote = remote;
-  }
-}
 
 export type SyncedPreferences = {
   theme: "dark" | "light";
@@ -89,6 +74,7 @@ const fromFolderRow = (row: FolderRow): NoteFolder => ({
 });
 
 const fromNoteRow = (row: NoteRow): Note => ({
+  version: row.version,
   id: row.id,
   title: row.title,
   body: documentToMarkdown(row.content),
@@ -147,33 +133,28 @@ async function query<T>(
 }
 
 export const notesRepository = {
-  async load(user: User) {
+  async sync(user: User, batch: SyncBatch, cursor: string | null): Promise<SyncReply> {
+    requireUserId(user);
     const client = requireClient();
-    const userId = requireUserId(user);
-    const [folderRows, noteRows] = await Promise.all([
-      query(
-        client
-          .from("folders")
-          .select("id,name,icon,color,created_at,updated_at")
-          .eq("user_id", userId)
-          .order("created_at"),
-      ),
-      query(
-        client
-          .from("notes")
-          .select(
-            "id,title,content,folder_id,is_pinned,created_at,updated_at,deleted_at,is_draft",
-          )
-          .eq("user_id", userId)
-          .order("updated_at", { ascending: false }),
-      ),
-    ]);
+    const { data: { session }, error: sessionError } = await client.auth.getSession();
+    if (sessionError || session?.user.id !== user.id)
+      throw new Error("The signed-in account changed. Its local queue was kept for the next sign-in.");
+    const operations = batch.payload ?? encodeSyncOperations(batch.operations);
+    const raw = await query(client.rpc("sync_notes_batch", {
+      p_batch_id: batch.id, p_operations: operations, p_cursor: cursor,
+    }).setHeader("Authorization", `Bearer ${session.access_token}`).abortSignal(AbortSignal.timeout(20_000))) as {
+      cursor: string; full: boolean; hasMore: boolean;
+      changes: { entity: "note" | "folder"; id: string; snapshot: NoteRow | FolderRow | null }[];
+      results: { revisionId: string; status: "applied" | "conflict"; entity: "note" | "folder"; snapshot: NoteRow | FolderRow | null }[];
+    };
+    const decode = (entity: "note" | "folder", row: NoteRow | FolderRow | null) =>
+      row ? (entity === "note" ? fromNoteRow(row as NoteRow) : fromFolderRow(row as FolderRow)) : null;
     return {
-      folders: (folderRows as FolderRow[]).map(fromFolderRow),
-      notes: (noteRows as NoteRow[]).map(fromNoteRow),
+      ...raw,
+      changes: raw.changes.map((change) => ({ ...change, snapshot: decode(change.entity, change.snapshot) })),
+      results: raw.results.map((result) => ({ ...result, snapshot: decode(result.entity, result.snapshot) })),
     };
   },
-
   async loadProfileName(user: User): Promise<string | null> {
     const client = requireClient();
     const userId = requireUserId(user);
@@ -221,197 +202,4 @@ export const notesRepository = {
     }
   },
 
-  async createNote(user: User, note: Note) {
-    const client = requireClient();
-    const userId = requireUserId(user);
-    const values = {
-      id: note.id,
-      user_id: userId,
-      title: note.title,
-      content: markdownToDocument(note.body),
-      folder_id: note.folderId,
-      is_pinned: note.pinned,
-      created_at: note.createdAt,
-      deleted_at: note.deletedAt,
-      is_draft: note.isDraft,
-    };
-    const data = await query(
-      client
-        .from("notes")
-        .upsert(values, { onConflict: "id" })
-        .select(
-          "id,title,content,folder_id,is_pinned,created_at,updated_at,deleted_at,is_draft",
-        )
-        .single(),
-    );
-    return fromNoteRow(data as NoteRow);
-  },
-
-  async updateNote(
-    user: User,
-    id: string,
-    patch: Partial<Note>,
-    expectedUpdatedAt?: string,
-  ) {
-    const client = requireClient();
-    const userId = requireUserId(user);
-    const values: Record<string, unknown> = {};
-    if (patch.title !== undefined) values.title = patch.title;
-    if (patch.body !== undefined)
-      values.content = markdownToDocument(patch.body);
-    if (patch.folderId !== undefined) values.folder_id = patch.folderId;
-    if (patch.pinned !== undefined) values.is_pinned = patch.pinned;
-    if (patch.deletedAt !== undefined) values.deleted_at = patch.deletedAt;
-    if (patch.isDraft !== undefined) values.is_draft = patch.isDraft;
-    if (Object.keys(values).length === 0) return null;
-    let update = client
-      .from("notes")
-      .update(values)
-      .eq("id", id)
-      .eq("user_id", userId);
-    if (expectedUpdatedAt) update = update.eq("updated_at", expectedUpdatedAt);
-    const data = await query(
-      update
-        .select(
-          "id,title,content,folder_id,is_pinned,created_at,updated_at,deleted_at,is_draft",
-        )
-        .maybeSingle(),
-    );
-    if (!data) {
-      if (expectedUpdatedAt) {
-        const remote = await query(
-          client
-            .from("notes")
-            .select(
-              "id,title,content,folder_id,is_pinned,created_at,updated_at,deleted_at,is_draft",
-            )
-            .eq("id", id)
-            .eq("user_id", userId)
-            .maybeSingle(),
-        );
-        throw new OfflineSyncConflictError(
-          remote ? fromNoteRow(remote as NoteRow) : null,
-        );
-      }
-      throw new Error(
-        "This note could not be found or is no longer accessible.",
-      );
-    }
-    return fromNoteRow(data as NoteRow);
-  },
-
-  async permanentlyDeleteNote(
-    user: User,
-    id: string,
-    expectedUpdatedAt?: string,
-  ) {
-    const client = requireClient();
-    const userId = requireUserId(user);
-    let deletion = client
-      .from("notes")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", userId);
-    if (expectedUpdatedAt)
-      deletion = deletion.eq("updated_at", expectedUpdatedAt);
-    const deleted = await query(deletion.select("id").maybeSingle());
-    if (!deleted && expectedUpdatedAt) {
-      const remote = await query(
-        client
-          .from("notes")
-          .select(
-            "id,title,content,folder_id,is_pinned,created_at,updated_at,deleted_at,is_draft",
-          )
-          .eq("id", id)
-          .eq("user_id", userId)
-          .maybeSingle(),
-      );
-      if (remote)
-        throw new OfflineSyncConflictError(fromNoteRow(remote as NoteRow));
-    }
-  },
-
-  async createFolder(user: User, folder: NoteFolder) {
-    const data = await query(
-      requireClient()
-        .from("folders")
-        .upsert({
-          id: folder.id,
-          user_id: requireUserId(user),
-          name: folder.name,
-          icon: folder.icon,
-          color: folder.color,
-          created_at: folder.createdAt,
-        })
-        .select("id,name,icon,color,created_at,updated_at")
-        .single(),
-    );
-    return fromFolderRow(data as FolderRow);
-  },
-
-  async updateFolder(
-    user: User,
-    folder: NoteFolder,
-    expectedUpdatedAt?: string,
-  ) {
-    let update = requireClient()
-      .from("folders")
-      .update({
-        name: folder.name,
-        icon: folder.icon,
-        color: folder.color,
-      })
-      .eq("id", folder.id)
-      .eq("user_id", requireUserId(user));
-    if (expectedUpdatedAt) update = update.eq("updated_at", expectedUpdatedAt);
-    const data = await query(
-      update.select("id,name,icon,color,created_at,updated_at").maybeSingle(),
-    );
-    if (!data) {
-      if (expectedUpdatedAt) {
-        const remote = await query(
-          requireClient()
-            .from("folders")
-            .select("id,name,icon,color,created_at,updated_at")
-            .eq("id", folder.id)
-            .eq("user_id", requireUserId(user))
-            .maybeSingle(),
-        );
-        throw new FolderSyncConflictError(
-          remote ? fromFolderRow(remote as FolderRow) : null,
-        );
-      }
-      throw new Error(
-        "This folder could not be found or is no longer accessible.",
-      );
-    }
-    return fromFolderRow(data as FolderRow);
-  },
-
-  async deleteFolder(user: User, id: string, expectedUpdatedAt?: string) {
-    // The schema's composite FK uses ON DELETE SET NULL(folder_id), so Postgres
-    // detaches this user's notes atomically as part of deleting the folder.
-    const client = requireClient();
-    const userId = requireUserId(user);
-    let deletion = client
-      .from("folders")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", userId);
-    if (expectedUpdatedAt)
-      deletion = deletion.eq("updated_at", expectedUpdatedAt);
-    const deleted = await query(deletion.select("id").maybeSingle());
-    if (!deleted && expectedUpdatedAt) {
-      const remote = await query(
-        client
-          .from("folders")
-          .select("id,name,icon,color,created_at,updated_at")
-          .eq("id", id)
-          .eq("user_id", userId)
-          .maybeSingle(),
-      );
-      if (remote)
-        throw new FolderSyncConflictError(fromFolderRow(remote as FolderRow));
-    }
-  },
 };

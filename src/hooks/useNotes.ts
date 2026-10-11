@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import {
-  FolderSyncConflictError,
-  notesRepository,
-  OfflineSyncConflictError,
-} from "../features/notes/notesRepository";
+import { notesRepository } from "../features/notes/notesRepository";
 import {
   offlineStore,
-  type OutboxOperation,
 } from "../features/notes/offlineStore";
 import type {
   FolderColor,
@@ -20,7 +15,8 @@ import type {
 
 const makeId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
-const TEXT_SYNC_DEBOUNCE_MS = 1_500;
+const CLOUD_BATCH_INTERVAL_MS = 15_000;
+const CLOUD_PULL_INTERVAL_MS = 60_000;
 const folderOrderStorageKey = (userId: string) =>
   `scribe-folder-order:${userId}`;
 const unfiledOrderStorageKey = (userId: string) =>
@@ -129,40 +125,28 @@ export function useNotes(
   const [pendingWrites, setPendingWrites] = useState(0);
   const [online, setOnline] = useState(true);
   const [hasPendingSync, setHasPendingSync] = useState(false);
-  const [outboxRevision, setOutboxRevision] = useState(0);
   const [notesForUser, setNotesForUser] = useState<string | null>(null);
+  const [pulledForUser, setPulledForUser] = useState<string | null>(null);
   const syncLock = useRef(false);
   const syncOwnerId = useRef(makeId());
   const refreshingRef = useRef(false);
   const flushOutboxRef = useRef<() => void>(() => undefined);
-  const syncOperationRef = useRef<
-    (owner: User, operation: OutboxOperation) => Promise<void>
-  >(async () => undefined);
-  const noteConflictRef = useRef<
-    (
-      userId: string,
-      operation: OutboxOperation,
-      remote: Note | null,
-    ) => Promise<void>
-  >(async () => undefined);
-  const folderConflictRef = useRef<
-    (
-      userId: string,
-      operation: OutboxOperation,
-      remote: NoteFolder | null,
-    ) => Promise<void>
-  >(async () => undefined);
-  const noteSyncTimers = useRef(
-    new Map<string, ReturnType<typeof setTimeout>>(),
-  );
+  const retryAt = useRef(0);
+  const failureCount = useRef(0);
+  const lastPullAt = useRef(0);
+  const lastCloudError = useRef<string | null>(null);
+  const lastLocalError = useRef<string | null>(null);
+  const editGeneration = useRef(new Map<string, number>());
+  const localRetries = useRef(new Map<string, { run: () => Promise<void>; running: boolean; ownerId: string }>());
+  const activeUserId = useRef(user?.id);
   const notesRef = useRef(notes);
-  const foldersRef = useRef(folders);
   useEffect(() => {
+    activeUserId.current = user?.id;
     notesRef.current = notes;
-    foldersRef.current = folders;
-  }, [notes, folders]);
+  }, [notes, user?.id]);
   const loading = Boolean(
-    user && configured && loadedForUser !== user.id && !error,
+    user && configured && !error && (loadedForUser !== user.id ||
+      (!notes.length && pulledForUser !== user.id && online && !offlineMode)),
   );
   const syncStatus: "on-device" | "syncing" | "synced" | "offline" | "error" =
     !user || !configured
@@ -174,10 +158,48 @@ export function useNotes(
           : error
             ? "error"
             : hasPendingSync
-              ? "syncing"
+              ? "on-device"
               : "synced";
   const clearError = useCallback(() => setError(null), []);
   const showError = useCallback((message: string) => setError(message), []);
+  const persistLocally = useCallback((ownerId: string, key: string, run: () => Promise<void>) => {
+    const taskKey = `${ownerId}:${key}`;
+    const task = { run, running: true, ownerId };
+    localRetries.current.set(taskKey, task);
+    if (activeUserId.current === ownerId) setHasPendingSync(true);
+    const execute = () => {
+      task.running = true;
+      void task.run().then(() => {
+        if (localRetries.current.get(taskKey) === task) localRetries.current.delete(taskKey);
+        if (activeUserId.current === ownerId) {
+          setHasPendingSync(true);
+          if (![...localRetries.current.values()].some((pending) => pending.ownerId === ownerId)) {
+            const recoveredError = lastLocalError.current;
+            lastLocalError.current = null;
+            setError((current) => current === recoveredError ? null : current);
+          }
+        }
+      }).catch((cause: unknown) => {
+        if (localRetries.current.get(taskKey) === task && activeUserId.current === ownerId) {
+          lastLocalError.current = `Local save failed; keep Scribe open while it retries. These latest changes are not yet protected against a crash: ${messageFor(cause)}`;
+          setError(lastLocalError.current);
+        }
+      }).finally(() => { task.running = false; });
+    };
+    // Retried work still uses the newest task for this entity; an older failed
+    // edit must never resurrect a note that was subsequently deleted.
+    execute();
+  }, []);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      for (const [key, task] of [...localRetries.current]) if (!task.running) {
+        localRetries.current.delete(key);
+        persistLocally(task.ownerId, key.slice(task.ownerId.length + 1), task.run);
+      }
+    }, 3000);
+    void navigator.storage?.persist?.().catch(() => undefined);
+    return () => window.clearInterval(timer);
+  }, [persistLocally]);
   const beginWrite = useCallback(() => {
     setPendingWrites((count) => count + 1);
     let ended = false;
@@ -189,255 +211,77 @@ export function useNotes(
   }, []);
 
   const flushOutbox = useCallback(async () => {
-    if (
-      !user ||
-      !configured ||
-      offlineMode ||
-      !online ||
-      !navigator.onLine ||
-      syncLock.current ||
-      refreshingRef.current ||
-      notesForUser !== user.id
-    )
-      return;
+    if (!user || !configured || offlineMode || !online || !navigator.onLine ||
+      syncLock.current || refreshingRef.current || notesForUser !== user.id || Date.now() < retryAt.current) return;
+    if (!hasPendingSync && Date.now() - lastPullAt.current < CLOUD_PULL_INTERVAL_MS) return;
+    if ([...localRetries.current.values()].some((task) => task.ownerId === user.id)) return;
     syncLock.current = true;
-    const finishWrite = beginWrite();
+    let finishWrite: (() => void) | undefined;
     let hasLease = false;
+    const editsAtStart = new Map(editGeneration.current);
     try {
-      hasLease = await offlineStore.acquireSyncLease(
-        user.id,
-        syncOwnerId.current,
-      );
+      hasLease = await offlineStore.acquireSyncLease(user.id, syncOwnerId.current, 60_000);
       if (!hasLease) return;
-      let operations = await offlineStore.listOutbox(user.id);
-      setHasPendingSync(operations.length > 0);
-      for (const operation of operations) {
-        if (offlineMode || !navigator.onLine) break;
-        try {
-          await syncOperationRef.current(user, operation);
-        } catch (cause) {
-          if (cause instanceof OfflineSyncConflictError) {
-            await noteConflictRef.current(user.id, operation, cause.remote);
-            continue;
-          }
-          if (cause instanceof FolderSyncConflictError) {
-            await folderConflictRef.current(user.id, operation, cause.remote);
-            continue;
-          }
-          setError(`Could not sync offline changes: ${messageFor(cause)}`);
-          break;
+      const prepared = await offlineStore.prepareBatch(user.id);
+      if (activeUserId.current !== user.id) return;
+      finishWrite = beginWrite();
+      const reply = await notesRepository.sync(user, prepared.batch, prepared.cursor);
+      // Always acknowledge this account's durable queue, even if it signed out.
+      const local = await offlineStore.commitBatch(user.id, prepared.batch, reply);
+      if (activeUserId.current !== user.id) return;
+      setPulledForUser(user.id);
+      const ordered = applyLocalFolderOrder(user.id, local.folders);
+      setNotes((current) => {
+        const merged = new Map(local.notes.map((note) => [note.id, note]));
+        for (const [key, generation] of editGeneration.current) if (key.startsWith("note:") && generation !== editsAtStart.get(key)) {
+          const id = key.slice(5);
+          const latest = current.find((note) => note.id === id);
+          if (latest) merged.set(id, latest); else merged.delete(id);
         }
+        return [...merged.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      });
+      setFolders((current) => {
+        const merged = new Map(ordered.folders.map((folder) => [folder.id, folder]));
+        for (const [key, generation] of editGeneration.current) if (key.startsWith("folder:") && generation !== editsAtStart.get(key)) {
+          const id = key.slice(7);
+          const latest = current.find((folder) => folder.id === id);
+          if (latest) merged.set(id, latest); else merged.delete(id);
+        }
+        return [...merged.values()];
+      });
+      setUnfiledPosition(ordered.unfiledPosition);
+      setFolderId((current) => current && (ordered.folders.some((folder) => folder.id === current) ||
+        editGeneration.current.get(`folder:${current}`) !== editsAtStart.get(`folder:${current}`)) ? current : null);
+      setHasPendingSync(local.outbox.length > 0);
+      setSelectedId((current) => current && (local.notes.some((note) => note.id === current) ||
+        (editGeneration.current.get(`note:${current}`) !== editsAtStart.get(`note:${current}`) && notesRef.current.some((note) => note.id === current)))
+        ? current : local.notes.find((note) => !note.deletedAt)?.id ?? null);
+      failureCount.current = 0;
+      retryAt.current = 0;
+      lastPullAt.current = reply.hasMore ? 0 : Date.now();
+      const recoveredError = lastCloudError.current;
+      setError((current) => current === recoveredError ? null : current);
+      lastCloudError.current = null;
+      if (local.conflicts) setError("Another device changed the same data. Your edits were preserved in conflict copies; conflicting deletions were canceled.");
+      if (reply.hasMore || (local.outbox.length && prepared.batch.operations.length === 50)) {
+        // Drain large queues in bounded batches, leaving time for local edits.
+        window.setTimeout(() => flushOutboxRef.current(), 500);
       }
-      operations = await offlineStore.listOutbox(user.id);
-      setHasPendingSync(operations.length > 0);
-      if (!operations.length) setError(null);
     } catch (cause) {
-      setError(`Could not access offline changes: ${messageFor(cause)}`);
+      failureCount.current++;
+      const delay = Math.min(120_000, 5000 * 2 ** Math.min(failureCount.current - 1, 5));
+      retryAt.current = Date.now() + delay + Math.random() * 1500;
+      if (activeUserId.current === user.id) {
+        lastCloudError.current = `Cloud sync paused. Local changes are kept on this device and will retry automatically: ${messageFor(cause)}`;
+        setError(lastCloudError.current);
+      }
     } finally {
-      if (hasLease)
-        await offlineStore
-          .releaseSyncLease(user!.id, syncOwnerId.current)
-          .catch(() => undefined);
+      if (hasLease) await offlineStore.releaseSyncLease(user.id, syncOwnerId.current).catch(() => undefined);
       syncLock.current = false;
-      finishWrite();
+      finishWrite?.();
     }
-  }, [user, configured, offlineMode, online, notesForUser, beginWrite]);
-  const syncOperation = useCallback(
-    async (owner: User, operation: OutboxOperation) => {
-      if (operation.entity === "note") {
-        if (operation.kind === "delete") {
-          await notesRepository.permanentlyDeleteNote(
-            owner,
-            operation.entityId,
-            operation.baseUpdatedAt ?? undefined,
-          );
-          await offlineStore.resolveOperation(operation);
-          return;
-        }
-        const note = operation.snapshot as Note;
-        const saved = operation.baseUpdatedAt
-          ? await notesRepository.updateNote(
-              owner,
-              note.id,
-              note,
-              operation.baseUpdatedAt,
-            )
-          : await notesRepository.createNote(owner, note);
-        if (!saved) throw new Error("The cloud did not confirm the note save.");
-        const resolved = await offlineStore.resolveOperation(
-          operation,
-          saved.updatedAt,
-        );
-        if (resolved) {
-          setNotes((items) =>
-            items.map((item) =>
-              item.id === note.id ? { ...saved, body: item.body } : item,
-            ),
-          );
-          await offlineStore.cacheNote(owner.id, {
-            ...saved,
-            body:
-              notesRef.current.find((item) => item.id === note.id)?.body ??
-              note.body,
-          });
-        }
-        return;
-      }
-
-      if (operation.kind === "delete") {
-        await notesRepository.deleteFolder(
-          owner,
-          operation.entityId,
-          operation.baseUpdatedAt ?? undefined,
-        );
-        await offlineStore.resolveOperation(operation);
-        return;
-      }
-      const folder = operation.snapshot as NoteFolder;
-      const saved = operation.baseUpdatedAt
-        ? await notesRepository.updateFolder(
-            owner,
-            folder,
-            operation.baseUpdatedAt,
-          )
-        : await notesRepository.createFolder(owner, folder);
-      const resolved = await offlineStore.resolveOperation(
-        operation,
-        saved.updatedAt,
-      );
-      if (resolved) {
-        setFolders((items) =>
-          items.map((item) =>
-            item.id === folder.id
-              ? { ...saved, sortOrder: item.sortOrder }
-              : item,
-          ),
-        );
-        const localFolder = foldersRef.current.find(
-          (item) => item.id === folder.id,
-        );
-        await offlineStore.cacheFolder(owner.id, {
-          ...saved,
-          sortOrder: localFolder?.sortOrder ?? folder.sortOrder,
-        });
-      }
-    },
-    [],
-  );
-  const handleNoteConflict = useCallback(
-    async (userId: string, operation: OutboxOperation, remote: Note | null) => {
-      const latest = (await offlineStore.takeOperation(operation)) ?? operation;
-      if (latest.kind === "delete") {
-        const nextNotes = notesRef.current.filter(
-          (note) => note.id !== latest.entityId,
-        );
-        if (remote) nextNotes.unshift(remote);
-        setNotes(nextNotes);
-        if (remote) await offlineStore.cacheNote(userId, remote);
-        else await offlineStore.removeCached(userId, "note", latest.entityId);
-        setError(
-          "A note changed in the cloud while this device was offline, so the permanent delete was canceled and the cloud version was restored.",
-        );
-        return;
-      }
-      const local = latest.snapshot as Note;
-      const copy: Note = {
-        ...local,
-        id: makeId(),
-        title: `${local.title || "Untitled note"} (offline copy)`,
-        createdAt: now(),
-        updatedAt: now(),
-        deletedAt: null,
-      };
-      const nextNotes = notesRef.current.filter((note) => note.id !== local.id);
-      if (remote) nextNotes.unshift(remote);
-      nextNotes.unshift(copy);
-      setNotes(nextNotes);
-      if (remote) await offlineStore.cacheNote(userId, remote);
-      else await offlineStore.removeCached(userId, "note", local.id);
-      await offlineStore.cacheNote(userId, copy);
-      await offlineStore.putNote(userId, copy, null, true);
-      setOutboxRevision((revision) => revision + 1);
-      setError(
-        "A cloud note changed while this device was offline. Your edits were kept in a separate offline copy.",
-      );
-    },
-    [],
-  );
-  const handleFolderConflict = useCallback(
-    async (
-      userId: string,
-      operation: OutboxOperation,
-      remote: NoteFolder | null,
-    ) => {
-      const latest = (await offlineStore.takeOperation(operation)) ?? operation;
-      if (latest.kind === "delete") {
-        if (remote) {
-          setFolders((items) =>
-            items.map((folder) =>
-              folder.id === remote.id
-                ? { ...remote, sortOrder: folder.sortOrder }
-                : folder,
-            ),
-          );
-          await offlineStore.cacheFolder(userId, remote);
-          setError(
-            "A folder changed in the cloud while this device was offline, so its deletion was canceled. Notes moved out while offline stay unfiled.",
-          );
-        } else {
-          setFolders((items) =>
-            items.filter((folder) => folder.id !== latest.entityId),
-          );
-          await offlineStore.removeCached(userId, "folder", latest.entityId);
-        }
-        return;
-      }
-      const local = latest.snapshot as NoteFolder;
-      if (!remote) {
-        setFolders((items) => items.filter((folder) => folder.id !== local.id));
-        await offlineStore.removeCached(userId, "folder", local.id);
-        setError(
-          "A folder changed or was deleted in the cloud while this device was offline. The local change was not applied.",
-        );
-        return;
-      }
-      const copy: NoteFolder = {
-        ...local,
-        id: makeId(),
-        name: `${local.name} (offline copy)`,
-        createdAt: now(),
-        updatedAt: now(),
-        sortOrder: foldersRef.current.length,
-      };
-      const nextFolders = foldersRef.current
-        .map((folder) => (folder.id === local.id ? remote : folder))
-        .concat(copy);
-      setFolders(nextFolders);
-      await offlineStore.cacheFolder(userId, remote);
-      await offlineStore.cacheFolder(userId, copy);
-      await offlineStore.putFolder(userId, copy, null, true);
-      setError(
-        "A folder changed in the cloud while this device was offline. Your folder settings were kept in a separate copy.",
-      );
-    },
-    [],
-  );
-  useEffect(() => {
-    syncOperationRef.current = syncOperation;
-    noteConflictRef.current = handleNoteConflict;
-    folderConflictRef.current = handleFolderConflict;
-  }, [syncOperation, handleNoteConflict, handleFolderConflict]);
-  useEffect(() => {
-    flushOutboxRef.current = () => {
-      void flushOutbox();
-    };
-  }, [flushOutbox]);
-  useEffect(
-    () => () => {
-      for (const timer of noteSyncTimers.current.values()) clearTimeout(timer);
-    },
-    [],
-  );
+  }, [user, configured, offlineMode, online, notesForUser, beginWrite, hasPendingSync]);
+  useEffect(() => { flushOutboxRef.current = () => { void flushOutbox(); }; }, [flushOutbox]);
 
   useEffect(() => {
     const updateOnlineStatus = () => setOnline(navigator.onLine);
@@ -452,149 +296,40 @@ export function useNotes(
 
   useEffect(() => {
     let active = true;
-    let localStoreAvailable = true;
-    refreshingRef.current = Boolean(
-      user && configured && online && !offlineMode,
-    );
-    if (!user || !configured) {
+    const userId = user?.id;
+    if (!userId || !configured) return;
+    refreshingRef.current = true;
+    void offlineStore.load(userId).then((local) => {
+      if (!active) return;
+      const order = applyLocalFolderOrder(userId, local.folders);
+      setNotes(local.notes.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+      setFolders(order.folders);
+      setUnfiledPosition(order.unfiledPosition);
+      setHasPendingSync(local.outbox.length > 0);
+      setSelectedId((current) => current && local.notes.some((note) => note.id === current)
+        ? current : local.notes.find((note) => !note.deletedAt)?.id ?? null);
+      setNotesForUser(userId);
+      setLoadedForUser(userId);
+      lastPullAt.current = 0;
+      retryAt.current = 0;
       refreshingRef.current = false;
-      return () => {
-        active = false;
-      };
-    }
-    void (async () => {
-      try {
-        const local = await offlineStore.load(user.id);
-        if (!active) return;
-        const localNotesById = new Map(
-          local.notes.map((note) => [note.id, note]),
-        );
-        const localFoldersById = new Map(
-          local.folders.map((folder) => [folder.id, folder]),
-        );
-        for (const operation of local.outbox) {
-          if (operation.entity === "note") {
-            if (operation.kind === "delete")
-              localNotesById.delete(operation.entityId);
-            else
-              localNotesById.set(
-                operation.entityId,
-                operation.snapshot as Note,
-              );
-          } else if (operation.kind === "delete")
-            localFoldersById.delete(operation.entityId);
-          else
-            localFoldersById.set(
-              operation.entityId,
-              operation.snapshot as NoteFolder,
-            );
-        }
-        const localNotes = [...localNotesById.values()].sort((a, b) =>
-          b.updatedAt.localeCompare(a.updatedAt),
-        );
-        setNotes(localNotes);
-        const localOrder = applyLocalFolderOrder(user.id, [
-          ...localFoldersById.values(),
-        ]);
-        setFolders(localOrder.folders);
-        setUnfiledPosition(localOrder.unfiledPosition);
-        setHasPendingSync(local.outbox.length > 0);
-        setNotesForUser(user.id);
-        if (offlineMode || !online) setLoadedForUser(user.id);
-        setSelectedId((current) =>
-          current && localNotes.some((note) => note.id === current)
-            ? current
-            : (localNotes.find((note) => !note.deletedAt)?.id ?? null),
-        );
-      } catch (cause) {
-        if (!active) return;
-        localStoreAvailable = false;
-        setError(`Could not open local notes storage: ${messageFor(cause)}`);
-        setNotesForUser(user.id);
-        if (offlineMode || !online) {
-          setLoadedForUser(user.id);
-          return;
-        }
-      }
-      if (!active || offlineMode || !online) return;
-      try {
-        const cloud = await notesRepository.load(user);
-        if (!active) return;
-        const latestOutbox = localStoreAvailable
-          ? await offlineStore.listOutbox(user.id)
-          : [];
-        if (!active) return;
-        const cloudNotes = new Map(cloud.notes.map((note) => [note.id, note]));
-        const cloudFolders = new Map(
-          cloud.folders.map((folder) => [folder.id, folder]),
-        );
-        for (const operation of latestOutbox) {
-          if (operation.entity === "note") {
-            if (operation.kind === "delete")
-              cloudNotes.delete(operation.entityId);
-            else cloudNotes.set(operation.entityId, operation.snapshot as Note);
-          } else if (operation.kind === "delete")
-            cloudFolders.delete(operation.entityId);
-          else
-            cloudFolders.set(
-              operation.entityId,
-              operation.snapshot as NoteFolder,
-            );
-        }
-        const mergedNotes = [...cloudNotes.values()].sort((a, b) =>
-          b.updatedAt.localeCompare(a.updatedAt),
-        );
-        const mergedOrder = applyLocalFolderOrder(user.id, [
-          ...cloudFolders.values(),
-        ]);
-        const mergedFolders = mergedOrder.folders;
-        setNotes(mergedNotes);
-        setFolders(mergedFolders);
-        setUnfiledPosition(mergedOrder.unfiledPosition);
-        setHasPendingSync(latestOutbox.length > 0);
-        if (localStoreAvailable)
-          await offlineStore.replaceCache(user.id, mergedNotes, mergedFolders);
-        saveLocalFolderOrder(
-          user.id,
-          mergedFolders,
-          mergedOrder.unfiledPosition,
-        );
-        setSelectedId((current) =>
-          current && mergedNotes.some((note) => note.id === current)
-            ? current
-            : (mergedNotes.find((note) => !note.deletedAt)?.id ?? null),
-        );
-        if (localStoreAvailable) setError(null);
-        else
-          setError(
-            "Local offline storage is unavailable. Your cloud notes loaded, but changes cannot be saved on this device.",
-          );
-        setLoadedForUser(user.id);
-        refreshingRef.current = false;
-        setOutboxRevision((revision) => revision + 1);
-      } catch (cause) {
-        if (active) {
-          setError(
-            `Could not refresh cloud notes. Your local notes are still available: ${messageFor(cause)}`,
-          );
-          setLoadedForUser(user.id);
-          refreshingRef.current = false;
-          setOutboxRevision((revision) => revision + 1);
-        }
-      }
-    })();
-
-    return () => {
-      active = false;
+    }).catch((cause: unknown) => {
+      if (!active) return;
       refreshingRef.current = false;
-    };
-  }, [user, configured, offlineMode, online]);
+      setError(`Could not open local notes storage: ${messageFor(cause)}. Cloud sync is paused to protect unsaved data.`);
+    });
+    return () => { active = false; refreshingRef.current = false; };
+  }, [user?.id, configured]);
 
   useEffect(() => {
-    if (loadedForUser === user?.id && !offlineMode && online)
-      flushOutboxRef.current();
-  }, [outboxRevision, loadedForUser, user, offlineMode, online]);
-
+    if (loadedForUser !== user?.id || offlineMode || !online) return;
+    retryAt.current = 0;
+    flushOutboxRef.current();
+    const timer = window.setInterval(() => flushOutboxRef.current(), CLOUD_BATCH_INTERVAL_MS);
+    const onFocus = () => { if (Date.now() - lastPullAt.current >= CLOUD_PULL_INTERVAL_MS) flushOutboxRef.current(); };
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [loadedForUser, user?.id, offlineMode, online]);
   const clearUserData = useCallback(() => {
     setNotes([]);
     setFolders([]);
@@ -635,38 +370,20 @@ export function useNotes(
 
   const updateNote = useCallback(
     (id: string, patch: NotePatch) => {
-      const previous = notes.find((note) => note.id === id);
+      const previous = notesRef.current.find((note) => note.id === id);
       if (!previous) return;
+      if (Object.entries(patch).every(([key, value]) => previous[key as keyof Note] === value)) return;
+      editGeneration.current.set(`note:${id}`, (editGeneration.current.get(`note:${id}`) ?? 0) + 1);
       const updated = { ...previous, ...patch, updatedAt: now() };
+      notesRef.current = notesRef.current.map((note) => note.id === id ? updated : note);
       setNotes((current) =>
         current.map((note) => (note.id === id ? updated : note)),
       );
       if (!user || !configured) return;
-      const isTextEdit = patch.title !== undefined || patch.body !== undefined;
-      void offlineStore
-        .putNote(user.id, updated, previous.updatedAt)
-        .then(() => {
-          setHasPendingSync(true);
-          if (!isTextEdit) setOutboxRevision((revision) => revision + 1);
-        })
-        .catch((cause: unknown) =>
-          setError(`Could not save note locally: ${messageFor(cause)}`),
-        );
-      const oldTimer = noteSyncTimers.current.get(id);
-      if (oldTimer) clearTimeout(oldTimer);
-      if (isTextEdit) {
-        noteSyncTimers.current.set(
-          id,
-          setTimeout(() => {
-            setOutboxRevision((revision) => revision + 1);
-            flushOutboxRef.current();
-          }, TEXT_SYNC_DEBOUNCE_MS),
-        );
-      } else {
-        flushOutboxRef.current();
-      }
+      persistLocally(user.id, `note:${id}`, () => offlineStore.putNote(user.id, updated, previous.updatedAt));
+
     },
-    [notes, user, configured],
+    [user, configured, persistLocally],
   );
 
   const createNote = useCallback(
@@ -687,23 +404,17 @@ export function useNotes(
         deletedAt: null,
         isDraft: draft.isDraft ?? false,
       };
+      editGeneration.current.set(`note:${note.id}`, 1);
+      notesRef.current = [note, ...notesRef.current];
       setNotes((current) => [note, ...current]);
       setSection("all");
       setSelectedId(note.id);
       if (user && configured) {
-        void offlineStore
-          .putNote(user.id, note, null, true)
-          .then(() => {
-            setHasPendingSync(true);
-            setOutboxRevision((revision) => revision + 1);
-          })
-          .catch((cause: unknown) =>
-            setError(`Could not save note locally: ${messageFor(cause)}`),
-          );
+        persistLocally(user.id, `note:${note.id}`, () => offlineStore.putNote(user.id, note, null, true));
       }
       return note.id;
     },
-    [folderId, user, configured],
+    [folderId, user, configured, persistLocally],
   );
 
   const togglePinned = useCallback(
@@ -726,23 +437,14 @@ export function useNotes(
   const permanentlyDelete = useCallback(
     (id: string) => {
       const previous = notes.find((note) => note.id === id);
+      editGeneration.current.set(`note:${id}`, (editGeneration.current.get(`note:${id}`) ?? 0) + 1);
+      notesRef.current = notesRef.current.filter((note) => note.id !== id);
       setNotes((current) => current.filter((note) => note.id !== id));
       if (user && configured) {
-        const oldTimer = noteSyncTimers.current.get(id);
-        if (oldTimer) clearTimeout(oldTimer);
-        noteSyncTimers.current.delete(id);
-        void offlineStore
-          .deleteEntity(user.id, "note", id, previous?.updatedAt ?? null)
-          .then(() => {
-            setHasPendingSync(true);
-            setOutboxRevision((revision) => revision + 1);
-          })
-          .catch((cause: unknown) =>
-            setError(`Could not delete note locally: ${messageFor(cause)}`),
-          );
+        persistLocally(user.id, `note:${id}`, () => offlineStore.deleteEntity(user.id, "note", id, previous?.updatedAt ?? null, previous?.version));
       }
     },
-    [notes, user, configured],
+    [notes, user, configured, persistLocally],
   );
 
   const createFolder = useCallback(
@@ -765,25 +467,18 @@ export function useNotes(
         createdAt: timestamp,
         updatedAt: timestamp,
       };
+      editGeneration.current.set(`folder:${folder.id}`, 1);
       setFolders((current) => [...current, folder]);
       if (user)
         saveLocalFolderOrder(user.id, [...folders, folder], unfiledPosition);
       setFolderId(folder.id);
       setSection("all");
       if (user && configured) {
-        void offlineStore
-          .putFolder(user.id, folder, null, true)
-          .then(() => {
-            setHasPendingSync(true);
-            setOutboxRevision((revision) => revision + 1);
-          })
-          .catch((cause: unknown) =>
-            setError(`Could not save folder locally: ${messageFor(cause)}`),
-          );
+        persistLocally(user.id, `folder:${folder.id}`, () => offlineStore.putFolder(user.id, folder, null, true));
       }
       return true;
     },
-    [folders, user, configured, unfiledPosition],
+    [folders, user, configured, unfiledPosition, persistLocally],
   );
 
   const updateFolder = useCallback(
@@ -807,32 +502,26 @@ export function useNotes(
         color,
         updatedAt: now(),
       };
+      editGeneration.current.set(`folder:${id}`, (editGeneration.current.get(`folder:${id}`) ?? 0) + 1);
       setFolders((current) =>
         current.map((item) => (item.id === id ? updated : item)),
       );
       if (user && configured) {
-        void offlineStore
-          .putFolder(user.id, updated, previous.updatedAt)
-          .then(() => {
-            setHasPendingSync(true);
-            setOutboxRevision((revision) => revision + 1);
-            flushOutboxRef.current();
-          })
-          .catch((cause: unknown) =>
-            setError(`Could not save folder locally: ${messageFor(cause)}`),
-          );
+        persistLocally(user.id, `folder:${id}`, () => offlineStore.putFolder(user.id, updated, previous.updatedAt));
       }
       return true;
     },
-    [folders, user, configured],
+    [folders, user, configured, persistLocally],
   );
 
   const deleteFolder = useCallback(
     (id: string) => {
       const previous = folders.find((item) => item.id === id);
+      editGeneration.current.set(`folder:${id}`, (editGeneration.current.get(`folder:${id}`) ?? 0) + 1);
       const detachedNotes = notes
         .filter((note) => note.folderId === id)
         .map((note) => ({ ...note, folderId: null, updatedAt: now() }));
+      for (const note of detachedNotes) editGeneration.current.set(`note:${note.id}`, (editGeneration.current.get(`note:${note.id}`) ?? 0) + 1);
       setFolders((current) => current.filter((item) => item.id !== id));
       const nextFolders = folders.filter((item) => item.id !== id);
       const nextUnfiledPosition = Math.max(
@@ -855,44 +544,17 @@ export function useNotes(
       );
       setFolderId((current) => (current === id ? null : current));
       if (user && configured) {
-        void Promise.all(
-          detachedNotes.map((note) =>
-            offlineStore.putNote(
-              user.id,
-              note,
-              notes.find((item) => item.id === note.id)?.updatedAt ?? null,
-            ),
-          ),
-        )
-          .then(() =>
-            offlineStore.deleteEntity(
-              user.id,
-              "folder",
-              id,
-              previous?.updatedAt ?? null,
-            ),
-          )
-          .then(async () => {
-            await offlineStore.replaceCache(
-              user.id,
-              notes.map(
-                (note) =>
-                  detachedNotes.find((detached) => detached.id === note.id) ??
-                  note,
-              ),
-              folders.filter((folder) => folder.id !== id),
-            );
-            setHasPendingSync(true);
-            setOutboxRevision((revision) => revision + 1);
-          })
-          .catch((cause: unknown) =>
-            setError(
-              `Could not save folder deletion locally: ${messageFor(cause)}`,
-            ),
-          );
+        if (!previous) return;
+        for (const note of detachedNotes) localRetries.current.delete(`${user.id}:note:${note.id}`);
+        persistLocally(user.id, `folder:${id}`, () => offlineStore.deleteFolderAndDetach(user.id, previous,
+          detachedNotes.flatMap((after) => {
+            const latest = notesRef.current.find((note) => note.id === after.id);
+            return latest ? [{ before: notes.find((note) => note.id === after.id)!, after: { ...latest, folderId: null, updatedAt: latest.updatedAt > after.updatedAt ? latest.updatedAt : after.updatedAt } }] : [];
+          })));
+
       }
     },
-    [folders, notes, user, configured, unfiledPosition],
+    [folders, notes, user, configured, unfiledPosition, persistLocally],
   );
 
   const moveFolder = useCallback(

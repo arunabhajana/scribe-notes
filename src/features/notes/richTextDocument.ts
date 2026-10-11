@@ -117,14 +117,16 @@ export function markdownToDocument(markdown: string): RichTextDocument {
       content.push({ type: "taskList", content: items });
       continue;
     }
-    const listItem = lines[i].match(/^\s*([-*+] |\d+\. )/);
+    const listPattern = /^[ \t]*(?:([-*+])[ \t]+|(\d+)[.)][ \t]+)(.*)$/;
+    const listItem = lines[i].match(listPattern);
     if (listItem) {
-      const ordered = /^\s*\d+\. /.test(lines[i]);
+      const ordered = Boolean(listItem[2]);
       const items: Array<{ type: "listItem"; content: RichTextNode[] }> = [];
       while (
         i < lines.length &&
-        /^\s*([-*+] |\d+\. )/.test(lines[i]) &&
-        /^\s*\d+\. /.test(lines[i]) === ordered
+        listPattern.test(lines[i]) &&
+        Boolean(lines[i].match(listPattern)?.[2]) === ordered &&
+        !/^[ \t]*[-*+][ \t]+\[([ xX])\][ \t]+/.test(lines[i])
       ) {
         items.push({
           type: "listItem",
@@ -132,7 +134,7 @@ export function markdownToDocument(markdown: string): RichTextDocument {
             {
               type: "paragraph",
               content: parseInline(
-                lines[i].replace(/^\s*(?:[-*+] |\d+\. )/, ""),
+                lines[i].match(listPattern)![3],
               ),
             },
           ],
@@ -161,7 +163,7 @@ export function markdownToDocument(markdown: string): RichTextDocument {
     while (
       i < lines.length &&
       lines[i].trim() &&
-      !/^(#{1,3})\s|^```|^\s*([-*+] |\d+\. )|^> /.test(lines[i])
+      !/^(#{1,3})\s|^```|^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+)|^> /.test(lines[i])
     )
       paragraph.push(lines[i++]);
     const inline: RichTextNode[] = [];

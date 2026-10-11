@@ -1,4 +1,8 @@
 import type { Note, NoteFolder } from "../../types/note";
+import type { SyncBatch, SyncReply } from "./syncProtocol";
+import { encodeSyncOperations } from "./syncProtocol";
+
+type SyncState = { userId: string; cursor: string | null; inFlight?: SyncBatch };
 
 export type OutboxOperation = {
   key: [string, "note" | "folder", string];
@@ -9,6 +13,7 @@ export type OutboxOperation = {
   snapshot?: Note | NoteFolder;
   /** null means this row was created locally and has no cloud version yet. */
   baseUpdatedAt: string | null;
+  baseVersion?: number;
   queuedUpdatedAt: string;
   revisionId: string;
   sequence: number;
@@ -18,7 +23,7 @@ type CacheNote = Note & { key: string; userId: string };
 type CacheFolder = NoteFolder & { key: string; userId: string };
 
 const databaseName = "scribe-offline-v1";
-const databaseVersion = 2;
+const databaseVersion = 3;
 let databasePromise: Promise<IDBDatabase> | undefined;
 
 function ensureStore(
@@ -56,6 +61,7 @@ function openDatabase() {
           outbox.createIndex("sequence", "sequence");
       }
       ensureStore(db, transaction, "syncLeases", { keyPath: "userId" });
+      ensureStore(db, transaction, "syncState", { keyPath: "userId" });
     };
     request.onsuccess = () => {
       const db = request.result;
@@ -86,6 +92,125 @@ function transactionDone(transaction: IDBTransaction) {
 }
 
 export const offlineStore = {
+  async prepareBatch(userId: string): Promise<{ batch: SyncBatch; cursor: string | null }> {
+    const db = await openDatabase();
+    const tx = db.transaction(["outbox", "syncState"], "readwrite", { durability: "strict" });
+    const done = transactionDone(tx);
+    const stateRequest = tx.objectStore("syncState").get(userId) as IDBRequest<SyncState | undefined>;
+    const queueRequest = tx.objectStore("outbox").index("userId").getAll(userId) as IDBRequest<OutboxOperation[]>;
+    const result = new Promise<{ batch: SyncBatch; cursor: string | null }>((resolve, reject) => {
+      let remaining = 2;
+      const ready = () => {
+        if (--remaining) return;
+        const state = stateRequest.result ?? { userId, cursor: null };
+        const rank = (op: OutboxOperation) => op.entity === "folder" ? (op.kind === "delete" ? 2 : 0) : 1;
+        const batch: SyncBatch = state.inFlight ?? {
+          id: crypto.randomUUID(),
+          operations: queueRequest.result.sort((a, b) => rank(a) - rank(b) || a.sequence - b.sequence).slice(0, 50),
+        };
+        batch.payload ??= encodeSyncOperations(batch.operations);
+        // Persist the exact request BEFORE sending it. Ambiguous failures replay
+        // this batch even if the user has since edited/deleted the same entity.
+        tx.objectStore("syncState").put({ ...state, inFlight: batch });
+        resolve({ batch, cursor: state.cursor });
+      };
+      stateRequest.onsuccess = queueRequest.onsuccess = ready;
+      tx.addEventListener("abort", () => reject(tx.error ?? new Error("Could not prepare sync batch.")), { once: true });
+    });
+    return (await Promise.all([result, done]))[0];
+  },
+
+  async commitBatch(userId: string, batch: SyncBatch, reply: SyncReply) {
+    const db = await openDatabase();
+    const tx = db.transaction(["notes", "folders", "outbox", "syncState"], "readwrite", { durability: "strict" });
+    const done = transactionDone(tx);
+    const requests = ["notes", "folders", "outbox"].map((store) =>
+      tx.objectStore(store).index("userId").getAll(userId));
+    const stateRequest = tx.objectStore("syncState").get(userId) as IDBRequest<SyncState | undefined>;
+    let conflicts = 0;
+    let remaining = requests.length + 1;
+    const ready = () => {
+      if (--remaining) return;
+      // A lease can expire during suspension. Ignore duplicate/stale replies
+      // already committed by another window rather than rewinding its cursor.
+      if (stateRequest.result?.inFlight?.id !== batch.id) return;
+      if (reply.results.length !== batch.operations.length ||
+        new Set(reply.results.map((result) => result.revisionId)).size !== batch.operations.length) { tx.abort(); return; }
+      const notes = new Map<string, Note>((requests[0].result as CacheNote[]).map((note) => [note.id, note]));
+      const folders = new Map<string, NoteFolder>((requests[1].result as CacheFolder[]).map((folder) => [folder.id, folder]));
+      const pending = new Map<string, OutboxOperation>((requests[2].result as OutboxOperation[]).map((op) => [`${op.entity}:${op.entityId}`, op]));
+      if (reply.full) {
+        notes.clear();
+        folders.clear();
+      }
+      const apply = (entity: "note" | "folder", id: string, snapshot: Note | NoteFolder | null) => {
+        if (entity === "note") { if (snapshot) notes.set(id, snapshot as Note); else notes.delete(id); }
+        else { if (snapshot) folders.set(id, snapshot as NoteFolder); else folders.delete(id); }
+      };
+      for (const change of reply.changes) apply(change.entity, change.id, change.snapshot);
+      for (const result of reply.results) {
+        const sent = batch.operations.find((op) => op.revisionId === result.revisionId);
+        if (!sent) { tx.abort(); return; }
+        const key = `${sent.entity}:${sent.entityId}`;
+        const latest = pending.get(key);
+        if (result.status === "conflict") {
+          conflicts++;
+          // Preserve the newest local edits in the SAME transaction that retires
+          // their old queue entry. A crash cannot strand an unsaved conflict copy.
+          if (latest?.kind === "upsert" && latest.snapshot) {
+            const id = crypto.randomUUID();
+            const timestamp = new Date().toISOString();
+            const copy = { ...latest.snapshot, id, version: undefined, createdAt: timestamp, updatedAt: timestamp };
+            if (sent.entity === "note") {
+              const note = copy as Note;
+              note.title = `${note.title || "Untitled note"} (conflict copy)`;
+              note.deletedAt = null;
+            } else (copy as NoteFolder).name += ` (conflict ${id.slice(0, 6)})`;
+            pending.set(`${sent.entity}:${id}`, {
+              ...latest, key: [userId, sent.entity, id], entityId: id, snapshot: copy,
+              baseUpdatedAt: null, baseVersion: undefined, revisionId: crypto.randomUUID(), sequence: Date.now(),
+            });
+          }
+          pending.delete(key);
+          if (!reply.changes.some((change) => change.entity === sent.entity && change.id === sent.entityId))
+            apply(sent.entity, sent.entityId, result.snapshot);
+        } else if (latest?.revisionId === sent.revisionId) {
+          pending.delete(key);
+          // A receipt may describe an earlier version than this pull (another
+          // device edited after our request). The incremental change wins.
+          if (!reply.changes.some((change) => change.entity === sent.entity && change.id === sent.entityId))
+            apply(sent.entity, sent.entityId, result.snapshot);
+        } else if (latest) {
+          pending.set(key, { ...latest, baseUpdatedAt: result.snapshot?.updatedAt ?? null, baseVersion: result.snapshot?.version });
+        }
+      }
+      // Folder references in conflict copies/pending notes may have disappeared.
+      for (const op of pending.values()) if (op.entity === "folder" && op.kind === "upsert")
+        folders.set(op.entityId, op.snapshot as NoteFolder);
+      for (const op of pending.values()) if (op.entity === "folder" && op.kind === "delete") folders.delete(op.entityId);
+      for (const op of pending.values()) {
+        if (op.entity === "note" && op.kind === "upsert") {
+          const note = op.snapshot as Note;
+          if (note.folderId && !folders.has(note.folderId)) op.snapshot = { ...note, folderId: null };
+        }
+        apply(op.entity, op.entityId, op.kind === "delete" ? null : op.snapshot!);
+      }
+      for (const note of notes.values()) if (note.folderId && !folders.has(note.folderId)) note.folderId = null;
+      // Replace only this account's records, atomically with cursor + outbox.
+      for (let index = 0; index < 3; index++) {
+        const store = tx.objectStore(["notes", "folders", "outbox"][index]);
+        for (const row of requests[index].result as { key: IDBValidKey }[]) store.delete(row.key);
+      }
+      for (const note of notes.values()) tx.objectStore("notes").put({ ...note, userId, key: rowKey(userId, note.id) });
+      for (const folder of folders.values()) tx.objectStore("folders").put({ ...folder, userId, key: rowKey(userId, folder.id) });
+      for (const op of pending.values()) tx.objectStore("outbox").put(op);
+      tx.objectStore("syncState").put({ userId, cursor: reply.cursor } satisfies SyncState);
+    };
+    for (const request of requests) request.onsuccess = ready;
+    stateRequest.onsuccess = ready;
+    await done;
+    return { ...(await offlineStore.load(userId)), conflicts };
+  },
   async load(
     userId: string,
   ): Promise<{
@@ -123,92 +248,32 @@ export const offlineStore = {
       }),
     ]);
     await done;
-    return {
-      notes: notes.map((row) => {
+    const noteMap = new Map(notes.map((row) => {
         const note = { ...row } as Partial<CacheNote>;
         delete note.key;
         delete note.userId;
-        return note as Note;
-      }),
-      folders: folders.map((row) => {
+        return [row.id, note as Note] as const;
+      }));
+    const folderMap = new Map(folders.map((row) => {
         const folder = { ...row } as Partial<CacheFolder>;
         delete folder.key;
         delete folder.userId;
-        return folder as NoteFolder;
-      }),
+        return [row.id, folder as NoteFolder] as const;
+      }));
+    // Reconcile pre-v3 caches too; queued snapshots/deletes are authoritative.
+    for (const operation of outbox) {
+      if (operation.entity === "note") {
+        if (operation.kind === "delete") noteMap.delete(operation.entityId);
+        else noteMap.set(operation.entityId, operation.snapshot as Note);
+      } else if (operation.kind === "delete") folderMap.delete(operation.entityId);
+      else folderMap.set(operation.entityId, operation.snapshot as NoteFolder);
+    }
+    for (const note of noteMap.values()) if (note.folderId && !folderMap.has(note.folderId)) note.folderId = null;
+    return {
+      notes: [...noteMap.values()],
+      folders: [...folderMap.values()],
       outbox: outbox.sort((a, b) => a.sequence - b.sequence),
     };
-  },
-
-  async replaceCache(userId: string, notes: Note[], folders: NoteFolder[]) {
-    const db = await openDatabase();
-    const tx = db.transaction(["notes", "folders"], "readwrite");
-    const noteStore = tx.objectStore("notes");
-    const folderStore = tx.objectStore("folders");
-    let cursorsRemaining = 2;
-    const putRows = () => {
-      cursorsRemaining--;
-      if (cursorsRemaining !== 0) return;
-      for (const note of notes)
-        noteStore.put({
-          ...note,
-          userId,
-          key: rowKey(userId, note.id),
-        } satisfies CacheNote);
-      for (const folder of folders)
-        folderStore.put({
-          ...folder,
-          userId,
-          key: rowKey(userId, folder.id),
-        } satisfies CacheFolder);
-    };
-    for (const store of [noteStore, folderStore]) {
-      const request = store
-        .index("userId")
-        .openKeyCursor(IDBKeyRange.only(userId));
-      request.onsuccess = () => {
-        const cursor = request.result;
-        if (cursor) {
-          store.delete(cursor.primaryKey);
-          cursor.continue();
-        } else putRows();
-      };
-    }
-    await transactionDone(tx);
-  },
-
-  async cacheNote(userId: string, note: Note) {
-    const db = await openDatabase();
-    const tx = db.transaction("notes", "readwrite");
-    tx.objectStore("notes").put({
-      ...note,
-      userId,
-      key: rowKey(userId, note.id),
-    } satisfies CacheNote);
-    await transactionDone(tx);
-  },
-
-  async cacheFolder(userId: string, folder: NoteFolder) {
-    const db = await openDatabase();
-    const tx = db.transaction("folders", "readwrite");
-    tx.objectStore("folders").put({
-      ...folder,
-      userId,
-      key: rowKey(userId, folder.id),
-    } satisfies CacheFolder);
-    await transactionDone(tx);
-  },
-
-  async removeCached(userId: string, entity: "note" | "folder", id: string) {
-    const db = await openDatabase();
-    const tx = db.transaction(
-      entity === "note" ? "notes" : "folders",
-      "readwrite",
-    );
-    tx.objectStore(entity === "note" ? "notes" : "folders").delete(
-      rowKey(userId, id),
-    );
-    await transactionDone(tx);
   },
 
   async putNote(
@@ -218,7 +283,7 @@ export const offlineStore = {
     created = false,
   ) {
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "outbox"], "readwrite");
+    const tx = db.transaction(["notes", "outbox"], "readwrite", { durability: "strict" });
     tx.objectStore("notes").put({
       ...note,
       userId,
@@ -236,8 +301,8 @@ export const offlineStore = {
         entityId: note.id,
         kind: "upsert",
         snapshot: note,
-        baseUpdatedAt:
-          previous?.baseUpdatedAt ?? (created ? null : baseUpdatedAt),
+        baseUpdatedAt: previous ? previous.baseUpdatedAt : (created ? null : baseUpdatedAt),
+        baseVersion: previous ? previous.baseVersion : note.version,
         queuedUpdatedAt: note.updatedAt,
         revisionId: crypto.randomUUID(),
         sequence: previous?.sequence ?? Date.now(),
@@ -253,7 +318,7 @@ export const offlineStore = {
     created = false,
   ) {
     const db = await openDatabase();
-    const tx = db.transaction(["folders", "outbox"], "readwrite");
+    const tx = db.transaction(["folders", "outbox"], "readwrite", { durability: "strict" });
     tx.objectStore("folders").put({
       ...folder,
       userId,
@@ -271,8 +336,8 @@ export const offlineStore = {
         entityId: folder.id,
         kind: "upsert",
         snapshot: folder,
-        baseUpdatedAt:
-          previous?.baseUpdatedAt ?? (created ? null : baseUpdatedAt),
+        baseUpdatedAt: previous ? previous.baseUpdatedAt : (created ? null : baseUpdatedAt),
+        baseVersion: previous ? previous.baseVersion : folder.version,
         queuedUpdatedAt: folder.updatedAt,
         revisionId: crypto.randomUUID(),
         sequence: previous?.sequence ?? Date.now(),
@@ -286,25 +351,26 @@ export const offlineStore = {
     entity: OutboxOperation["entity"],
     entityId: string,
     baseUpdatedAt: string | null,
+    baseVersion?: number,
   ) {
     const db = await openDatabase();
     const cacheName = entity === "note" ? "notes" : "folders";
-    const tx = db.transaction([cacheName, "outbox"], "readwrite");
+    const tx = db.transaction([cacheName, "outbox"], "readwrite", { durability: "strict" });
     tx.objectStore(cacheName).delete(rowKey(userId, entityId));
     const store = tx.objectStore("outbox");
     const key: OutboxOperation["key"] = [userId, entity, entityId];
     const get = store.get(key) as IDBRequest<OutboxOperation | undefined>;
     get.onsuccess = () => {
-      if (get.result?.kind === "upsert" && get.result.baseUpdatedAt === null)
-        store.delete(key);
-      else
+      // Keep deletes even for local creates: the create may already be in flight.
+      // The batch receipt determines whether the server saw the earlier create.
         store.put({
           key,
           userId,
           entity,
           entityId,
           kind: "delete",
-          baseUpdatedAt: get.result?.baseUpdatedAt ?? baseUpdatedAt,
+          baseUpdatedAt: get.result ? get.result.baseUpdatedAt : baseUpdatedAt,
+          baseVersion: get.result ? get.result.baseVersion : baseVersion,
           queuedUpdatedAt: new Date().toISOString(),
           revisionId: crypto.randomUUID(),
           sequence: get.result?.sequence ?? Date.now(),
@@ -313,82 +379,37 @@ export const offlineStore = {
     await transactionDone(tx);
   },
 
-  async resolveOperation(operation: OutboxOperation, serverUpdatedAt?: string) {
+  async deleteFolderAndDetach(userId: string, folder: NoteFolder, notes: { before: Note; after: Note }[]) {
     const db = await openDatabase();
-    const tx = db.transaction("outbox", "readwrite");
-    const store = tx.objectStore("outbox");
-    const get = store.get(operation.key) as IDBRequest<
-      OutboxOperation | undefined
-    >;
-    let resolved = false;
-    get.onsuccess = () => {
-      const current = get.result;
-      if (!current) return;
-      if (current.revisionId === operation.revisionId) {
-        store.delete(operation.key);
-        resolved = true;
-      } else if (serverUpdatedAt)
-        store.put({ ...current, baseUpdatedAt: serverUpdatedAt });
-    };
-    await transactionDone(tx);
-    return resolved;
-  },
-
-  async discardOperation(operation: OutboxOperation) {
-    const db = await openDatabase();
-    const tx = db.transaction("outbox", "readwrite");
-    const store = tx.objectStore("outbox");
-    const get = store.get(operation.key) as IDBRequest<
-      OutboxOperation | undefined
-    >;
-    get.onsuccess = () => {
-      if (get.result?.revisionId === operation.revisionId)
-        store.delete(operation.key);
-    };
-    await transactionDone(tx);
-  },
-
-  async takeOperation(operation: OutboxOperation) {
-    const db = await openDatabase();
-    const tx = db.transaction("outbox", "readwrite");
-    const store = tx.objectStore("outbox");
-    const get = store.get(operation.key) as IDBRequest<
-      OutboxOperation | undefined
-    >;
+    const tx = db.transaction(["notes", "folders", "outbox"], "readwrite", { durability: "strict" });
     const done = transactionDone(tx);
-    const current = await new Promise<OutboxOperation | undefined>(
-      (resolve, reject) => {
-        get.onsuccess = () => {
-          const value = get.result;
-          if (value) store.delete(operation.key);
-          resolve(value);
-        };
-        get.onerror = () => reject(get.error);
-      },
-    );
+    const store = tx.objectStore("outbox");
+    tx.objectStore("folders").delete(rowKey(userId, folder.id));
+    for (const { before, after } of notes) {
+      tx.objectStore("notes").put({ ...after, userId, key: rowKey(userId, after.id) });
+      const key: OutboxOperation["key"] = [userId, "note", after.id];
+      const get = store.get(key) as IDBRequest<OutboxOperation | undefined>;
+      get.onsuccess = () => store.put({
+        key, userId, entity: "note", entityId: after.id, kind: "upsert", snapshot: after,
+        baseUpdatedAt: get.result ? get.result.baseUpdatedAt : before.updatedAt,
+        baseVersion: get.result ? get.result.baseVersion : before.version,
+        revisionId: crypto.randomUUID(), queuedUpdatedAt: after.updatedAt, sequence: get.result?.sequence ?? Date.now(),
+      } satisfies OutboxOperation);
+    }
+    const key: OutboxOperation["key"] = [userId, "folder", folder.id];
+    const get = store.get(key) as IDBRequest<OutboxOperation | undefined>;
+    get.onsuccess = () => store.put({
+      key, userId, entity: "folder", entityId: folder.id, kind: "delete",
+      baseUpdatedAt: get.result ? get.result.baseUpdatedAt : folder.updatedAt,
+      baseVersion: get.result ? get.result.baseVersion : folder.version,
+      revisionId: crypto.randomUUID(), queuedUpdatedAt: new Date().toISOString(), sequence: get.result?.sequence ?? Date.now(),
+    } satisfies OutboxOperation);
     await done;
-    return current;
-  },
-
-  async listOutbox(userId: string) {
-    const db = await openDatabase();
-    const tx = db.transaction("outbox", "readonly");
-    const done = transactionDone(tx);
-    const request = tx
-      .objectStore("outbox")
-      .index("userId")
-      .getAll(userId) as IDBRequest<OutboxOperation[]>;
-    const result = await new Promise<OutboxOperation[]>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    await done;
-    return result.sort((a, b) => a.sequence - b.sequence);
   },
 
   async acquireSyncLease(userId: string, ownerId: string, durationMs = 30_000) {
     const db = await openDatabase();
-    const tx = db.transaction("syncLeases", "readwrite");
+    const tx = db.transaction("syncLeases", "readwrite", { durability: "strict" });
     const store = tx.objectStore("syncLeases");
     const get = store.get(userId) as IDBRequest<
       { userId: string; ownerId: string; expiresAt: number } | undefined
@@ -408,7 +429,7 @@ export const offlineStore = {
 
   async releaseSyncLease(userId: string, ownerId: string) {
     const db = await openDatabase();
-    const tx = db.transaction("syncLeases", "readwrite");
+    const tx = db.transaction("syncLeases", "readwrite", { durability: "strict" });
     const store = tx.objectStore("syncLeases");
     const get = store.get(userId) as IDBRequest<
       { userId: string; ownerId: string } | undefined
@@ -419,10 +440,4 @@ export const offlineStore = {
     await transactionDone(tx);
   },
 
-  async removeOperation(operation: OutboxOperation) {
-    const db = await openDatabase();
-    const tx = db.transaction("outbox", "readwrite");
-    tx.objectStore("outbox").delete(operation.key);
-    await transactionDone(tx);
-  },
 };

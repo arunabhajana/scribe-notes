@@ -23,7 +23,7 @@ function inlineMarkdown(escaped: string) {
 function listItem(line: string) {
   const task = line.match(/^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/);
   if (task) return { ordered: false, task: true, checked: task[1].toLowerCase() === "x", content: task[2] };
-  const match = line.match(/^\s*(?:([-*+])\s*|(\d+)[.)]\s*)(.*)$/);
+  const match = line.match(/^[ \t]*(?:([-*+])[ \t]+|(\d+)[.)][ \t]+)(.*)$/);
   if (!match) return null;
   return { ordered: Boolean(match[2]), task: false, checked: false, content: match[3] };
 }
