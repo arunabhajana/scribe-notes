@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { supabase } from "../features/auth/supabaseClient";
 import { notesRepository } from "../features/notes/notesRepository";
 import {
   offlineStore,
@@ -130,10 +131,13 @@ export function useNotes(
   const syncLock = useRef(false);
   const syncOwnerId = useRef(makeId());
   const refreshingRef = useRef(false);
-  const flushOutboxRef = useRef<() => void>(() => undefined);
+  const flushOutboxRef = useRef<(forcePull?: boolean) => void>(() => undefined);
   const retryAt = useRef(0);
   const failureCount = useRef(0);
   const lastPullAt = useRef(0);
+  const lastSyncCursor = useRef<string | null>(null);
+  const pendingRealtimeSequence = useRef<bigint | null>(null);
+  const realtimeDebounce = useRef<number | null>(null);
   const lastCloudError = useRef<string | null>(null);
   const lastLocalError = useRef<string | null>(null);
   const editGeneration = useRef(new Map<string, number>());
@@ -212,10 +216,11 @@ export function useNotes(
 
   const editingInProgress = () => Boolean(document.querySelector('[data-sync-editing="true"], .editor-title-wrap.is-editing, .composer-window'));
 
-  const flushOutbox = useCallback(async () => {
+  const flushOutbox = useCallback(async (forcePull = false) => {
     if (!user || !configured || offlineMode || !online || !navigator.onLine ||
-      editingInProgress() || syncLock.current || refreshingRef.current || notesForUser !== user.id || Date.now() < retryAt.current) return;
-    if (!hasPendingSync && Date.now() - lastPullAt.current < CLOUD_PULL_INTERVAL_MS) return;
+      refreshingRef.current || notesForUser !== user.id || Date.now() < retryAt.current) return;
+    if (editingInProgress() || syncLock.current) return;
+    if (!forcePull && !hasPendingSync && Date.now() - lastPullAt.current < CLOUD_PULL_INTERVAL_MS) return;
     if ([...localRetries.current.values()].some((task) => task.ownerId === user.id)) return;
     syncLock.current = true;
     let finishWrite: (() => void) | undefined;
@@ -225,6 +230,7 @@ export function useNotes(
       hasLease = await offlineStore.acquireSyncLease(user.id, syncOwnerId.current, 60_000);
       if (!hasLease) return;
       const prepared = await offlineStore.prepareBatch(user.id);
+      lastSyncCursor.current = prepared.cursor;
       if (activeUserId.current !== user.id || editingInProgress()) return;
       finishWrite = beginWrite();
       const reply = await notesRepository.sync(user, prepared.batch, prepared.cursor);
@@ -268,6 +274,7 @@ export function useNotes(
       failureCount.current = 0;
       retryAt.current = 0;
       lastPullAt.current = reply.hasMore ? 0 : Date.now();
+      lastSyncCursor.current = reply.cursor;
       const recoveredError = lastCloudError.current;
       setError((current) => current === recoveredError ? null : current);
       lastCloudError.current = null;
@@ -288,9 +295,14 @@ export function useNotes(
       if (hasLease) await offlineStore.releaseSyncLease(user.id, syncOwnerId.current).catch(() => undefined);
       syncLock.current = false;
       finishWrite?.();
+      const pendingSequence = pendingRealtimeSequence.current;
+      const cursor = BigInt(lastSyncCursor.current ?? "0");
+      if (pendingSequence !== null && pendingSequence <= cursor) pendingRealtimeSequence.current = null;
+      else if (pendingSequence !== null && activeUserId.current === user.id)
+        window.setTimeout(() => flushOutboxRef.current(true), 800);
     }
   }, [user, configured, offlineMode, online, notesForUser, beginWrite, hasPendingSync]);
-  useEffect(() => { flushOutboxRef.current = () => { void flushOutbox(); }; }, [flushOutbox]);
+  useEffect(() => { flushOutboxRef.current = (forcePull = false) => { void flushOutbox(forcePull); }; }, [flushOutbox]);
 
   useEffect(() => {
     const updateOnlineStatus = () => setOnline(navigator.onLine);
@@ -306,6 +318,8 @@ export function useNotes(
   useEffect(() => {
     let active = true;
     const userId = user?.id;
+    lastSyncCursor.current = null;
+    pendingRealtimeSequence.current = null;
     if (!userId || !configured) return;
     refreshingRef.current = true;
     void offlineStore.load(userId).then((local) => {
@@ -338,6 +352,72 @@ export function useNotes(
     const onFocus = () => { if (Date.now() - lastPullAt.current >= CLOUD_PULL_INTERVAL_MS) flushOutboxRef.current(); };
     window.addEventListener("focus", onFocus);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [loadedForUser, user?.id, offlineMode, online]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!supabase || !userId || !configured || offlineMode || loadedForUser !== userId) return;
+    let active = true;
+    const client = supabase;
+    const channel = client
+      .channel(`scribe-sync-${userId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "sync_changes",
+        filter: `user_id=eq.${userId}`,
+      }, (payload) => {
+        const row = payload.new as Record<string, unknown>;
+        if (!row || typeof row.sequence === "undefined") return;
+        const sequence = BigInt(String(row.sequence));
+        const cursor = BigInt(lastSyncCursor.current ?? "0");
+        if (sequence <= cursor) return;
+        if (pendingRealtimeSequence.current === null || sequence > pendingRealtimeSequence.current)
+          pendingRealtimeSequence.current = sequence;
+        if (realtimeDebounce.current !== null) window.clearTimeout(realtimeDebounce.current);
+        realtimeDebounce.current = window.setTimeout(() => {
+          realtimeDebounce.current = null;
+          if (!active) return;
+          const latestCursor = BigInt(lastSyncCursor.current ?? "0");
+          if (pendingRealtimeSequence.current !== null && pendingRealtimeSequence.current <= latestCursor) {
+            pendingRealtimeSequence.current = null;
+            return;
+          }
+          flushOutboxRef.current(true);
+        }, 350);
+      })
+      .subscribe();
+    return () => {
+      active = false;
+      if (realtimeDebounce.current !== null) window.clearTimeout(realtimeDebounce.current);
+      realtimeDebounce.current = null;
+      void client.removeChannel(channel);
+    };
+  }, [user?.id, configured, offlineMode, loadedForUser]);
+
+  useEffect(() => {
+    if (loadedForUser !== user?.id || offlineMode || !online) return;
+    let timer: number | null = null;
+    const observer = new MutationObserver(() => {
+      if (editingInProgress()) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        const pendingSequence = pendingRealtimeSequence.current;
+        const cursor = BigInt(lastSyncCursor.current ?? "0");
+        flushOutboxRef.current(pendingSequence !== null && pendingSequence > cursor);
+      }, 180);
+    });
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-sync-editing", "class"],
+    });
+    return () => {
+      observer.disconnect();
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [loadedForUser, user?.id, offlineMode, online]);
   const clearUserData = useCallback(() => {
     setNotes([]);
