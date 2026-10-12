@@ -11,6 +11,7 @@ import { notesRepository } from "./features/notes/notesRepository";
 import type { Note } from "./types/note";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { AuthPage } from "./components/auth/AuthPage";
+import { PasswordRecoveryPage } from "./components/auth/PasswordRecoveryPage";
 import { CompleteProfile } from "./components/auth/CompleteProfile";
 import { EditorSkeleton, LoadingSpinner, SyncFeedback } from "./components/feedback/LoadingFeedback";
 import { useAuth } from "./hooks/useAuth";
@@ -294,6 +295,20 @@ function App() {
           onProviderSignIn={auth.signInWithProvider}
           oauthPending={auth.oauthPending}
           onCancelProviderSignIn={auth.cancelProviderSignIn}
+          onRequestPasswordReset={auth.requestPasswordReset}
+        />
+      </div>
+    );
+  if (auth.passwordRecoveryRequired)
+    return (
+      <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
+        <TitleBar dark={isDark} onToggleTheme={() => changeTheme(!isDark)} />
+        <PasswordRecoveryPage
+          onUpdatePassword={auth.updateRecoveredPassword}
+          onContinue={() => {
+            auth.finishPasswordRecovery();
+            setPage("notes");
+          }}
         />
       </div>
     );
@@ -335,6 +350,7 @@ function App() {
           onUpdateDisplayName={updateDisplayName}
           onLinkAccount={auth.linkAccount}
           onUnlinkAccount={auth.unlinkAccount}
+          onRequestPasswordReset={auth.requestPasswordReset}
           folders={notesState.folders}
           unfiledPosition={notesState.unfiledPosition}
           notes={notesState.notes}

@@ -26,6 +26,7 @@ export function AuthPage({
   onProviderSignIn,
   oauthPending,
   onCancelProviderSignIn,
+  onRequestPasswordReset,
 }: {
   configured: boolean;
   onSignIn: (email: string, password: string) => Promise<string | null>;
@@ -40,6 +41,7 @@ export function AuthPage({
   onProviderSignIn: (provider: SocialProvider) => Promise<string | null>;
   oauthPending: SocialProvider | null;
   onCancelProviderSignIn: () => void;
+  onRequestPasswordReset: (email: string) => Promise<string | null>;
 }) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [displayName, setDisplayName] = useState("");
@@ -49,6 +51,7 @@ export function AuthPage({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const isSignUp = mode === "signup";
   const signInWithProvider = async (provider: SocialProvider) => {
@@ -67,6 +70,27 @@ export function AuthPage({
     setMode(next);
     setError("");
     setConfirmationSent(false);
+    setResetEmailSent(false);
+  };
+
+  const requestPasswordReset = async () => {
+    if (submitting || oauthPending) return;
+    setError("");
+    setResetEmailSent(false);
+    if (!email.trim()) {
+      setError("Enter your email address first.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const result = await onRequestPasswordReset(email.trim());
+      if (result) setError(result);
+      else setResetEmailSent(true);
+    } catch {
+      setError("Could not send the reset email. Check your connection and try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -236,6 +260,11 @@ export function AuthPage({
                     {notice}
                   </div>
                 )}
+                {resetEmailSent && (
+                  <div className="auth-feedback auth-message" role="status">
+                    If an account exists for that email, a password reset link is on its way.
+                  </div>
+                )}
                 <SocialSignInButtons
                   disabled={submitting || !configured || Boolean(oauthPending)}
                   onSignIn={(provider) => void signInWithProvider(provider)}
@@ -323,6 +352,16 @@ export function AuthPage({
                       </button>
                     </div>
                   </label>
+                  {!isSignUp && (
+                    <button
+                      type="button"
+                      className="auth-forgot"
+                      onClick={() => void requestPasswordReset()}
+                      disabled={submitting || !configured || Boolean(oauthPending)}
+                    >
+                      Forgot password?
+                    </button>
+                  )}
                   {isSignUp && (
                     <label className="auth-field">
                       <span>Confirm password</span>

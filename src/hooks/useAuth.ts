@@ -29,6 +29,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(Boolean(supabase));
   const [authCallbackError, setAuthCallbackError] = useState("");
   const [authNotice, setAuthNotice] = useState("");
+  const [passwordRecoveryRequired, setPasswordRecoveryRequired] = useState(false);
   const [oauthPending, setOauthPending] = useState<SocialProvider | null>(null);
   const [linkedAccounts, setLinkedAccounts] = useState<{ provider: string; email?: string; name?: string }[]>([]);
   const [linkedIdentityCount, setLinkedIdentityCount] = useState(0);
@@ -128,10 +129,12 @@ export function useAuth() {
     let mounted = true;
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (mounted) {
         setSession(nextSession);
         setLoading(false);
+        if (event === "PASSWORD_RECOVERY") setPasswordRecoveryRequired(true);
+        else if (event === "SIGNED_OUT") setPasswordRecoveryRequired(false);
         if (nextSession) setOauthPending(null);
         else {
           identityRequest.current += 1;
@@ -210,6 +213,9 @@ export function useAuth() {
       return;
     }
 
+    const isRecoveryCallback =
+      params.get("type") === "recovery" || hash.get("type") === "recovery";
+
     const code = params.get("code");
     if (code) {
       if (handledCallbacks.current.has(code)) return;
@@ -217,7 +223,10 @@ export function useAuth() {
       try {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         setAuthCallbackError(error?.message ?? "");
-        if (!error) await refreshLinkedAccounts();
+        if (!error) {
+          if (isRecoveryCallback) setPasswordRecoveryRequired(true);
+          await refreshLinkedAccounts();
+        }
       } catch {
         setAuthCallbackError(
           "The confirmation link could not be completed. Please try signing in again.",
@@ -237,7 +246,10 @@ export function useAuth() {
           refresh_token: refreshToken,
         });
         setAuthCallbackError(error?.message ?? "");
-        if (!error) await refreshLinkedAccounts();
+        if (!error) {
+          if (isRecoveryCallback) setPasswordRecoveryRequired(true);
+          await refreshLinkedAccounts();
+        }
       } catch {
         setAuthCallbackError(
           "The confirmation link could not be completed. Please try signing in again.",
@@ -333,7 +345,10 @@ export function useAuth() {
         email,
         password,
       });
-      if (!error) return null;
+      if (!error) {
+        setPasswordRecoveryRequired(false);
+        return null;
+      }
       if (/email not confirmed/i.test(error.message)) {
         return "Please confirm your email using the link we sent before signing in.";
       }
@@ -341,6 +356,37 @@ export function useAuth() {
     },
     [],
   );
+
+  const requestPasswordReset = useCallback(async (email: string) => {
+    if (!supabase) return "Password reset is unavailable until Supabase is configured.";
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail) return "Enter your email address first.";
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: isTauri() ? "com.scribe.notes://auth/callback" : window.location.origin,
+      });
+      return error?.message ?? null;
+    } catch {
+      return "Could not send the reset email. Check your connection and try again.";
+    }
+  }, []);
+
+  const updateRecoveredPassword = useCallback(async (password: string) => {
+    if (!supabase) return "Password reset is unavailable until Supabase is configured.";
+    if (!session) return "Your reset session expired. Request a new password reset email.";
+    if (password.length < 6) return "Use at least 6 characters for your new password.";
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      return error?.message ?? null;
+    } catch {
+      return "Could not update your password. Check your connection and try again.";
+    }
+  }, [session]);
+
+  const finishPasswordRecovery = useCallback(() => {
+    setPasswordRecoveryRequired(false);
+    setAuthCallbackError("");
+  }, []);
 
   const signUpWithPassword = useCallback(
     async (displayName: string, email: string, password: string) => {
@@ -407,6 +453,10 @@ export function useAuth() {
     loading,
     configured: supabaseConfigured,
     signInWithPassword,
+    requestPasswordReset,
+    updateRecoveredPassword,
+    passwordRecoveryRequired,
+    finishPasswordRecovery,
     signUpWithPassword,
     signInWithProvider,
     linkedAccounts,

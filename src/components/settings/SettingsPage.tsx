@@ -1,6 +1,6 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -16,6 +16,7 @@ import {
   Pencil,
   Plus,
   HardDrive,
+  LoaderCircle,
   ShieldCheck,
   Smartphone,
   Trash2,
@@ -365,17 +366,20 @@ function AccountSettings({
   onUpdateDisplayName,
   onLinkAccount,
   onUnlinkAccount,
+  onRequestPasswordReset,
 }: {
   profile: AccountProfile;
   onAvatarColorChange: (color: string) => void;
   onUpdateDisplayName: (name: string) => Promise<string | null>;
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
+  onRequestPasswordReset: (email: string) => Promise<string | null>;
 }) {
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [displayNameDraft, setDisplayNameDraft] = useState(profile.displayName);
   const [savingName, setSavingName] = useState(false);
+  const [requestingPasswordReset, setRequestingPasswordReset] = useState(false);
   const [linkStartedProvider, setLinkStartedProvider] = useState<SocialProvider | null>(null);
   const [accountToast, setAccountToast] = useState<{ message: string; kind: "success" | "error" | "info" } | null>(null);
   const initials = profile.displayName.trim().charAt(0).toUpperCase() || "A";
@@ -404,6 +408,19 @@ function AccountSettings({
       showAccountToast(error instanceof Error ? error.message : "Could not update your display name.", "error");
     } finally {
       setSavingName(false);
+    }
+  }
+
+  async function requestPasswordReset() {
+    setRequestingPasswordReset(true);
+    try {
+      const error = await onRequestPasswordReset(profile.email);
+      if (error) showAccountToast(error, "error");
+      else showAccountToast("If an account exists for this email, a password reset link is on its way.", "success");
+    } catch {
+      showAccountToast("Could not send the reset email. Check your connection and try again.", "error");
+    } finally {
+      setRequestingPasswordReset(false);
     }
   }
 
@@ -526,12 +543,22 @@ function AccountSettings({
             </small>
           </div>
         </div>
-        <AccountSettingRow
-          id="Reset password"
-          label="Reset password"
-          detail="Request a password reset link."
-          action="Coming soon"
-        />
+        <div className="account-setting-row" id={settingId("Reset password")}>
+          <div>
+            <strong>Reset password</strong>
+            <span>Send a password reset link to {profile.email}.</span>
+          </div>
+          <button
+            type="button"
+            className="account-reset-button"
+            data-tooltip="Email a secure link to reset your Scribe password"
+            disabled={requestingPasswordReset}
+            onClick={() => void requestPasswordReset()}
+          >
+            {requestingPasswordReset ? "Sending…" : "Send reset link"}
+            {requestingPasswordReset && <LoaderCircle size={15} className="spin" />}
+          </button>
+        </div>
         <AccountSettingRow
           id="Two-step verification"
           label="Two-step verification"
@@ -978,6 +1005,7 @@ function CategoryContent({
   onUpdateDisplayName,
   onLinkAccount,
   onUnlinkAccount,
+  onRequestPasswordReset,
   folders,
   notes,
   onCreateFolder,
@@ -1004,6 +1032,7 @@ function CategoryContent({
   onUpdateDisplayName: (name: string) => Promise<string | null>;
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
+  onRequestPasswordReset: (email: string) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
   onCreateFolder: (
@@ -1054,7 +1083,7 @@ function CategoryContent({
         </>
       );
     case "account":
-      return <AccountSettings profile={profile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} />;
+      return <AccountSettings profile={profile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} />;
     case "folders":
       return (
         <FolderManagementSettings
@@ -1330,6 +1359,7 @@ export function SettingsPage({
   onUpdateDisplayName,
   onLinkAccount,
   onUnlinkAccount,
+  onRequestPasswordReset,
   folders,
   notes,
   onCreateFolder,
@@ -1356,6 +1386,7 @@ export function SettingsPage({
   onUpdateDisplayName: (name: string) => Promise<string | null>;
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
+  onRequestPasswordReset: (email: string) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
   onCreateFolder: (
@@ -1555,6 +1586,7 @@ export function SettingsPage({
               onUpdateDisplayName={onUpdateDisplayName}
               onLinkAccount={onLinkAccount}
               onUnlinkAccount={onUnlinkAccount}
+              onRequestPasswordReset={onRequestPasswordReset}
               folders={folders}
               notes={notes}
               onCreateFolder={onCreateFolder}
