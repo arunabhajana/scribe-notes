@@ -45,6 +45,9 @@ function App() {
   const [fontFamily, setFontFamily] = useState(
     () => localStorage.getItem("scribe-font-family") ?? "DM Sans",
   );
+  const [profileAvatarColor, setProfileAvatarColor] = useState(
+    () => localStorage.getItem("scribe-profile-avatar") ?? "#8970ed",
+  );
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isComposerModalActive, setIsComposerModalActive] = useState(false);
@@ -80,6 +83,12 @@ function App() {
     };
   }, [auth.user, auth.configured, offlineMode]);
 
+  const authenticatedUserId = auth.user?.id;
+  const refreshLinkedAccounts = auth.refreshLinkedAccounts;
+  useEffect(() => {
+    if (page === "preferences" && authenticatedUserId) void refreshLinkedAccounts();
+  }, [page, authenticatedUserId, refreshLinkedAccounts]);
+
   useEffect(() => {
     document.documentElement.style.setProperty("--note-font-family", ({ "DM Sans": '"DM Sans", sans-serif', "System default": "system-ui, sans-serif", Georgia: "Georgia, serif", Monospace: "monospace" } as Record<string, string>)[fontFamily] ?? '"DM Sans", sans-serif');
     document.documentElement.style.setProperty("--note-text-size", ({ Small: "12px", Medium: "13px", Large: "16px" } as Record<string, string>)[writingPreferences.size] ?? "13px");
@@ -92,6 +101,7 @@ function App() {
       "scribe-writing-preferences",
       "scribe-font-family",
       "scribe-accent",
+      "scribe-profile-avatar",
       "scribe-keyboard-shortcuts",
       "scribe-sidebar-collapsed",
     ].reduce(
@@ -124,6 +134,17 @@ function App() {
     localStorage.setItem("scribe-font-family", value);
   };
 
+  const changeProfileAvatarColor = (value: string) => {
+    setProfileAvatarColor(value);
+    localStorage.setItem("scribe-profile-avatar", value);
+  };
+
+  const updateDisplayName = async (value: string) => {
+    const error = await auth.completeDisplayName(value);
+    if (!error && auth.user) setLoadedProfile({ userId: auth.user.id, name: value.trim() });
+    return error;
+  };
+
   const changeOfflineMode = (enabled: boolean) => {
     setOfflineMode(enabled);
     localStorage.setItem("scribe-offline-mode", String(enabled));
@@ -134,7 +155,12 @@ function App() {
     : { displayName: "Scribe user", email: "" };
   const accountProfile = {
     ...fallbackProfile,
+    avatarColor: profileAvatarColor,
     displayName: (loadedProfile?.userId === auth.user?.id ? loadedProfile?.name : null) ?? fallbackProfile.displayName,
+    linkedAccounts: auth.linkedAccounts,
+    linkedIdentityCount: auth.linkedIdentityCount,
+    linkedAccountsLoaded: auth.linkedAccountsLoaded,
+    linkedAccountsError: auth.linkedAccountsError,
   };
 
   const changeShortcuts = (value: ShortcutBindings) => {
@@ -305,6 +331,10 @@ function App() {
           onOfflineModeChange={changeOfflineMode}
           storageMetrics={storageMetrics}
           profile={accountProfile}
+          onAvatarColorChange={changeProfileAvatarColor}
+          onUpdateDisplayName={updateDisplayName}
+          onLinkAccount={auth.linkAccount}
+          onUnlinkAccount={auth.unlinkAccount}
           folders={notesState.folders}
           unfiledPosition={notesState.unfiledPosition}
           notes={notesState.notes}

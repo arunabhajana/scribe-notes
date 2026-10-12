@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
+import type { Session, UserIdentity } from "@supabase/supabase-js";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -12,14 +12,115 @@ import {
 
 export type SocialProvider = "google" | "github";
 
+function linkedAccountsFromIdentities(identities: UserIdentity[]) {
+  return identities
+    .filter((identity) => identity.provider === "google" || identity.provider === "github")
+    .map((identity) => ({
+      provider: identity.provider,
+      email: typeof identity.identity_data?.email === "string" ? identity.identity_data.email : undefined,
+      name: typeof (identity.identity_data?.full_name ?? identity.identity_data?.name ?? identity.identity_data?.user_name) === "string"
+        ? String(identity.identity_data?.full_name ?? identity.identity_data?.name ?? identity.identity_data?.user_name)
+        : undefined,
+    }));
+}
+
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [authCallbackError, setAuthCallbackError] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   const [oauthPending, setOauthPending] = useState<SocialProvider | null>(null);
+  const [linkedAccounts, setLinkedAccounts] = useState<{ provider: string; email?: string; name?: string }[]>([]);
+  const [linkedIdentityCount, setLinkedIdentityCount] = useState(0);
+  const [linkedAccountsLoaded, setLinkedAccountsLoaded] = useState(false);
+  const [linkedAccountsError, setLinkedAccountsError] = useState("");
   const handledCallbacks = useRef(new Set<string>());
   const oauthStarting = useRef(false);
+  const identityRequest = useRef(0);
+
+  const refreshLinkedAccounts = useCallback(async () => {
+    if (!supabase) return "Supabase is not configured.";
+    const request = ++identityRequest.current;
+    setLinkedAccountsLoaded(false);
+    setLinkedAccountsError("");
+    try {
+      const { data, error } = await supabase.auth.getUserIdentities();
+      if (error) {
+        if (request === identityRequest.current) setLinkedAccountsError(error.message);
+        return error.message;
+      }
+      if (request !== identityRequest.current) return null;
+      setLinkedIdentityCount(data.identities.length);
+      setLinkedAccounts(linkedAccountsFromIdentities(data.identities));
+      setLinkedAccountsLoaded(true);
+      return null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load linked accounts.";
+      if (request === identityRequest.current) setLinkedAccountsError(message);
+      return message;
+    }
+  }, []);
+
+  const linkAccount = useCallback(async (provider: SocialProvider) => {
+    if (!supabase) return "Supabase is not configured.";
+    if (oauthStarting.current) return "A sign-in request is already starting.";
+    oauthStarting.current = true;
+    try {
+      const redirectTo = isTauri() ? "com.scribe.notes://auth/callback" : window.location.origin;
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          scopes: provider === "github" ? "read:user user:email" : "openid email profile",
+          ...(provider === "google" ? { queryParams: { prompt: "select_account" } } : {}),
+        },
+      });
+      if (error) throw error;
+      if (!data.url) throw new Error("Supabase did not return a provider linking URL.");
+      const providerUrl = new URL(data.url);
+      const projectUrl = new URL(import.meta.env.VITE_SUPABASE_URL);
+      const isGoogleUrl = providerUrl.hostname === "accounts.google.com"
+        && providerUrl.pathname.startsWith("/o/oauth2/");
+      const isGithubUrl = providerUrl.hostname === "github.com"
+        && providerUrl.pathname === "/login/oauth/authorize";
+      if (providerUrl.protocol !== "https:"
+        || !(provider === "google" ? isGoogleUrl : isGithubUrl)
+        || providerUrl.searchParams.get("redirect_uri") !== `${projectUrl.origin}/auth/v1/callback`) {
+        throw new Error(`Could not start ${provider === "google" ? "Google" : "GitHub"} linking. Check the provider settings and try again.`);
+      }
+      if (isTauri()) await openUrl(providerUrl.href);
+      else window.location.assign(providerUrl.href);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : "Could not start account linking. Please try again.";
+    } finally {
+      oauthStarting.current = false;
+    }
+  }, []);
+
+  const unlinkAccount = useCallback(async (provider: SocialProvider) => {
+    if (!supabase) return "Supabase is not configured.";
+    try {
+      const { data, error } = await supabase.auth.getUserIdentities();
+      if (error) return error.message;
+      setLinkedIdentityCount(data.identities.length);
+      setLinkedAccounts(linkedAccountsFromIdentities(data.identities));
+      setLinkedAccountsLoaded(true);
+      const identity = data.identities.find((item) => item.provider === provider);
+      if (!identity) return `No ${provider === "google" ? "Google" : "GitHub"} account is linked.`;
+      if (data.identities.length <= 1) return "Link another sign-in method before unlinking this one.";
+      const { error: unlinkError } = await supabase.auth.unlinkIdentity(identity);
+      if (unlinkError) return unlinkError.message;
+      const remainingIdentities = data.identities.filter((item) => item.identity_id !== identity.identity_id);
+      setLinkedIdentityCount(remainingIdentities.length);
+      setLinkedAccounts(linkedAccountsFromIdentities(remainingIdentities));
+      setLinkedAccountsLoaded(true);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : "Could not unlink this account. Please try again.";
+    }
+  }, []);
 
   useEffect(() => {
     if (!supabase) return;
@@ -32,6 +133,13 @@ export function useAuth() {
         setSession(nextSession);
         setLoading(false);
         if (nextSession) setOauthPending(null);
+        else {
+          identityRequest.current += 1;
+          setLinkedAccounts([]);
+          setLinkedIdentityCount(0);
+          setLinkedAccountsLoaded(false);
+          setLinkedAccountsError("");
+        }
       }
     });
 
@@ -64,6 +172,14 @@ export function useAuth() {
       subscription.unsubscribe();
     };
   }, []);
+
+  const authenticatedUserId = session?.user.id;
+  const sessionAccessToken = session?.access_token;
+  useEffect(() => {
+    if (!authenticatedUserId) return;
+    const timeout = window.setTimeout(() => void refreshLinkedAccounts(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [authenticatedUserId, sessionAccessToken, refreshLinkedAccounts]);
 
   const handleAuthCallback = useCallback(async (rawUrl: string) => {
     if (!supabase) return;
@@ -101,6 +217,7 @@ export function useAuth() {
       try {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         setAuthCallbackError(error?.message ?? "");
+        if (!error) await refreshLinkedAccounts();
       } catch {
         setAuthCallbackError(
           "The confirmation link could not be completed. Please try signing in again.",
@@ -120,6 +237,7 @@ export function useAuth() {
           refresh_token: refreshToken,
         });
         setAuthCallbackError(error?.message ?? "");
+        if (!error) await refreshLinkedAccounts();
       } catch {
         setAuthCallbackError(
           "The confirmation link could not be completed. Please try signing in again.",
@@ -128,7 +246,7 @@ export function useAuth() {
         setOauthPending(null);
       }
     }
-  }, []);
+  }, [refreshLinkedAccounts]);
 
   useEffect(() => {
     if (!supabase || !isTauri()) return;
@@ -291,6 +409,13 @@ export function useAuth() {
     signInWithPassword,
     signUpWithPassword,
     signInWithProvider,
+    linkedAccounts,
+    linkedIdentityCount,
+    linkedAccountsLoaded,
+    linkedAccountsError,
+    refreshLinkedAccounts,
+    linkAccount,
+    unlinkAccount,
     oauthPending,
     cancelProviderSignIn: () => setOauthPending(null),
     needsDisplayName: Boolean(session?.user && needsDisplayName(session.user)),

@@ -1,10 +1,10 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  Camera,
+  AlertCircle,
   Check,
   ChevronDown,
   ChevronRight,
@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Smartphone,
   Trash2,
+  X,
 } from "lucide-react";
 import { Icon, type IconName } from "../Icon";
 import { CreateFolderDialog } from "../dialogs/CreateFolderDialog";
@@ -37,6 +38,7 @@ import {
   type ShortcutId,
 } from "../../features/shortcuts/keyboardShortcuts";
 import type { AccountProfile } from "../../features/auth/accountProfile";
+import type { SocialProvider } from "../../hooks/useAuth";
 import { useWritingPreferences } from "../../features/settings/writingPreferences";
 import type { Note, NoteFolder } from "../../types/note";
 
@@ -133,13 +135,13 @@ const settingSearchIndex = [
   { label: "Local storage", detail: "View estimated local Notes, folders, and preferences usage.", category: "storage", terms: "device disk usage chart pie donut local offline", targetId: "setting-local-storage" },
   { label: "Cloud storage", detail: "View estimated cloud content against a 15 MB allowance.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 15mb" },
   { label: "Folder organization", detail: "Reorder, rename, recolor, or delete your folders.", category: "folders", terms: "organize folders reorder rename delete icon color unfiled", targetId: "setting-manage-folders" },
-  { label: "Profile photo", detail: "Profile photo controls are coming soon.", category: "account", terms: "avatar picture image photo" },
-  { label: "Display name", detail: "View your account display name; editing is coming soon.", category: "account", terms: "username profile name" },
-  { label: "Email address", detail: "View the email address associated with your account.", category: "account", terms: "email login address" },
+  { label: "Avatar color", detail: "Choose a color for your profile initials.", category: "account", terms: "avatar profile color initials", targetId: "setting-display-name" },
+  { label: "Display name", detail: "Change the name shown across Scribe and saved to your account.", category: "account", terms: "username profile name", targetId: "setting-display-name" },
+  { label: "Email address", detail: "View the email address associated with your account; it cannot be changed here.", category: "account", terms: "email login address", targetId: "setting-display-name" },
   { label: "Password & security", detail: "Review account security controls.", category: "account", terms: "security password verification" },
   { label: "Reset password", detail: "Password reset controls are coming soon.", category: "account", terms: "password reset recovery" },
   { label: "Two-step verification", detail: "Additional sign-in protection is coming soon.", category: "account", terms: "2fa mfa two factor authentication security" },
-  { label: "Linked accounts", detail: "View Google and GitHub profiles; Link and Unlink are preview controls.", category: "account", terms: "social provider google github link unlink connected" },
+  { label: "Linked accounts", detail: "Link or unlink Google and GitHub sign-in providers.", category: "account", terms: "social provider google github link unlink connected" },
   { label: "Signed-in devices", detail: "Preview sessions for this PC, Chrome extension, and mobile app.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout" },
   { label: "Sign out from all devices", detail: "Preview the option to sign out every device.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
   { label: "Account data", detail: "Review upcoming export and deletion controls.", category: "account", terms: "privacy export delete data" },
@@ -357,46 +359,154 @@ function ProviderLogo({ provider }: { provider: "google" | "github" }) {
   );
 }
 
-function AccountSettings({ profile }: { profile: AccountProfile }) {
+function AccountSettings({
+  profile,
+  onAvatarColorChange,
+  onUpdateDisplayName,
+  onLinkAccount,
+  onUnlinkAccount,
+}: {
+  profile: AccountProfile;
+  onAvatarColorChange: (color: string) => void;
+  onUpdateDisplayName: (name: string) => Promise<string | null>;
+  onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
+  onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
+}) {
+  const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [displayNameDraft, setDisplayNameDraft] = useState(profile.displayName);
+  const [savingName, setSavingName] = useState(false);
+  const [linkStartedProvider, setLinkStartedProvider] = useState<SocialProvider | null>(null);
+  const [accountToast, setAccountToast] = useState<{ message: string; kind: "success" | "error" | "info" } | null>(null);
   const initials = profile.displayName.trim().charAt(0).toUpperCase() || "A";
+
+  function showAccountToast(message: string, kind: "success" | "error" | "info") {
+    setAccountToast({ message, kind });
+  }
+
+  async function saveDisplayName() {
+    const name = displayNameDraft.trim();
+    if (!name || name.length > 60) {
+      showAccountToast("Enter a name between 1 and 60 characters.", "error");
+      return;
+    }
+    setSavingName(true);
+    try {
+      const error = await onUpdateDisplayName(name);
+      if (error) {
+        showAccountToast(error, "error");
+        return;
+      }
+      setDisplayNameDraft(name);
+      setEditingName(false);
+      showAccountToast("Display name updated.", "success");
+    } catch (error) {
+      showAccountToast(error instanceof Error ? error.message : "Could not update your display name.", "error");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!linkStartedProvider || !profile.linkedAccounts?.some((item) => item.provider === linkStartedProvider)) return;
+    setAccountToast({
+      message: `${linkStartedProvider === "google" ? "Google" : "GitHub"} account linked.`,
+      kind: "success",
+    });
+    setLinkStartedProvider(null);
+  }, [linkStartedProvider, profile.linkedAccounts]);
+
+  useEffect(() => {
+    if (!accountToast) return;
+    const timeout = window.setTimeout(() => setAccountToast(null), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [accountToast]);
+
+  async function toggleProvider(provider: SocialProvider, isLinked: boolean) {
+    setPendingProvider(provider);
+    setAccountToast(null);
+    if (isLinked) setLinkStartedProvider(null);
+    try {
+      const error = await (isLinked ? onUnlinkAccount(provider) : onLinkAccount(provider));
+      if (error) {
+        setLinkStartedProvider(null);
+        showAccountToast(error, "error");
+      } else if (isLinked) {
+        showAccountToast(`${provider === "google" ? "Google" : "GitHub"} account unlinked.`, "success");
+      } else {
+        setLinkStartedProvider(provider);
+        showAccountToast(`Continue in your browser to finish linking ${provider === "google" ? "Google" : "GitHub"}.`, "info");
+      }
+    } catch (error) {
+      setLinkStartedProvider(null);
+      showAccountToast(error instanceof Error ? error.message : "Could not update this linked account.", "error");
+    } finally {
+      setPendingProvider(null);
+    }
+  }
   return (
     <>
       <SettingCard
         title="Your profile"
-        description="Your account details from Supabase."
+        description="Personalize the name and initials shown in Scribe."
         accent="pink"
-        id={settingId("Profile photo")}
+        id={settingId("Display name")}
       >
         <div className="account-profile-card">
-          <div className="account-profile-avatar">
+          <div className="account-profile-avatar" style={{ backgroundColor: profile.avatarColor ?? "#8970ed" }}>
             {initials}
-            <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Profile photos are not available yet"><button
-              type="button"
-              disabled
-              aria-label="Change profile photo"
-              data-tooltip="Profile photos are not available yet"
-            >
-              <Camera size={14} />
-            </button></span>
           </div>
-          <div className="account-profile-copy">
-            <strong>{profile.displayName}</strong>
+          <div className={`account-profile-copy ${editingName ? "is-editing" : ""}`}>
+            {editingName ? (
+              <div className="account-display-name-editor">
+                <input
+                  autoFocus
+                  aria-label="Display name"
+                  maxLength={60}
+                  value={displayNameDraft}
+                  disabled={savingName}
+                  onChange={(event) => setDisplayNameDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") { event.preventDefault(); void saveDisplayName(); }
+                    if (event.key === "Escape") { setDisplayNameDraft(profile.displayName); setEditingName(false); }
+                  }}
+                />
+                <button type="button" className="account-name-save" aria-label="Save display name" disabled={savingName} onClick={() => void saveDisplayName()}><Check size={14} /></button>
+                <button type="button" className="account-name-cancel" aria-label="Cancel display name edit" disabled={savingName} onClick={() => { setDisplayNameDraft(profile.displayName); setEditingName(false); }}><X size={14} /></button>
+              </div>
+            ) : (
+              <div className="account-profile-name-line">
+                <strong>{profile.displayName}</strong>
+                <button type="button" aria-label="Edit display name" onClick={() => { setDisplayNameDraft(profile.displayName); setEditingName(true); }}>Edit</button>
+              </div>
+            )}
             <span>{profile.email}</span>
           </div>
-          <span className="coming-soon-badge">Preview</span>
         </div>
-        <AccountSettingRow
-          id="Display name"
-          label="Display name"
-          detail={profile.displayName}
-          action="Managed soon"
-        />
-        <AccountSettingRow
-          id="Email address"
-          label="Email address"
-          detail={profile.email}
-          action="Supabase"
-        />
+        <div className="account-avatar-color-row">
+          <div><strong>Avatar color</strong><small>Choose a color for your initials.</small></div>
+          <div className="account-avatar-color-options" role="radiogroup" aria-label="Avatar color">
+            {[
+              { name: "Violet", value: "#8970ed" },
+              { name: "Blue", value: "#379be9" },
+              { name: "Green", value: "#22b893" },
+              { name: "Orange", value: "#e7a642" },
+              { name: "Pink", value: "#df69a2" },
+              { name: "Cyan", value: "#20bfcc" },
+            ].map(({ name, value }) => (
+              <button
+                key={value}
+                type="button"
+                className={`account-avatar-color ${profile.avatarColor === value ? "is-selected" : ""}`}
+                style={{ backgroundColor: value }}
+                aria-pressed={profile.avatarColor === value}
+                aria-label={`${name} avatar color`}
+                title={name}
+                onClick={() => onAvatarColorChange(value)}
+              />
+            ))}
+          </div>
+        </div>
       </SettingCard>
       <SettingCard
         title="Password & security"
@@ -429,9 +539,11 @@ function AccountSettings({ profile }: { profile: AccountProfile }) {
           action="Coming soon"
         />
       </SettingCard>
-      <SettingCard title="Linked accounts" id={settingId("Linked accounts")} description="Connected sign-in providers. Link and unlink actions are previews." accent="pink">
+      <SettingCard title="Linked accounts" id={settingId("Linked accounts")} description="Connect Google or GitHub to this Scribe account." accent="pink">
         {(["google", "github"] as const).map((provider) => {
           const identity = profile.linkedAccounts?.find((item) => item.provider === provider);
+          const identitiesLoaded = profile.linkedAccountsLoaded !== false;
+          const cannotUnlink = Boolean(identity) && (profile.linkedIdentityCount ?? 0) <= 1;
           return (
             <div className="account-connection-row" key={provider}>
               <div className="account-icon-tile"><ProviderLogo provider={provider} /></div>
@@ -439,13 +551,30 @@ function AccountSettings({ profile }: { profile: AccountProfile }) {
                 <strong>{provider === "google" ? "Google" : "GitHub"}</strong>
                 {identity?.name && <span>{identity.name}</span>}
                 {identity?.email && <span>{identity.email}</span>}
-                <small className={identity ? "connection-status-linked" : ""}>{identity ? "Linked to your account" : "No account linked"}</small>
+                <small className={identity ? "connection-status-linked" : ""}>{!identitiesLoaded ? profile.linkedAccountsError ? "Could not check linked providers. Reopen Settings to retry." : "Checking connected providers…" : identity ? "Linked to your account" : "No account linked"}</small>
               </div>
-              <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Preview only: account linking and unlinking are not implemented"><button type="button" className={`account-preview-action ${identity ? "action-danger" : "action-link"}`} disabled data-tooltip="Preview only: account linking and unlinking are not implemented">{identity ? "Unlink" : "Link"}</button></span>
+              <button
+                type="button"
+                className={`account-preview-action ${identity ? "action-danger" : "action-link"}`}
+                disabled={pendingProvider !== null || !identitiesLoaded || cannotUnlink}
+                title={cannotUnlink ? "Keep at least one sign-in method linked." : undefined}
+                onClick={() => void toggleProvider(provider, Boolean(identity))}
+              >
+                {pendingProvider === provider ? "Working…" : !identitiesLoaded ? "Checking…" : identity ? "Unlink" : "Link"}
+              </button>
             </div>
           );
         })}
       </SettingCard>
+      {accountToast && (
+        <div className="status-toast-stack">
+          <div className={`status-toast is-${accountToast.kind}`} role={accountToast.kind === "error" ? "alert" : "status"} aria-live={accountToast.kind === "error" ? "assertive" : "polite"}>
+            <span className="status-toast-icon">{accountToast.kind === "success" ? <Check size={18} /> : accountToast.kind === "error" ? <AlertCircle size={18} /> : <Globe size={18} />}</span>
+            <span>{accountToast.message}</span>
+            <button type="button" aria-label="Dismiss notification" onClick={() => setAccountToast(null)}><X size={15} /></button>
+          </div>
+        </div>
+      )}
       <SettingCard title="Signed-in devices" id={settingId("Signed-in devices")} description="Sample sessions · device management preview." accent="pink">
         {[
           { icon: Monitor, name: "This PC", platform: "Scribe for Windows · Windows 11", activity: "Active now", current: true },
@@ -845,6 +974,10 @@ function CategoryContent({
   onOfflineModeChange,
   storageMetrics,
   profile,
+  onAvatarColorChange,
+  onUpdateDisplayName,
+  onLinkAccount,
+  onUnlinkAccount,
   folders,
   notes,
   onCreateFolder,
@@ -867,6 +1000,10 @@ function CategoryContent({
   onOfflineModeChange: (enabled: boolean) => void;
   storageMetrics: StorageMetrics;
   profile: AccountProfile;
+  onAvatarColorChange: (color: string) => void;
+  onUpdateDisplayName: (name: string) => Promise<string | null>;
+  onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
+  onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
   onCreateFolder: (
@@ -917,7 +1054,7 @@ function CategoryContent({
         </>
       );
     case "account":
-      return <AccountSettings profile={profile} />;
+      return <AccountSettings profile={profile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} />;
     case "folders":
       return (
         <FolderManagementSettings
@@ -1189,6 +1326,10 @@ export function SettingsPage({
   onOfflineModeChange,
   storageMetrics,
   profile,
+  onAvatarColorChange,
+  onUpdateDisplayName,
+  onLinkAccount,
+  onUnlinkAccount,
   folders,
   notes,
   onCreateFolder,
@@ -1211,6 +1352,10 @@ export function SettingsPage({
   onOfflineModeChange: (enabled: boolean) => void;
   storageMetrics: StorageMetrics;
   profile: AccountProfile;
+  onAvatarColorChange: (color: string) => void;
+  onUpdateDisplayName: (name: string) => Promise<string | null>;
+  onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
+  onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
   onCreateFolder: (
@@ -1406,6 +1551,10 @@ export function SettingsPage({
               onOfflineModeChange={onOfflineModeChange}
               storageMetrics={storageMetrics}
               profile={profile}
+              onAvatarColorChange={onAvatarColorChange}
+              onUpdateDisplayName={onUpdateDisplayName}
+              onLinkAccount={onLinkAccount}
+              onUnlinkAccount={onUnlinkAccount}
               folders={folders}
               notes={notes}
               onCreateFolder={onCreateFolder}

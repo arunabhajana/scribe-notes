@@ -2629,36 +2629,45 @@
   place-items: center;
   border-radius: 15px;
   color: #fff;
-  background: linear-gradient(140deg, #5b78d3, #a174da);
+  background: #8970ed;
   font:
     700 17px Manrope,
     sans-serif;
 }
-.account-profile-avatar button {
-  position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 23px;
-  height: 23px;
-  display: grid;
-  place-items: center;
-  border: 2px solid var(--surface);
-  border-radius: 8px;
-  color: var(--muted);
-  background: var(--surface-3);
-}
 .account-profile-copy {
+  flex: 1;
+  min-width: 0;
   display: grid;
   gap: 4px;
 }
+.account-profile-name-line { min-width: 0; display: flex; align-items: center; gap: 8px; }
 .account-profile-copy strong {
+  min-width: 0;
+  overflow: hidden;
   color: var(--text);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .account-profile-copy span {
   color: var(--muted);
   font-size: 10px;
 }
+.account-profile-name-line button { flex: none; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: var(--surface-2); font-size: 9px; cursor: pointer; }
+.account-profile-name-line button:hover { color: var(--text); border-color: var(--accent); }
+.account-display-name-editor { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.account-display-name-editor input { width: min(190px, 100%); min-width: 0; height: 29px; padding: 0 8px; border: 1px solid var(--accent); border-radius: 7px; outline: none; color: var(--text); background: var(--surface-2); font: 550 11px "DM Sans", "Segoe UI", sans-serif; }
+.account-display-name-editor button { width: 27px; height: 27px; display: grid; flex: none; place-items: center; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: var(--surface-2); cursor: pointer; }
+.account-display-name-editor .account-name-save { color: #37c994; }
+.account-display-name-editor button:disabled { opacity: .55; cursor: wait; }
+.account-avatar-color-row { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.account-avatar-color-row > div:first-child { display: grid; gap: 4px; }
+.account-avatar-color-row strong { color: var(--text); font-size: 11px; font-weight: 600; }
+.account-avatar-color-row small { color: var(--muted); font-size: 9px; }
+.account-avatar-color-options { display: flex; align-items: center; gap: 9px; }
+.account-avatar-color { width: 19px; height: 19px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px transparent; cursor: pointer; transition: transform .14s ease, box-shadow .14s ease; }
+.account-avatar-color:hover { transform: scale(1.1); }
+.account-avatar-color.is-selected { box-shadow: 0 0 0 2px var(--accent); }
 .coming-soon-badge {
   margin-left: auto;
   padding: 5px 8px;
@@ -6385,6 +6394,8 @@
 @keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 .status-toast-stack { position: fixed; z-index: 10001; right: 20px; bottom: 20px; width: min(410px, calc(100vw - 40px)); display: grid; gap: 10px; pointer-events: none; }
 .status-toast { position: relative; display: flex; align-items: flex-start; gap: 11px; padding: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-left: 3px solid var(--accent); border-radius: 12px; color: var(--text); background: var(--surface-2); box-shadow: 0 8px 28px #0003; font-size: 12px; line-height: 1.5; pointer-events: auto; animation: toast-appear .18s ease-out both; }
+.status-toast.is-success { --accent: #37c994; }
+.status-toast.is-error { --accent: #f26b7a; }
 .status-toast-icon { flex: none; color: var(--accent); padding-top: 1px; }
 .status-toast > span:nth-child(2) { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .status-toast button { flex: none; padding: 2px; border: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
@@ -6438,6 +6449,10 @@
 .account-preview-action.action-danger { color: #ef737b; border-color: #ef737b40; background: #ef737b0d; }
 .account-preview-action.action-link { color: #37c994; border-color: #37c99440; background: #37c9940d; }
 .account-preview-action:disabled { opacity: 1; cursor: not-allowed; }
+.account-preview-action:not(:disabled) { cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .16s ease; }
+.account-preview-action:not(:disabled):hover { transform: translateY(-1px); }
+.account-preview-action.action-danger:not(:disabled):hover { background: #ef737b18; border-color: #ef737b75; }
+.account-preview-action.action-link:not(:disabled):hover { background: #37c99418; border-color: #37c99475; }
 .device-actions-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 16px; border-top: 1px solid var(--border); }
 .device-actions-footer > span { font-size: 10px; color: var(--muted); line-height: 1.5; }
 @media (max-width: 600px) { .account-connection-row { flex-wrap: wrap; gap: 11px; } .account-connection-info { min-width: 130px; } .device-actions-footer { align-items: flex-start; flex-direction: column; } }

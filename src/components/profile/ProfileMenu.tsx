@@ -44,7 +44,7 @@ export function ProfileMenu({
                 onClick={() => setOpen((value) => !value)}
             >
                 {collapsed ? (
-                    <span className="avatar">{initials}</span>
+                    <span className="avatar" style={{ background: profile.avatarColor, color: "#fff" }}>{initials}</span>
                 ) : (
                     <span className="profile-menu-dots" aria-hidden="true">
                         ···
@@ -57,7 +57,7 @@ export function ProfileMenu({
                     role="menu"
                 >
                     <div className="profile-popover-user">
-                        <div className="avatar">{initials}</div>
+                        <div className="avatar" style={{ background: profile.avatarColor, color: "#fff" }}>{initials}</div>
                         <div>
                             <strong>{profile.displayName}</strong>
                             <span>{profile.email}</span>
@@ -104,7 +104,7 @@ export function ProfileBar({
     const initials = profile.displayName.trim().charAt(0).toUpperCase() || "A";
     return (
         <div className={`profile-row ${collapsed ? "is-collapsed" : ""}`}>
-            <div className="avatar profile-avatar">{initials}</div>
+            <div className="avatar profile-avatar" style={{ background: profile.avatarColor, color: "#fff" }}>{initials}</div>
             <div className="profile-copy">
                 <span className="profile-name">{profile.displayName}</span>
                 <span className="profile-plan">{profile.email}</span>
