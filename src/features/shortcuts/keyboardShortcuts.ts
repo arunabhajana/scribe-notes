@@ -1,4 +1,5 @@
 export const shortcutActions = [
+  { id: "toggleEditMode", label: "Toggle editing / reading mode", description: "Switch the selected note between editing and reading mode." },
   { id: "newNote", label: "New Note", description: "Start a new Note." },
   { id: "search", label: "Search Notes", description: "Focus Note search." },
   {
@@ -35,6 +36,7 @@ export type ShortcutBinding = { key: string; shift: boolean };
 export type ShortcutBindings = Record<ShortcutId, ShortcutBinding>;
 
 export const defaultShortcutBindings: ShortcutBindings = {
+  toggleEditMode: { key: "e", shift: false },
   newNote: { key: "n", shift: false },
   search: { key: "k", shift: false },
   allNotes: { key: "1", shift: false },

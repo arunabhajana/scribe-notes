@@ -3765,6 +3765,8 @@
 .app-tooltip {
   position: fixed;
   z-index: 10000;
+  width: max-content;
+  box-sizing: border-box;
   max-width: min(360px, calc(100vw - 24px));
   padding: 8px 11px;
   border: 1px solid #454650;
@@ -3804,7 +3806,7 @@
   transform: rotate(45deg);
 }
 .app-tooltip-top::after {
-  left: calc(50% - 3px);
+  left: var(--tooltip-arrow-left, calc(50% - 3px));
   bottom: -4px;
 }
 .app-tooltip-right::after {

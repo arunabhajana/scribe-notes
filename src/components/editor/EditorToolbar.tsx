@@ -2,17 +2,20 @@ import {
   Bold,
   Code2,
   CheckSquare,
-  Eye,
-  EyeOff,
+  BookOpen,
+  Pencil,
   Heading1,
   Heading2,
+  Heading3,
+  Underline,
   Italic,
   Link2,
   List,
   ListOrdered,
   Quote,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
+import "./editorToolbar.css";
 import {
   getAltModifierLabel,
   getModifierLabel,
@@ -21,8 +24,10 @@ import {
 export type MarkdownAction =
   | "bold"
   | "italic"
+  | "underline"
   | "heading1"
   | "heading2"
+  | "heading3"
   | "bullet"
   | "number"
   | "todo"
@@ -36,13 +41,34 @@ export function EditorToolbar({
   onAction,
   className = "",
   disabled = false,
+  editModeShortcut,
 }: {
   preview: boolean;
   onTogglePreview: () => void;
   onAction: (action: MarkdownAction) => void;
   className?: string;
   disabled?: boolean;
+  editModeShortcut?: string;
 }) {
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const toolbar = toolbarRef.current;
+    const pane = toolbar?.closest<HTMLElement>(".editor-pane");
+    const content = pane?.querySelector<HTMLElement>(".note-reading-content");
+    const toggle = toolbar?.querySelector<HTMLElement>(".markdown-view-toggle");
+    if (!toolbar || !pane || !content || !toggle) return;
+    const align = () => {
+      const toolbarPadding = Number.parseFloat(getComputedStyle(toolbar).paddingRight) || 0;
+      const contentPadding = Number.parseFloat(getComputedStyle(content).paddingRight) || 0;
+      const rightEdge = content.getBoundingClientRect().right - contentPadding;
+      toggle.style.marginRight = `${Math.max(0, toolbar.getBoundingClientRect().right - toolbarPadding - rightEdge)}px`;
+    };
+    align();
+    const observer = new ResizeObserver(align);
+    observer.observe(pane);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
   const modifier = getModifierLabel();
   const altModifier = getAltModifierLabel();
   const button = (
@@ -65,11 +91,23 @@ export function EditorToolbar({
   );
   return (
     <div
-      className={`format-toolbar ${className}`}
+      ref={toolbarRef}
+      className={`format-toolbar format-toolbar-refined ${className}`}
       role="toolbar"
       aria-label="Markdown formatting"
+      onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+        const index = buttons.indexOf(event.target as HTMLButtonElement);
+        if (index < 0 || !buttons.length) return;
+        event.preventDefault();
+        const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+          : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+        buttons[next].focus();
+      }}
     >
-      <div className="format-group">
+      <div className="format-tools">
+      <div className="format-group" role="group" aria-label="Headings">
         {button(
           "Heading 1",
           "heading1",
@@ -82,23 +120,23 @@ export function EditorToolbar({
           <Heading2 size={16} />,
           `${altModifier} + 2`,
         )}
+        {button("Heading 3", "heading3", <Heading3 size={16} />, `${altModifier} + 3`)}
       </div>
-      <span className="toolbar-divider" />
-      <div className="format-group">
+      <div className="format-group" role="group" aria-label="Text emphasis">
         {button("Bold", "bold", <Bold size={15} />, "B")}
         {button("Italic", "italic", <Italic size={15} />, "I")}
+        {button("Underline", "underline", <Underline size={15} />, "U")}
       </div>
-      <span className="toolbar-divider" />
-      <div className="format-group">
+      <div className="format-group" role="group" aria-label="Lists">
         {button("Bulleted list", "bullet", <List size={16} />)}
         {button("Numbered list", "number", <ListOrdered size={16} />)}
         {button("To-do list", "todo", <CheckSquare size={16} />)}
       </div>
-      <span className="toolbar-divider" />
-      <div className="format-group">
+      <div className="format-group" role="group" aria-label="Insert quote, code or link">
         {button("Quote", "quote", <Quote size={15} />)}
         {button("Inline code", "code", <Code2 size={15} />)}
         {button("Link", "link", <Link2 size={15} />, "K")}
+      </div>
       </div>
       <div className="format-group markdown-view-toggle">
         <button
@@ -106,11 +144,11 @@ export function EditorToolbar({
           className={`format-button ${preview ? "active" : ""}`}
           disabled={disabled}
           onClick={onTogglePreview}
-          data-tooltip={preview ? "Edit Markdown" : "Preview Markdown"}
-          aria-label={preview ? "Edit Markdown" : "Preview Markdown"}
+          data-tooltip={`${preview ? "Edit the note" : "Switch to reading mode"}${editModeShortcut ? ` · ${editModeShortcut}` : ""}`}
+          aria-label={preview ? "Edit note" : "Switch to reading mode"}
         >
-          {preview ? <EyeOff size={15} /> : <Eye size={15} />}
-          <span>{preview ? "Edit" : "Preview"}</span>
+          {preview ? <Pencil size={15} /> : <BookOpen size={15} />}
+          <span>{preview ? "Edit" : "Reading mode"}</span>
         </button>
       </div>
     </div>

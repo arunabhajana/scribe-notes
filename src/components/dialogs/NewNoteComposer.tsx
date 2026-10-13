@@ -123,12 +123,16 @@ export function NewNoteComposer({
         ? "bold"
         : !event.altKey && !event.shiftKey && key === "i"
           ? "italic"
+          : !event.altKey && !event.shiftKey && key === "u"
+            ? "underline"
           : !event.altKey && !event.shiftKey && key === "k"
             ? "link"
             : event.altKey && !event.shiftKey && key === "1"
               ? "heading1"
               : event.altKey && !event.shiftKey && key === "2"
                 ? "heading2"
+                : event.altKey && !event.shiftKey && key === "3"
+                  ? "heading3"
                 : null;
     if (!action) return;
     event.preventDefault();

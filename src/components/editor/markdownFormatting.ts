@@ -35,6 +35,7 @@ export function continueMarkdownList(event: KeyboardEvent<HTMLTextAreaElement>, 
 const inlineDelimiters: Partial<Record<MarkdownAction, [string, string]>> = {
   bold: ["**", "**"],
   italic: ["*", "*"],
+  underline: ["<u>", "</u>"],
   code: ["`", "`"],
   link: ["[", "](https://)"],
 };
@@ -111,12 +112,14 @@ export function applyMarkdownAction(
     return;
   }
 
-  if (["heading1", "heading2", "bullet", "number", "quote"].includes(action)) {
+  if (["heading1", "heading2", "heading3", "bullet", "number", "quote"].includes(action)) {
     const marker =
       action === "heading1"
         ? "# "
         : action === "heading2"
           ? "## "
+          : action === "heading3"
+            ? "### "
           : action === "bullet"
             ? "- "
           : action === "number"

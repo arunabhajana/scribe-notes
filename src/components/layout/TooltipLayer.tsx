@@ -32,6 +32,9 @@ export function TooltipLayer() {
         left: Math.max(bounds.width / 2 + safeGap, Math.min(window.innerWidth - bounds.width / 2 - safeGap, next.left)),
         top: Math.max(bounds.height + safeGap, Math.min(window.innerHeight - safeGap, next.top)),
       };
+      const targetCenter = tooltip.target.getBoundingClientRect().left + tooltip.target.getBoundingClientRect().width / 2;
+      const arrowLeft = Math.max(10, Math.min(bounds.width - 16, targetCenter - (next.left - bounds.width / 2) - 3));
+      tooltipElement.current.style.setProperty("--tooltip-arrow-left", `${arrowLeft}px`);
     } else {
       next = {
         ...next,

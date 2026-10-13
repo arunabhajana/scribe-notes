@@ -283,6 +283,10 @@ function App() {
       if (!action) return;
       event.preventDefault();
       switch (action.id) {
+        case "toggleEditMode":
+          if (notesState.selectedNote && !notesState.selectedNote.deletedAt && !document.querySelector('[role="dialog"][aria-modal="true"]'))
+            window.dispatchEvent(new Event("scribe:toggle-note-mode"));
+          break;
         case "newNote":
           openNewNote();
           break;
@@ -625,6 +629,7 @@ function App() {
           onDeleteNote={handleDeleteNote}
           pinShortcut={formatShortcut(shortcuts.togglePin)}
           newNoteShortcut={formatShortcut(shortcuts.newNote)}
+          editModeShortcut={formatShortcut(shortcuts.toggleEditMode)}
         />}
       </div>
       {isCreateFolderOpen && (

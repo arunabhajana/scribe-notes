@@ -11,6 +11,7 @@ import { applyMarkdownAction } from "./markdownFormatting";
 import { isMacOS } from "../../features/shortcuts/keyboardShortcuts";
 
 type EditorPaneProps = {
+  editModeShortcut: string;
   reminder?: NoteReminder;
   onSetReminder: () => void;
   note: Note | null;
@@ -37,6 +38,7 @@ type EditorPaneProps = {
 };
 
 export function EditorPane({
+  editModeShortcut,
   reminder,
   onSetReminder,
   note,
@@ -71,12 +73,16 @@ export function EditorPane({
         ? "bold"
         : !event.altKey && !event.shiftKey && key === "i"
           ? "italic"
+          : !event.altKey && !event.shiftKey && key === "u"
+            ? "underline"
           : !event.altKey && !event.shiftKey && key === "k"
             ? "link"
             : event.altKey && !event.shiftKey && key === "1"
               ? "heading1"
               : event.altKey && !event.shiftKey && key === "2"
                 ? "heading2"
+              : event.altKey && !event.shiftKey && key === "3"
+                ? "heading3"
                 : null;
     if (!action) return;
     event.preventDefault();
@@ -111,12 +117,15 @@ export function EditorPane({
       />
       {bodyEditing && !isTrash && (
         <EditorToolbar
+          editModeShortcut={editModeShortcut}
           preview={false}
           onTogglePreview={() => setBodyEditing(false)}
           onAction={applyAction}
         />
       )}
       <NoteBodyEditor
+        editModeShortcut={editModeShortcut}
+        onEndEdit={() => setBodyEditing(false)}
         value={note.body}
         preview={!bodyEditing}
         inputRef={bodyInputRef}
@@ -125,7 +134,7 @@ export function EditorPane({
         readOnly={isTrash}
         onBeginEdit={() => setBodyEditing(true)}
       />
-      <EditorFooter body={note.body} />
+      <EditorFooter body={note.body} updatedAt={note.updatedAt} />
     </section>
   );
 }

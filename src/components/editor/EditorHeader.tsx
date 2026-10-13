@@ -3,6 +3,7 @@ import { Bell, ChevronDown, Folder, FolderPlus, Pencil, RotateCcw } from "lucide
 import { formatReminderTime, type NoteReminder } from "../../features/reminders/reminderTypes";
 import type { Note, NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
+import "./editorHeader.css";
 
 export function EditorHeader({
   note,
@@ -41,7 +42,8 @@ export function EditorHeader({
   }, [titleEditing]);
   const currentFolder = folders.find((folder) => folder.id === note.folderId);
   return (
-    <header className="editor-header">
+    <header className="editor-header editor-header-clean">
+      <div className="editor-heading-row">
       <div className={`editor-title-wrap ${titleEditing ? "is-editing" : ""}`}>
         {titleEditing && titleEditable ? (
           <input
@@ -65,16 +67,20 @@ export function EditorHeader({
             onClick={() => titleEditable && setTitleEditing(true)}
             disabled={!titleEditable}
             aria-label={titleEditable ? "Edit Note title" : undefined}
+            data-tooltip={titleEditable ? "Edit note title" : undefined}
           >
             <h1>{note.title || "Untitled Note"}</h1>
             {titleEditable && (
               <span className="editor-edit-hint" aria-hidden="true">
                 <Pencil size={14} />
-                <span>Click to edit</span>
               </span>
             )}
           </button>
         )}
+      </div>
+      <span className="save-status" data-tooltip="All changes are saved on this device">
+        <span className="save-dot" />Saved
+      </span>
       </div>
       <div className="editor-actions">
         {!note.deletedAt && (
@@ -163,10 +169,7 @@ export function EditorHeader({
             )}
           </div>
         )}
-        <span className="save-status" data-tooltip="All changes are saved">
-          <span className="save-dot" />
-          Saved
-        </span>
+        <div className="editor-note-tools">
         {!note.deletedAt && (
           <button className={`action-button reminder-action${reminder?.dueAt ? " has-reminder" : ""}`} onClick={onSetReminder}
             aria-label={reminder?.dueAt ? "Edit reminder" : "Set reminder"}
@@ -178,6 +181,8 @@ export function EditorHeader({
           <button
             className={`action-button ${note.pinned ? "pinned" : ""}`}
             onClick={onTogglePinned}
+            aria-label={note.pinned ? "Unpin note" : "Pin note"}
+            aria-pressed={note.pinned}
             data-tooltip={`${note.pinned ? "Unpin Note" : "Pin Note"} · ${pinShortcut}`}
           >
             <Icon name="pin" size={15} />
@@ -188,6 +193,7 @@ export function EditorHeader({
           <button
             className="action-button"
             onClick={onRestore}
+            aria-label="Restore note"
             data-tooltip="Restore Note"
           >
             <RotateCcw size={15} />
@@ -197,11 +203,13 @@ export function EditorHeader({
         <button
           className="action-button delete-action"
           onClick={onDelete}
+          aria-label={deleteLabel}
           data-tooltip={deleteLabel}
         >
           <Icon name="trash" size={15} />
           <span>{deleteLabel}</span>
         </button>
+        </div>
       </div>
     </header>
   );
