@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3 } from "lucide-react";
+import { scrollExpandedIntoView } from "../layout/scrollExpandedIntoView";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 const dateString = (value: Date) => `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
@@ -24,6 +25,7 @@ export function ReminderDateTimePicker({ date, time, minDate, disabled, onDateCh
   const [hour, setHour] = useState(time.slice(0, 2));
   const [minute, setMinute] = useState(time.slice(3, 5));
   const root = useRef<HTMLDivElement>(null);
+  const expandedPanel = useRef<HTMLDivElement>(null);
   const dateTrigger = useRef<HTMLButtonElement>(null);
   const timeTrigger = useRef<HTMLButtonElement>(null);
   const hourInput = useRef<HTMLInputElement>(null);
@@ -48,8 +50,17 @@ export function ReminderDateTimePicker({ date, time, minDate, disabled, onDateCh
   }
   useLayoutEffect(() => {
     if (panel === "date") dayButtons.current.get(activeDate)?.focus();
-    if (panel === "time") hourInput.current?.focus();
+    if (panel === "time") hourInput.current?.focus({ preventScroll: true });
   }, [panel, activeDate]);
+  useEffect(() => {
+    if (!panel) return;
+    const frame = window.requestAnimationFrame(() => {
+      const element = root.current;
+      if (!element) return;
+      scrollExpandedIntoView(element, expandedPanel.current);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [panel]);
   useEffect(() => {
     if (!panel) return;
     const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setPanel(null); };
@@ -98,7 +109,7 @@ export function ReminderDateTimePicker({ date, time, minDate, disabled, onDateCh
         </button>
       </div>
     </div>
-    {panel === "date" && <div id={`${id}-calendar`} className="reminder-picker-panel reminder-calendar" role="group" aria-label="Choose reminder date">
+    {panel === "date" && <div ref={expandedPanel} id={`${id}-calendar`} className="reminder-picker-panel reminder-calendar" role="group" aria-label="Choose reminder date">
       <div className="reminder-calendar-heading">
         <button type="button" className="icon-button" aria-label="Previous month" disabled={month <= monthStart(minDate)} onClick={() => changeMonth(-1)}><ChevronLeft size={17} /></button>
         <strong aria-live="polite">{visibleMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong>
@@ -127,7 +138,7 @@ export function ReminderDateTimePicker({ date, time, minDate, disabled, onDateCh
       </div>
       <div className="reminder-picker-footer"><span>Arrow keys to navigate</span><button type="button" className="cancel-button" onClick={() => selectDate(minDate)}>Today</button></div>
     </div>}
-    {panel === "time" && <div id={`${id}-clock`} className="reminder-picker-panel" role="group" aria-label="Choose reminder time">
+    {panel === "time" && <div ref={expandedPanel} id={`${id}-clock`} className="reminder-picker-panel" role="group" aria-label="Choose reminder time">
       <div className="reminder-clock-heading"><strong>Choose time</strong><span>24-hour clock</span></div>
       <div className="reminder-clock-controls">
         {(["hour", "minute"] as const).map((which) => <div className="reminder-clock-column" key={which}>

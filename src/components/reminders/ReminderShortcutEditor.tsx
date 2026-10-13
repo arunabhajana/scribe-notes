@@ -1,6 +1,7 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { formatPresetTime, isPresetTime, shortcutDuration, type ReminderShortcutInput } from "../../features/settings/reminderShortcuts";
 import { ReminderDateTimePicker } from "./ReminderDateTimePicker";
+import { scrollExpandedIntoView } from "../layout/scrollExpandedIntoView";
 
 const units = [{ label: "Minutes", multiplier: 1 }, { label: "Hours", multiplier: 60 }, { label: "Days", multiplier: 1440 }] as const;
 export function ReminderShortcutEditor({ initial, onSave, onCancel }: {
@@ -19,6 +20,15 @@ export function ReminderShortcutEditor({ initial, onSave, onCancel }: {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   });
   const [error, setError] = useState<string | null>(null);
+  const editor = useRef<HTMLDivElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { nameInput.current?.focus({ preventScroll: true }); }, []);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (editor.current) scrollExpandedIntoView(editor.current);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [mode, error]);
   const id = useId();
   const minutes = Number(amount) * unit;
   const valid = /^\d+$/.test(amount) && Number.isInteger(minutes) && minutes >= 1 && minutes <= 525600;
@@ -30,11 +40,11 @@ export function ReminderShortcutEditor({ initial, onSave, onCancel }: {
     const result = onSave(mode === "time" ? { label: name, time } : { label: name, minutes });
     if (result) setError(result);
   }
-  return <div className="reminder-shortcut-editor" onKeyDown={(event) => {
+  return <div ref={editor} className="reminder-shortcut-editor" onKeyDown={(event) => {
     if (event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); event.stopPropagation(); save(); }
   }}>
     <label htmlFor={`${id}-name`}>Preset name <span>Optional</span></label>
-    <input id={`${id}-name`} autoFocus value={label} maxLength={24} placeholder={suggestedName}
+    <input ref={nameInput} id={`${id}-name`} value={label} maxLength={24} placeholder={suggestedName}
       onChange={(event) => { setLabel(event.target.value); setError(null); }} />
     <div className="reminder-shortcut-units reminder-preset-mode" role="group" aria-label="Preset timing">
       <button type="button" aria-pressed={mode === "duration"} onClick={() => { setMode("duration"); setError(null); }}>After a delay</button>
