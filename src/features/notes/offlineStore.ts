@@ -92,6 +92,20 @@ function transactionDone(transaction: IDBTransaction) {
 }
 
 export const offlineStore = {
+  // Only use for a definite server rollback (such as quota rejection), never
+  // for network failures where the server might have committed the receipt.
+  async rejectBatch(userId: string, batchId: string) {
+    const db = await openDatabase();
+    const tx = db.transaction("syncState", "readwrite", { durability: "strict" });
+    const done = transactionDone(tx);
+    const store = tx.objectStore("syncState");
+    const request = store.get(userId) as IDBRequest<SyncState | undefined>;
+    request.onsuccess = () => {
+      const state = request.result;
+      if (state?.inFlight?.id === batchId) store.put({ ...state, inFlight: undefined });
+    };
+    await done;
+  },
   async prepareBatch(userId: string): Promise<{ batch: SyncBatch; cursor: string | null }> {
     const db = await openDatabase();
     const tx = db.transaction(["outbox", "syncState"], "readwrite", { durability: "strict" });
@@ -103,7 +117,7 @@ export const offlineStore = {
       const ready = () => {
         if (--remaining) return;
         const state = stateRequest.result ?? { userId, cursor: null };
-        const rank = (op: OutboxOperation) => op.entity === "folder" ? (op.kind === "delete" ? 2 : 0) : 1;
+        const rank = (op: OutboxOperation) => op.entity === "note" && op.kind === "delete" ? -1 : op.entity === "folder" ? (op.kind === "delete" ? 2 : 0) : 1;
         const batch: SyncBatch = state.inFlight ?? {
           id: crypto.randomUUID(),
           operations: queueRequest.result.sort((a, b) => rank(a) - rank(b) || a.sequence - b.sequence).slice(0, 50),

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useWritingPreferences } from "../../features/settings/writingPreferences";
 import {
   Minimize2,
   Minus,
@@ -33,7 +34,27 @@ export function TitleBar({
   onToggleOfflineMode?: () => void;
 }) {
   const [maximized, setMaximized] = useState(false);
+  const [writingPreferences] = useWritingPreferences();
   const desktop = isTauri();
+
+  useEffect(() => {
+    if (!desktop || !writingPreferences.minimizeToTray) return;
+    const appWindow = getCurrentWindow();
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void appWindow.onCloseRequested((event) => {
+      if (disposed) return;
+      event.preventDefault();
+      void appWindow.hide();
+    }).then((handler) => {
+      if (disposed) handler();
+      else unlisten = handler;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [desktop, writingPreferences.minimizeToTray]);
 
   useEffect(() => {
     if (!desktop) return;

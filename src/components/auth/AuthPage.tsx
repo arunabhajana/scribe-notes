@@ -10,6 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Icon } from "../Icon";
+import { AppLogo } from "../AppLogo";
 import { SocialSignInButtons } from "./SocialSignInButtons";
 import { LoadingSpinner } from "../feedback/LoadingFeedback";
 import type { SocialProvider } from "../../hooks/useAuth";
@@ -162,9 +163,7 @@ export function AuthPage({
       <section className="auth-layout" aria-label="Scribe account">
         <aside className="auth-story">
           <div className="auth-brand">
-            <span className="brand-mark">
-              <Icon name="note" size={20} />
-            </span>
+            <AppLogo variant="transparent" />
             <span>Scribe</span>
           </div>
           <div className="auth-story-copy">

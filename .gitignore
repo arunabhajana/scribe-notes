@@ -4,7 +4,22 @@ dist/
 dist-ssr/
 coverage/
 .vite/
+.cache/
+.eslintcache
+*.tsbuildinfo
 /target/
+
+# Temporary files and test reports
+/tmp/
+/temp/
+.nyc_output/
+playwright-report/
+test-results/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
 
 # Logs and tool output
 logs/
@@ -30,6 +45,7 @@ lerna-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+ehthumbs.db
 Desktop.ini
 *.suo
 *.ntvs*

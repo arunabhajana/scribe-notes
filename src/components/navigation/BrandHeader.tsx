@@ -1,4 +1,4 @@
-import { Icon } from "../Icon";
+import { AppLogo } from "../AppLogo";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 export function BrandHeader({
@@ -12,9 +12,7 @@ export function BrandHeader({
 }) {
     return (
         <div className={`brand-row ${collapsed ? "is-collapsed" : ""}`}>
-            <div className="brand-mark" aria-hidden="true">
-                <Icon name="note" size={19} />
-            </div>
+            <AppLogo variant="transparent" />
             <span className="brand-name">Scribe</span>
             <button
                 className="icon-button collapse-sidebar-button"

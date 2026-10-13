@@ -1,5 +1,6 @@
 import { useContextMenu, type ContextMenuItem } from "./components/context-menu/contextMenuState";
 import { useWritingPreferences } from "./features/settings/writingPreferences";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import { CreateFolderDialog } from "./components/dialogs/CreateFolderDialog";
@@ -34,7 +35,7 @@ type AppPage = "notes" | "preferences";
 function App() {
   const auth = useAuth();
   const openContextMenu = useContextMenu();
-  const [writingPreferences] = useWritingPreferences();
+  const [writingPreferences, updateWritingPreferences] = useWritingPreferences();
   const [offlineMode, setOfflineMode] = useState(
     () => localStorage.getItem("scribe-offline-mode") === "true",
   );
@@ -61,6 +62,29 @@ function App() {
   const [accent, setAccent] = useState<AccentColor>(
     () => (localStorage.getItem("scribe-accent") as AccentColor) || "violet",
   );
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    void invoke<boolean>("get_autostart_enabled")
+      .then((enabled) => {
+        if (active) updateWritingPreferences({ launch: enabled });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [updateWritingPreferences]);
+
+  const changeLaunchAtStartup = useCallback(async (enabled: boolean) => {
+    if (!isTauri()) return "Launch at startup is available in the installed Windows app.";
+    try {
+      await invoke("set_autostart_enabled", { enabled });
+      return null;
+    } catch {
+      return "Windows could not update the startup setting. Please try again.";
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -351,6 +375,7 @@ function App() {
           onLinkAccount={auth.linkAccount}
           onUnlinkAccount={auth.unlinkAccount}
           onRequestPasswordReset={auth.requestPasswordReset}
+          onLaunchAtStartupChange={changeLaunchAtStartup}
           folders={notesState.folders}
           unfiledPosition={notesState.unfiledPosition}
           notes={notesState.notes}

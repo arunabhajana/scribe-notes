@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-const defaults = { launch: true, spellcheck: true, reminders: true, desktop: true, sounds: false, size: "Medium", reminderLead: "10 minutes" };
+const defaults = { launch: false, minimizeToTray: false, spellcheck: true, reminders: true, desktop: true, sounds: false, size: "Medium", reminderLead: "10 minutes" };
 const key = "scribe-writing-preferences";
 function read() {
   try { return { ...defaults, ...JSON.parse(localStorage.getItem(key) ?? "{}") }; }

@@ -1,4 +1,7 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
+import { AppLogo } from "../AppLogo";
+import { StatusToast } from "../feedback/LoadingFeedback";
+import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_BYTES, CLOUD_STORAGE_LIMIT_MESSAGE, getCloudStorageUsage, type CloudStorageUsage } from "../../features/settings/cloudStorage";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -120,7 +123,8 @@ const settingId = (label: string) =>
   `setting-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 const settingSearchIndex = [
-  { label: "Launch at startup", detail: "Save your startup preference on this device.", category: "general", terms: "startup launch windows open boot" },
+  { label: "Launch at startup", detail: "Open Scribe when you sign in to your computer.", category: "general", terms: "startup launch windows open boot" },
+  { label: "Close to system tray", detail: "Keep Scribe running in the system tray when you close its window.", category: "general", terms: "close minimize tray notification area hide background" },
   { label: "Offline mode", detail: "Keep changes locally and pause cloud sync.", category: "general", terms: "offline network internet sync pause local" },
   { label: "Dark appearance", detail: "Use the Midnight dark theme.", category: "appearance", terms: "theme night midnight dark", targetId: "setting-color-mood" },
   { label: "Light appearance", detail: "Use the Daylight light theme.", category: "appearance", terms: "theme day daylight light", targetId: "setting-color-mood" },
@@ -134,7 +138,7 @@ const settingSearchIndex = [
   { label: "Reminder lead time", detail: "Choose how many minutes before a reminder to notify; delivery is coming soon.", category: "notifications", terms: "before minutes time 5 10 15 30 60" },
   { label: "Keyboard shortcuts", detail: "Customize app shortcuts or restore their defaults.", category: "shortcuts", terms: "keys keyboard hotkey commands bindings reset formatting" },
   { label: "Local storage", detail: "View estimated local Notes, folders, and preferences usage.", category: "storage", terms: "device disk usage chart pie donut local offline", targetId: "setting-local-storage" },
-  { label: "Cloud storage", detail: "View estimated cloud content against a 15 MB allowance.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 15mb" },
+  { label: "Cloud storage", detail: "View server storage usage against your 10 MB limit.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 10mb" },
   { label: "Folder organization", detail: "Reorder, rename, recolor, or delete your folders.", category: "folders", terms: "organize folders reorder rename delete icon color unfiled", targetId: "setting-manage-folders" },
   { label: "Avatar color", detail: "Choose a color for your profile initials.", category: "account", terms: "avatar profile color initials", targetId: "setting-display-name" },
   { label: "Display name", detail: "Change the name shown across Scribe and saved to your account.", category: "account", terms: "username profile name", targetId: "setting-display-name" },
@@ -157,12 +161,14 @@ function SettingToggle({
   checked,
   onChange,
   color = "violet",
+  disabled = false,
 }: {
   label: string;
   detail: string;
   checked: boolean;
   onChange: (value: boolean) => void;
   color?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="setting-row" id={settingId(label)}>
@@ -175,6 +181,7 @@ function SettingToggle({
         role="switch"
         aria-checked={checked}
         aria-label={label}
+        disabled={disabled}
         data-tooltip={detail}
         onClick={() => onChange(!checked)}
       >
@@ -321,22 +328,54 @@ function AccountSettingRow({
 }
 
 function StorageSettings({ metrics }: { metrics: StorageMetrics }) {
+  const [usage, setUsage] = useState<CloudStorageUsage | null>(null);
+  const [cloudError, setCloudError] = useState("");
+  const [cloudLoading, setCloudLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    let request = 0;
+    const refresh = () => {
+      const id = ++request;
+      setCloudLoading(true);
+      void getCloudStorageUsage().then((result) => {
+        if (!active || id !== request) return;
+        setUsage(result);
+        setCloudError("");
+      }).catch((error: unknown) => {
+        if (active && id === request) setCloudError(error instanceof Error ? error.message : "Cloud usage is unavailable.");
+      }).finally(() => {
+        if (active && id === request) setCloudLoading(false);
+      });
+    };
+    refresh();
+    window.addEventListener(CLOUD_STORAGE_CHANGED_EVENT, refresh);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener(CLOUD_STORAGE_CHANGED_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, []);
   const local = metrics.noteBytes + metrics.folderBytes + metrics.settingsBytes;
-  const cloud = metrics.noteBytes + metrics.folderBytes;
-  const limit = 15 * 1024 * 1024;
+  const cloud = usage?.usedBytes ?? 0;
+  const limit = usage?.limitBytes ?? CLOUD_STORAGE_LIMIT_BYTES;
   const percent = Math.min(100, cloud / limit * 100);
   const noteShare = local ? metrics.noteBytes / local * 100 : 0;
   const folderShare = local ? metrics.folderBytes / local * 100 : 0;
   return <>
-    <SettingCard title="Cloud storage" description="15 MB allowance for synced Notes and folders." accent="purple" id={settingId("Cloud storage")}>
+    <SettingCard title="Cloud storage" description="10 MB per account for synced Notes and folders." accent="purple" id={settingId("Cloud storage")}>
       <div className="storage-chart-layout">
-        <div className="settings-donut" role="img" aria-label={`Estimated cloud usage ${formatBytes(cloud)} of 15 MB`} style={{ background: `conic-gradient(var(--category) ${percent}%, var(--border) 0)` }}><div><Cloud size={22} /><strong>{percent.toFixed(1)}%</strong><small>used</small></div></div>
-        <div className="storage-chart-copy"><strong>{formatBytes(cloud)} <span>/ 15 MB</span></strong><p>{formatBytes(Math.max(0, limit - cloud))} remaining</p><small>Estimated from current Notes and folders, including Trash and pending changes. Server usage may differ.</small></div>
+        <div className="settings-donut" role="img" aria-label={usage ? `Cloud usage ${formatBytes(cloud)} of 10 MB` : "Loading cloud usage"} style={{ background: `conic-gradient(var(--category) ${percent}%, var(--border) 0)` }}><div><Cloud size={22} /><strong>{usage ? `${percent.toFixed(1)}%` : "—"}</strong><small>used</small></div></div>
+        <div className="storage-chart-copy"><strong>{usage ? formatBytes(cloud) : "—"} <span>/ 10 MB</span></strong><p>{cloudLoading ? "Checking cloud usage…" : usage ? `${formatBytes(Math.max(0, limit - cloud))} remaining` : "Cloud usage unavailable"}</p><small>Server-reported content, including Drafts and Trash. Pending local edits and database overhead are not included.</small></div>
       </div>
-      <div className="storage-detail-row"><FileText size={16} /><span>Notes</span><strong>{formatBytes(metrics.noteBytes)}</strong></div>
-      <div className="storage-detail-row"><Folder size={16} /><span>Folders</span><strong>{formatBytes(metrics.folderBytes)}</strong></div>
-      {cloud > limit && <p className="settings-info-banner">Estimated content exceeds 15 MB. Remove unwanted Notes to reduce usage.</p>}
+      <div className="storage-detail-row"><FileText size={16} /><span>Notes</span><strong>{usage ? formatBytes(usage.noteBytes) : "—"}</strong></div>
+      <div className="storage-detail-row"><Folder size={16} /><span>Folders</span><strong>{usage ? formatBytes(usage.folderBytes) : "—"}</strong></div>
+      {cloudError && <p role="alert" className="settings-inline-error">{cloudError}</p>}
+      {usage && cloud >= limit && <p className="settings-info-banner">Cloud storage limit reached. Permanently delete unwanted Notes or shorten their content to free space. Local changes remain saved.</p>}
     </SettingCard>
+    {usage && cloud > limit && <div className="status-toast-stack"><StatusToast message={CLOUD_STORAGE_LIMIT_MESSAGE} /></div>}
     <SettingCard title="On this device" description="Your local copy keeps Notes available offline." accent="purple" id={settingId("Local storage")}>
       <div className="storage-chart-layout">
         <div className="settings-donut" role="img" aria-label={`Local content ${formatBytes(local)}`} style={{ background: local ? `conic-gradient(var(--category) ${noteShare}%, #25bfd1 ${noteShare}% ${noteShare + folderShare}%, #f6a623 0)` : 'var(--border)' }}><div><HardDrive size={22} /><strong>{formatBytes(local)}</strong><small>local content</small></div></div>
@@ -1006,6 +1045,7 @@ function CategoryContent({
   onLinkAccount,
   onUnlinkAccount,
   onRequestPasswordReset,
+  onLaunchAtStartupChange,
   folders,
   notes,
   onCreateFolder,
@@ -1033,6 +1073,7 @@ function CategoryContent({
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onRequestPasswordReset: (email: string) => Promise<string | null>;
+  onLaunchAtStartupChange: (enabled: boolean) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
   onCreateFolder: (
@@ -1052,9 +1093,24 @@ function CategoryContent({
   unfiledPosition: number;
 }) {
   const [preferences, updatePreferences] = useWritingPreferences();
+  const [startupPending, setStartupPending] = useState(false);
+  const [startupError, setStartupError] = useState("");
   const toggles = preferences;
   const values = { size: preferences.size };
-  const toggle = (key: "launch" | "spellcheck" | "reminders" | "desktop" | "sounds") => (value: boolean) => updatePreferences({ [key]: value });
+  const toggle = (key: "minimizeToTray" | "spellcheck" | "reminders" | "desktop" | "sounds") => (value: boolean) => updatePreferences({ [key]: value });
+  const changeLaunchAtStartup = async (enabled: boolean) => {
+    setStartupPending(true);
+    setStartupError("");
+    try {
+      const error = await onLaunchAtStartupChange(enabled);
+      if (error) setStartupError(error);
+      else updatePreferences({ launch: enabled });
+    } catch {
+      setStartupError("Could not update the startup setting. Please try again.");
+    } finally {
+      setStartupPending(false);
+    }
+  };
   const change = (key: "size" | "reminderLead") => (value: string) => updatePreferences({ [key]: value });
   switch (category.id) {
     case "general":
@@ -1069,7 +1125,16 @@ function CategoryContent({
               label="Launch at startup"
               detail="Open Scribe when you sign in to your computer."
               checked={toggles.launch}
-              onChange={toggle("launch")}
+              onChange={(value) => void changeLaunchAtStartup(value)}
+              color="blue"
+              disabled={startupPending}
+            />
+            {startupError && <p role="alert" className="settings-inline-error">{startupError}</p>}
+            <SettingToggle
+              label="Close to system tray"
+              detail="Keep Scribe running in the system tray when you close its window. Open or quit Scribe from the tray icon."
+              checked={toggles.minimizeToTray}
+              onChange={toggle("minimizeToTray")}
               color="blue"
             />
             <SettingToggle
@@ -1244,9 +1309,7 @@ function CategoryContent({
             accent="pink"
           >
             <div className="about-mark">
-              <div className="brand-mark">
-                <Icon name="note" size={22} />
-              </div>
+              <AppLogo variant="transparent" />
               <div>
                 <strong>Scribe for Windows</strong>
                 <span>Version 0.1.0 · Preview</span>
@@ -1360,6 +1423,7 @@ export function SettingsPage({
   onLinkAccount,
   onUnlinkAccount,
   onRequestPasswordReset,
+  onLaunchAtStartupChange,
   folders,
   notes,
   onCreateFolder,
@@ -1387,6 +1451,7 @@ export function SettingsPage({
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onRequestPasswordReset: (email: string) => Promise<string | null>;
+  onLaunchAtStartupChange: (enabled: boolean) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
   onCreateFolder: (
@@ -1587,6 +1652,7 @@ export function SettingsPage({
               onLinkAccount={onLinkAccount}
               onUnlinkAccount={onUnlinkAccount}
               onRequestPasswordReset={onRequestPasswordReset}
+              onLaunchAtStartupChange={onLaunchAtStartupChange}
               folders={folders}
               notes={notes}
               onCreateFolder={onCreateFolder}

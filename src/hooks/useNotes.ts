@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "../features/auth/supabaseClient";
 import { notesRepository } from "../features/notes/notesRepository";
+import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_MESSAGE, isCloudStorageLimitError } from "../features/settings/cloudStorage";
 import {
   offlineStore,
 } from "../features/notes/offlineStore";
@@ -225,6 +226,7 @@ export function useNotes(
     syncLock.current = true;
     let finishWrite: (() => void) | undefined;
     let hasLease = false;
+    let submittedBatchId: string | undefined;
     const editsAtStart = new Map(editGeneration.current);
     try {
       hasLease = await offlineStore.acquireSyncLease(user.id, syncOwnerId.current, 60_000);
@@ -233,7 +235,9 @@ export function useNotes(
       lastSyncCursor.current = prepared.cursor;
       if (activeUserId.current !== user.id || editingInProgress()) return;
       finishWrite = beginWrite();
+      submittedBatchId = prepared.batch.id;
       const reply = await notesRepository.sync(user, prepared.batch, prepared.cursor);
+      if (prepared.batch.operations.length || reply.changes.length) window.dispatchEvent(new Event(CLOUD_STORAGE_CHANGED_EVENT));
       finishWrite();
       finishWrite = undefined;
       // A user may enter edit mode while the request is in flight. Keep its
@@ -284,11 +288,16 @@ export function useNotes(
         window.setTimeout(() => flushOutboxRef.current(), 500);
       }
     } catch (cause) {
+      const quotaReached = isCloudStorageLimitError(cause);
+      if (quotaReached && submittedBatchId) {
+        await offlineStore.rejectBatch(user.id, submittedBatchId).catch(() => undefined);
+        window.dispatchEvent(new Event(CLOUD_STORAGE_CHANGED_EVENT));
+      }
       failureCount.current++;
       const delay = Math.min(120_000, 5000 * 2 ** Math.min(failureCount.current - 1, 5));
       retryAt.current = Date.now() + delay + Math.random() * 1500;
       if (activeUserId.current === user.id) {
-        lastCloudError.current = `Cloud sync paused. Local changes are kept on this device and will retry automatically: ${messageFor(cause)}`;
+        lastCloudError.current = quotaReached ? CLOUD_STORAGE_LIMIT_MESSAGE : `Cloud sync paused. Local changes are kept on this device and will retry automatically: ${messageFor(cause)}`;
         setError(lastCloudError.current);
       }
     } finally {

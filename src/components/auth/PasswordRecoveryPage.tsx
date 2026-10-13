@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, ShieldCheck } from "lucide-react";
-import { Icon } from "../Icon";
+import { AppLogo } from "../AppLogo";
 import { LoadingSpinner } from "../feedback/LoadingFeedback";
 import { TooltipLayer } from "../layout/TooltipLayer";
 
@@ -44,7 +44,7 @@ export function PasswordRecoveryPage({
       <TooltipLayer />
       <section className="auth-layout auth-recovery-layout" aria-label="Reset password">
         <aside className="auth-story">
-          <div className="auth-brand"><span className="brand-mark"><Icon name="note" size={20} /></span><span>Scribe</span></div>
+          <div className="auth-brand"><AppLogo variant="transparent" /><span>Scribe</span></div>
           <div className="auth-story-copy">
             <span className="auth-eyebrow"><span /> ACCOUNT SECURITY</span>
             <h1>A fresh start<br />for your account.</h1>
