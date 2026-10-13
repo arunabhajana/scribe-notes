@@ -4,6 +4,8 @@ import { Icon } from "../Icon";
 import { EmptyNotes } from "./EmptyNotes";
 import { NoteCard } from "./NoteCard";
 import { NotesSkeleton } from "../feedback/LoadingFeedback";
+import { NoteSortDropdown } from "./NoteSortDropdown";
+import type { NoteSort } from "../../features/notes/noteSorting";
 import {
   formatShortcut,
   type ShortcutBindings,
@@ -22,6 +24,8 @@ export function NotesPane({
   onCreateNote,
   shortcuts,
   syncStatus,
+  sortOrder,
+  onSortChange,
   loading = false,
 }: {
   notes: Note[];
@@ -36,6 +40,8 @@ export function NotesPane({
   onCreateNote: () => void;
   shortcuts: ShortcutBindings;
   syncStatus: "on-device" | "syncing" | "synced" | "offline" | "error";
+  sortOrder: NoteSort;
+  onSortChange: (value: NoteSort) => void;
   loading?: boolean;
 }) {
   const title =
@@ -66,6 +72,10 @@ export function NotesPane({
           <span>New Note</span>
         </button>
       </header>
+      <div className="notes-sort-row">
+        <span>Sort by</span>
+        <NoteSortDropdown value={sortOrder} onChange={onSortChange} />
+      </div>
       <div className="notes-scroll">
         {loading ? <NotesSkeleton /> : notes.length === 0 ? (
           <EmptyNotes

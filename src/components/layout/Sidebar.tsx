@@ -52,6 +52,7 @@ export function Sidebar(props: SidebarProps) {
         />
         <PrimaryNavigation
           section={props.section}
+          folderId={props.folderId}
           noteCount={props.noteCount}
           draftCount={props.draftCount}
           onSelect={props.onSelectSection}

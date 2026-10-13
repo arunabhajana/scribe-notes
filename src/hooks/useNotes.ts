@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { sortNotes } from "../features/notes/noteSorting";
+import { useNoteSortPreferences } from "./useNoteSortPreferences";
 import { supabase } from "../features/auth/supabaseClient";
 import { notesRepository } from "../features/notes/notesRepository";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_MESSAGE, isCloudStorageLimitError } from "../features/settings/cloudStorage";
@@ -121,6 +123,8 @@ export function useNotes(
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [section, setSection] = useState<NoteSection>("all");
   const [folderId, setFolderId] = useState<string | null>(null);
+  const sortKey = `${user?.id ?? "local"}:${section === "all" && folderId ? `folder:${folderId}` : section}`;
+  const { sortOrder, setSortOrder } = useNoteSortPreferences(sortKey);
   const [search, setSearch] = useState("");
   const [loadedForUser, setLoadedForUser] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -448,7 +452,7 @@ export function useNotes(
     ) ?? null;
   const visibleNotes = useMemo(
     () =>
-      notes.filter((note) => {
+      sortNotes(notes.filter((note) => {
         if (section === "trash") return note.deletedAt !== null;
         if (note.deletedAt) return false;
         if (section === "drafts" && !note.isDraft) return false;
@@ -462,8 +466,8 @@ export function useNotes(
           note.title.toLowerCase().includes(query) ||
           note.body.toLowerCase().includes(query)
         );
-      }),
-    [notes, section, folderId, search],
+      }), sortOrder),
+    [notes, section, folderId, search, sortOrder],
   );
 
   const updateNote = useCallback(
@@ -495,7 +499,7 @@ export function useNotes(
         id: makeId(),
         title: draft.title?.trim() ?? "",
         body: draft.body ?? "",
-        folderId: draft.folderId ?? folderId,
+        folderId: draft.folderId !== undefined ? draft.folderId : folderId,
         pinned: draft.pinned ?? false,
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -506,6 +510,7 @@ export function useNotes(
       notesRef.current = [note, ...notesRef.current];
       setNotes((current) => [note, ...current]);
       setSection("all");
+      setFolderId(note.folderId);
       setSelectedId(note.id);
       if (user && configured) {
         persistLocally(user.id, `note:${note.id}`, () => offlineStore.putNote(user.id, note, null, true));
@@ -710,6 +715,8 @@ export function useNotes(
   return {
     notes,
     visibleNotes,
+    sortOrder,
+    setSortOrder,
     selectedNote,
     selectedId,
     setSelectedId,

@@ -53,6 +53,8 @@ function App() {
     () => localStorage.getItem("scribe-profile-avatar") ?? "#8970ed",
   );
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [composerInitialFolderId, setComposerInitialFolderId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isComposerModalActive, setIsComposerModalActive] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
@@ -131,6 +133,7 @@ function App() {
       "scribe-profile-avatar",
       "scribe-keyboard-shortcuts",
       "scribe-sidebar-collapsed",
+      "scribe-note-sort",
     ].reduce(
       (total, key) =>
         total +
@@ -206,6 +209,7 @@ function App() {
     if (isComposerOpen) {
       window.dispatchEvent(new Event("scribe:restore-note-draft"));
     } else {
+      setComposerInitialFolderId(null);
       setIsComposerOpen(true);
       setIsComposerModalActive(true);
     }
@@ -431,6 +435,17 @@ function App() {
           const index = notesState.folders.findIndex((folder) => folder.id === folderId);
           items = [
             { label: "Open folder", action: () => notesState.selectFolder(folderId) },
+            { label: "New note in folder", action: () => {
+              const destination = folderId === "system:unfiled" ? null : folderId;
+              if (isComposerOpen) {
+                window.dispatchEvent(new CustomEvent("scribe:restore-note-draft", { detail: { folderId: destination } }));
+              } else {
+                setComposerInitialFolderId(destination);
+                setIsComposerOpen(true);
+                setIsComposerModalActive(true);
+              }
+            } },
+            ...(index >= 0 ? [{ label: "Edit folder", action: () => setEditingFolderId(folderId) }] : []),
             { label: "Create folder", action: () => setIsCreateFolderOpen(true) },
             { label: "Move up", separator: true, disabled: folderId === "system:unfiled" ? notesState.unfiledPosition === 0 : index === 0, action: () => notesState.moveFolder(folderId, -1) },
             { label: "Move down", disabled: folderId === "system:unfiled" ? notesState.unfiledPosition === notesState.folders.length : index === notesState.folders.length - 1, action: () => notesState.moveFolder(folderId, 1) },
@@ -516,6 +531,8 @@ function App() {
           onCreateNote={openNewNote}
           shortcuts={shortcuts}
           syncStatus={notesState.syncStatus}
+          sortOrder={notesState.sortOrder}
+          onSortChange={notesState.setSortOrder}
           loading={notesState.loading && notesState.notes.length === 0}
         />
         {notesState.loading && notesState.notes.length === 0 ? <EditorSkeleton /> : <EditorPane
@@ -545,9 +562,19 @@ function App() {
           onCreate={notesState.createFolder}
         />
       )}
+      {editingFolderId && notesState.folders.some((folder) => folder.id === editingFolderId) && (
+        <CreateFolderDialog
+          key={editingFolderId}
+          folder={notesState.folders.find((folder) => folder.id === editingFolderId)}
+          onClose={() => setEditingFolderId(null)}
+          onCreate={notesState.createFolder}
+          onEdit={notesState.updateFolder}
+        />
+      )}
       {isComposerOpen && (
         <NewNoteComposer
           folders={notesState.folders}
+          initialFolderId={composerInitialFolderId}
           onSave={(draft) => {
             notesState.createNote(draft);
             setIsComposerOpen(false);

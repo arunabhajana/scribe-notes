@@ -5,12 +5,14 @@ import { formatShortcut } from "../../features/shortcuts/keyboardShortcuts";
 
 export function PrimaryNavigation({
     section,
+    folderId,
     noteCount,
     draftCount,
     onSelect,
     shortcuts,
 }: {
     section: NoteSection;
+    folderId: string | null;
     noteCount: number;
     draftCount: number;
     onSelect: (section: NoteSection) => void;
@@ -21,7 +23,7 @@ export function PrimaryNavigation({
             <button
                 data-tooltip={`All Notes · ${formatShortcut(shortcuts.allNotes)}`}
                 aria-label={`All Notes, ${noteCount} Notes`}
-                className={`nav-item ${section === "all" ? "active" : ""}`}
+                className={`nav-item ${section === "all" && folderId === null ? "active" : ""}`}
                 onClick={() => onSelect("all")}
             >
                 <Icon name="note" />

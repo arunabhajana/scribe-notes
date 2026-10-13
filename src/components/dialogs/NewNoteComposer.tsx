@@ -35,12 +35,14 @@ type NoteDraft = {
 
 export function NewNoteComposer({
   folders,
+  initialFolderId = null,
   onSave,
   onClose,
   onDiscard,
   onModalActiveChange,
 }: {
   folders: NoteFolder[];
+  initialFolderId?: string | null;
   onSave: (draft: NoteDraft) => void;
   onClose: () => void;
   onDiscard: (draft: NoteDraft) => void;
@@ -49,7 +51,7 @@ export function NewNoteComposer({
   const [writingPreferences] = useWritingPreferences();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [folderId, setFolderId] = useState<string | null>(null);
+  const [folderId, setFolderId] = useState<string | null>(initialFolderId);
   const folder = folders.find((item) => item.id === folderId)?.name ?? "";
   const [pinned, setPinned] = useState(false);
   const [minimized, setMinimized] = useState(false);
@@ -70,7 +72,9 @@ export function NewNoteComposer({
   }, [minimized, onClose]);
 
   useEffect(() => {
-    const restoreDraft = () => {
+    const restoreDraft = (event: Event) => {
+      const destination: unknown = (event as CustomEvent<{ folderId?: string | null }>).detail?.folderId;
+      if (destination === null || typeof destination === "string") setFolderId(destination);
       setMinimized(false);
       setFolderMenuOpen(false);
       onModalActiveChange(true);
