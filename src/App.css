@@ -136,6 +136,28 @@
   background: #e5484d;
   color: white;
 }
+.titlebar.titlebar-light {
+  border-bottom-color: #dedee6;
+  color: #61616e;
+  background: #f1f1f6;
+}
+.titlebar-light .titlebar-title { color: #24242d; }
+.titlebar-light .titlebar-leading { color: #686874; }
+.titlebar-light .titlebar-action,
+.titlebar-light .window-action { color: #61616e; }
+.titlebar-light .titlebar-action:hover,
+.titlebar-light .window-action:hover { color: #24242d; background: #24242d0c; }
+.titlebar-light .titlebar-action:focus-visible,
+.titlebar-light .window-action:focus-visible { outline: 2px solid #6256e9; outline-offset: -3px; }
+.titlebar-light .titlebar-action.offline-mode-toggle.is-offline { color: #956000; background: #f0b55c24; }
+.titlebar-light .titlebar-sync-label.status-syncing { color: #6256e9; }
+.titlebar-light .titlebar-sync-label.status-synced { color: #17865f; }
+.titlebar-light .titlebar-sync-label.status-offline,
+.titlebar-light .titlebar-sync-label.status-error { color: #956000; }
+.titlebar-light .titlebar-status-dot.status-synced { background: #17865f; box-shadow: none; }
+.titlebar-light .titlebar-status-dot.status-offline,
+.titlebar-light .titlebar-status-dot.status-error { background: #956000; box-shadow: none; }
+.titlebar-light .close-window-action:hover { color: white; background: #e5484d; }
 .desktop-frame {
   width: 100%;
   height: 100vh;

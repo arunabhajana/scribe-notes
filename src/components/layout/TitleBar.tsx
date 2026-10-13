@@ -16,7 +16,7 @@ import {
 
 export function TitleBar({
   onOpenSettings,
-  dark,
+  dark = true,
   onToggleTheme,
   inert,
   settingsShortcut,
@@ -84,7 +84,7 @@ export function TitleBar({
 
   return (
     <header
-      className="titlebar"
+      className={`titlebar ${dark ? "titlebar-dark" : "titlebar-light"}`}
       data-tauri-drag-region
       onMouseDown={startWindowDrag}
       onDoubleClick={toggleMaximize}
