@@ -1,6 +1,7 @@
 import type { Note, NoteFolder } from "../../types/note";
 import type { OutboxOperation } from "./offlineStore";
 import { markdownToDocument } from "./richTextDocument";
+export const NOTES_SYNCED_EVENT = "scribe:notes-synced";
 
 export type SyncBatch = {
   id: string;

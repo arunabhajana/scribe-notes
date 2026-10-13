@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { sortNotes } from "../features/notes/noteSorting";
 import { useNoteSortPreferences } from "./useNoteSortPreferences";
+import { NOTES_SYNCED_EVENT } from "../features/notes/syncProtocol";
 import { supabase } from "../features/auth/supabaseClient";
 import { notesRepository } from "../features/notes/notesRepository";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_MESSAGE, isCloudStorageLimitError } from "../features/settings/cloudStorage";
@@ -251,6 +252,9 @@ export function useNotes(
       }
       // Always acknowledge this account's durable queue, even if it signed out.
       const local = await offlineStore.commitBatch(user.id, prepared.batch, reply);
+      if (prepared.batch.operations.some((operation) => operation.entity === "note")) {
+        window.dispatchEvent(new CustomEvent(NOTES_SYNCED_EVENT, { detail: user.id }));
+      }
       if (activeUserId.current !== user.id) return;
       setPulledForUser(user.id);
       const ordered = applyLocalFolderOrder(user.id, local.folders);

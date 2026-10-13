@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Folder, FolderPlus, Pencil, RotateCcw } from "lucide-react";
+import { Bell, ChevronDown, Folder, FolderPlus, Pencil, RotateCcw } from "lucide-react";
+import { formatReminderTime, type NoteReminder } from "../../features/reminders/reminderTypes";
 import type { Note, NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
 
@@ -15,6 +16,8 @@ export function EditorHeader({
   onMoveToFolder,
   onCreateFolder,
   onRestore,
+  reminder,
+  onSetReminder,
 }: {
   note: Note;
   titleEditable: boolean;
@@ -27,13 +30,12 @@ export function EditorHeader({
   onMoveToFolder: (folderId: string | null) => void;
   onCreateFolder: () => void;
   onRestore: () => void;
+  reminder?: NoteReminder;
+  onSetReminder: () => void;
 }) {
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
   const [titleEditing, setTitleEditing] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    setTitleEditing(false);
-  }, [note.id]);
   useEffect(() => {
     if (titleEditing) titleInputRef.current?.focus();
   }, [titleEditing]);
@@ -165,6 +167,13 @@ export function EditorHeader({
           <span className="save-dot" />
           Saved
         </span>
+        {!note.deletedAt && (
+          <button className={`action-button reminder-action${reminder?.dueAt ? " has-reminder" : ""}`} onClick={onSetReminder}
+            aria-label={reminder?.dueAt ? "Edit reminder" : "Set reminder"}
+            data-tooltip={reminder?.dueAt ? `Reminder: ${formatReminderTime(reminder.dueAt)} · Click to edit` : "Set a reminder for this note"}>
+            <Bell size={15} /><span>{reminder?.dueAt ? "Reminder" : "Remind"}</span>
+          </button>
+        )}
         {!note.deletedAt && (
           <button
             className={`action-button ${note.pinned ? "pinned" : ""}`}

@@ -1,0 +1,114 @@
+.reminder-picker-field { display: grid; min-width: 0; gap: 8px; }
+.reminder-picker-field > span { color: var(--muted); font-size: 11px; font-weight: 600; }
+.reminder-picker-trigger {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 41px; padding: 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); color: var(--text);
+  font-size: 12px; font-weight: 500; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.reminder-picker-trigger > span { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reminder-picker-trigger > svg { flex-shrink: 0; color: var(--muted); }
+.reminder-picker-trigger:hover, .reminder-picker-trigger.is-open { border-color: var(--accent); background: var(--accent-soft); }
+.reminder-picker-trigger.is-open > svg { color: var(--accent); }
+.reminder-picker-trigger:focus-visible, .reminder-picker-panel button:focus-visible,
+.reminder-shortcut-editor input:focus-visible, .reminder-shortcut-editor button:focus-visible,
+.reminder-shortcut-settings button:focus-visible { outline: 2px solid var(--shortcut-accent, var(--accent)); outline-offset: 2px; }
+.reminder-picker-panel {
+  margin-top: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); color: var(--text); animation: toast-appear .15s ease-out;
+}
+.reminder-calendar-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.reminder-calendar-heading strong, .reminder-clock-heading strong { font-size: 12px; font-weight: 600; }
+.reminder-calendar-weekdays, .reminder-calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.reminder-calendar-weekdays { margin-bottom: 5px; text-align: center; color: var(--muted); font-size: 10px; }
+.reminder-calendar-days button {
+  position: relative; min-width: 0; min-height: 33px; padding: 5px 0; border: 1px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--text); font-size: 11px; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.reminder-calendar-days button.is-other-month { color: var(--muted); }
+.reminder-calendar-days button:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+.reminder-calendar-days button[aria-current="date"]::after { content: ""; position: absolute; bottom: 3px; left: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+.reminder-calendar-days button.is-selected { background: var(--accent); color: #fff; font-weight: 700; }
+.reminder-calendar-days button.is-selected[aria-current="date"]::after { background: #fff; }
+.reminder-modal .reminder-calendar-days button:disabled { color: var(--subtle); opacity: .4; cursor: default; }
+.reminder-picker-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.reminder-picker-footer > span { color: var(--muted); font-size: 10px; }
+.reminder-picker-footer button { min-height: 30px; font-size: 10px; }
+.reminder-clock-heading { display: flex; align-items: center; justify-content: space-between; }
+.reminder-clock-heading > span { color: var(--muted); font-size: 10px; }
+.reminder-clock-controls { display: flex; justify-content: center; gap: 28px; margin: 14px 0; }
+.reminder-clock-column { display: grid; justify-items: center; gap: 4px; }
+.reminder-clock-column label { color: var(--muted); font-size: 10px; margin-bottom: 3px; }
+.reminder-clock-column button { display: grid; place-items: center; width: 72px; min-height: 25px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; cursor: pointer; }
+.reminder-clock-column button:hover { color: var(--accent); background: var(--accent-soft); }
+.reminder-clock-column input {
+  width: 72px; height: 46px; padding: 6px; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); background: var(--surface); text-align: center; font-size: 23px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.reminder-clock-column input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.reminder-clock-minutes { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+.reminder-clock-minutes button { min-width: 46px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); background: var(--surface); font-size: 11px; cursor: pointer; }
+.reminder-clock-minutes button:hover, .reminder-clock-minutes button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.reminder-shortcut-editor { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+.reminder-shortcut-editor > label { display: block; margin-bottom: 7px; color: var(--text); font-size: 11px; font-weight: 500; }
+.reminder-shortcut-editor > label > span { margin-left: 4px; color: var(--muted); font-size: 10px; font-weight: 400; }
+.reminder-shortcut-editor input {
+  width: 100%; min-width: 0; height: 36px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px;
+  color: var(--text); background: var(--surface); font-size: 11px; font-weight: 400;
+}
+.reminder-shortcut-editor > input { margin-bottom: 14px; }
+.reminder-shortcut-editor input::placeholder { color: var(--muted); }
+.reminder-shortcut-duration { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.reminder-shortcut-duration > input { width: 75px; }
+.reminder-shortcut-units { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.reminder-shortcut-units button {
+  padding: 7px 9px; border: 0; border-radius: 5px; color: var(--muted); background: transparent; font-size: 10px; font-weight: 500; cursor: pointer;
+}
+.reminder-shortcut-units button:hover, .reminder-shortcut-units button[aria-pressed="true"] { background: var(--shortcut-soft, var(--accent-soft)); color: var(--shortcut-accent, var(--accent)); }
+.reminder-shortcut-editor-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.reminder-shortcut-editor-actions button { min-height: 32px; font-size: 11px; }
+.reminder-shortcut-error { color: var(--danger); font-size: 11px; line-height: 1.5; margin: 9px 0 0; }
+.reminder-quick-times .reminder-shortcut-add, .reminder-shortcut-settings > .reminder-shortcut-add {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-style: dashed; color: var(--shortcut-accent, var(--accent));
+}
+.reminder-shortcut-settings { --shortcut-accent: var(--category, var(--accent)); --shortcut-soft: color-mix(in srgb, var(--shortcut-accent) 12%, var(--surface-2)); }
+.reminder-shortcut-setting-row { display: flex; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid var(--border); }
+.reminder-shortcut-setting-row > svg { flex-shrink: 0; color: var(--shortcut-accent); }
+.reminder-shortcut-setting-row > div { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.reminder-shortcut-setting-row strong { overflow-wrap: anywhere; color: var(--text); font-size: 12px; font-weight: 500; }
+.reminder-shortcut-setting-row span { color: var(--muted); font-size: 11px; }
+.reminder-shortcut-setting-row button { flex-shrink: 0; }
+.reminder-shortcut-setting-row .reminder-shortcut-delete { color: var(--danger); }
+.reminder-shortcut-settings > .reminder-shortcut-add {
+  margin-top: 14px;
+  min-height: 38px;
+  padding: 9px 14px;
+  gap: 8px;
+  border: 1px solid var(--shortcut-accent);
+  border-radius: 8px;
+  background: var(--shortcut-soft);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background .15s, transform .15s;
+}
+.reminder-shortcut-settings > .reminder-shortcut-add:hover {
+  background: color-mix(in srgb, var(--shortcut-accent) 20%, var(--surface-2));
+  transform: translateY(-1px);
+}
+.reminder-preset-default > strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.reminder-preset-options { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.reminder-preset-options button {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px;
+  color: var(--text); background: var(--surface-2); font-size: 11px; font-weight: 500; cursor: pointer;
+}
+.reminder-preset-options button:hover, .reminder-preset-options button[aria-pressed="true"] {
+  border-color: var(--shortcut-accent); color: var(--shortcut-accent); background: var(--shortcut-soft);
+}
+.reminder-shortcut-settings .reminder-custom-presets-title { margin: 22px 0 0; color: var(--muted); font-size: 11px; font-weight: 600; }
+.reminder-preset-mode { width: fit-content; margin-bottom: 14px; }
+.reminder-time-only .reminder-date-time { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
+.reminder-shortcut-editor .reminder-clock-column input { width: 72px; height: 46px; padding: 6px; font-size: 23px; font-weight: 600; text-align: center; }
+.reminder-quick-times button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+@media (max-width: 420px) {
+  .reminder-date-time { grid-template-columns: minmax(0, 1fr); }
+  .reminder-picker-footer > span { display: none; }
+}

@@ -2,6 +2,7 @@ import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
 import { AppLogo } from "../AppLogo";
 import { MfaSettings } from "./MfaSettings";
 import { SignedInDevices } from "./SignedInDevices";
+import { ReminderShortcutSettings } from "./ReminderShortcutSettings";
 import type { MfaController } from "../../hooks/useMfa";
 import { StatusToast } from "../feedback/LoadingFeedback";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_BYTES, CLOUD_STORAGE_LIMIT_MESSAGE, getCloudStorageUsage, type CloudStorageUsage } from "../../features/settings/cloudStorage";
@@ -11,6 +12,7 @@ import {
   ArrowDown,
   ArrowUp,
   AlertCircle,
+  Bell,
   Check,
   ChevronDown,
   ChevronRight,
@@ -135,8 +137,9 @@ const settingSearchIndex = [
   { label: "Spell check", detail: "Underline possible spelling mistakes as you type.", category: "editor", terms: "spelling writing proofread" },
   { label: "Desktop notifications", detail: "Save your desktop alert preference.", category: "notifications", terms: "desktop notification alerts enable disable" },
   { label: "Sounds", detail: "Save your sound preference for app interactions.", category: "notifications", terms: "audio sound notification mute" },
-  { label: "Note reminders", detail: "Save your preference for future Note reminders.", category: "notifications", terms: "reminder notification alert scheduled" },
-  { label: "Reminder lead time", detail: "Choose how many minutes before a reminder to notify; delivery is coming soon.", category: "notifications", terms: "before minutes time 5 10 15 30 60" },
+  { label: "Note reminders", detail: "Choose whether to receive alerts for note reminders.", category: "notifications", terms: "reminder notification alert scheduled" },
+  { label: "Remind me before", detail: "Choose when to receive an extra alert before a reminder is due.", category: "notifications", terms: "lead advance early before minutes time 5 10 15 30 60" },
+  { label: "Reminder Presets", detail: "Choose a default reminder and manage custom presets saved locally.", category: "notifications", terms: "custom shortcut preset default quick time duration minutes hours days edit delete" },
   { label: "Keyboard shortcuts", detail: "Customize app shortcuts or restore their defaults.", category: "shortcuts", terms: "keys keyboard hotkey commands bindings reset formatting" },
   { label: "Local storage", detail: "View estimated local Notes, folders, and preferences usage.", category: "storage", terms: "device disk usage chart pie donut local offline", targetId: "setting-local-storage" },
   { label: "Cloud storage", detail: "View server storage usage against your 10 MB limit.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 10mb" },
@@ -366,13 +369,14 @@ function StorageSettings({ metrics }: { metrics: StorageMetrics }) {
   const noteShare = local ? metrics.noteBytes / local * 100 : 0;
   const folderShare = local ? metrics.folderBytes / local * 100 : 0;
   return <>
-    <SettingCard title="Cloud storage" description="10 MB per account for synced Notes and folders." accent="purple" id={settingId("Cloud storage")}>
+    <SettingCard title="Cloud storage" description="10 MB per account for synced Notes, folders, and reminders." accent="purple" id={settingId("Cloud storage")}>
       <div className="storage-chart-layout">
         <div className="settings-donut" role="img" aria-label={usage ? `Cloud usage ${formatBytes(cloud)} of 10 MB` : "Loading cloud usage"} style={{ background: `conic-gradient(var(--category) ${percent}%, var(--border) 0)` }}><div><Cloud size={22} /><strong>{usage ? `${percent.toFixed(1)}%` : "—"}</strong><small>used</small></div></div>
         <div className="storage-chart-copy"><strong>{usage ? formatBytes(cloud) : "—"} <span>/ 10 MB</span></strong><p>{cloudLoading ? "Checking cloud usage…" : usage ? `${formatBytes(Math.max(0, limit - cloud))} remaining` : "Cloud usage unavailable"}</p><small>Server-reported content, including Drafts and Trash. Pending local edits and database overhead are not included.</small></div>
       </div>
       <div className="storage-detail-row"><FileText size={16} /><span>Notes</span><strong>{usage ? formatBytes(usage.noteBytes) : "—"}</strong></div>
       <div className="storage-detail-row"><Folder size={16} /><span>Folders</span><strong>{usage ? formatBytes(usage.folderBytes) : "—"}</strong></div>
+      <div className="storage-detail-row"><Bell size={16} /><span>Reminders</span><strong>{usage ? formatBytes(usage.reminderBytes ?? 0) : "—"}</strong></div>
       {cloudError && <p role="alert" className="settings-inline-error">{cloudError}</p>}
       {usage && cloud >= limit && <p className="settings-info-banner">Cloud storage limit reached. Permanently delete unwanted Notes or shorten their content to free space. Local changes remain saved.</p>}
     </SettingCard>
@@ -1256,19 +1260,19 @@ function CategoryContent({
           >
             <SettingToggle
               label="Note reminders"
-              detail="Get a gentle nudge for reminders you create."
+              detail="Choose whether to receive alerts for note reminders."
               checked={toggles.reminders}
               onChange={toggle("reminders")}
               color="amber"
             />
             <SettingToggle
               label="Desktop notifications"
-              detail="Enable desktop alerts when notification delivery is available."
+              detail="Choose whether reminder alerts appear on your desktop."
               checked={toggles.desktop}
               onChange={toggle("desktop")}
               color="amber"
             />
-            <SettingSelect label="Reminder lead time" detail="Notify before a reminder is due. Delivery is coming soon; your preference is saved." value={preferences.reminderLead} options={["At the time", "5 minutes", "10 minutes", "15 minutes", "30 minutes", "60 minutes"]} onChange={change("reminderLead")} />
+            <SettingSelect label="Remind me before" detail="An extra alert before the scheduled time. The reminder still alerts when due. Applies to new reminders; you can change it for each note." value={preferences.reminderLead} options={["At the time", "5 minutes", "10 minutes", "15 minutes", "30 minutes", "60 minutes"]} onChange={change("reminderLead")} />
             <SettingToggle
               label="Sounds"
               detail="Play subtle sounds for app interactions."
@@ -1276,6 +1280,9 @@ function CategoryContent({
               onChange={toggle("sounds")}
               color="amber"
             />
+          </SettingCard>
+          <SettingCard title="Reminder Presets" description="Choose your default and manage custom reminder times." accent="amber">
+            <ReminderShortcutSettings />
           </SettingCard>
         </>
       );

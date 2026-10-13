@@ -8,6 +8,11 @@ import { EditorPane } from "./components/editor/EditorPane";
 import { NotesPane } from "./components/notes/NotesPane";
 import { Sidebar } from "./components/layout/Sidebar";
 import { useNotes } from "./hooks/useNotes";
+import { useReminders } from "./hooks/useReminders";
+import { ReminderDialog } from "./components/reminders/ReminderDialog";
+import { ReminderFeedback } from "./components/reminders/ReminderFeedback";
+import { reminderPresetActionLabel, reminderPresetDate, useReminderShortcuts } from "./features/settings/reminderShortcuts";
+import { formatReminderTime } from "./features/reminders/reminderTypes";
 import { notesRepository } from "./features/notes/notesRepository";
 import type { Note } from "./types/note";
 import { SettingsPage } from "./components/settings/SettingsPage";
@@ -37,11 +42,21 @@ function App() {
   const auth = useAuth();
   const openContextMenu = useContextMenu();
   const [writingPreferences, updateWritingPreferences] = useWritingPreferences();
+  const { defaultPreset } = useReminderShortcuts();
   const [offlineMode, setOfflineMode] = useState(
     () => localStorage.getItem("scribe-offline-mode") === "true",
   );
   const notesUser = !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null;
   const notesState = useNotes(notesUser, auth.configured, offlineMode);
+  const reminderState = useReminders(notesUser?.id ?? null, offlineMode);
+  const syncStatus = notesState.syncStatus === "error" || reminderState.error ? "error"
+    : notesState.syncStatus === "offline" ? "offline"
+    : notesState.syncStatus === "syncing" || reminderState.syncing ? "syncing"
+    : Object.keys(reminderState.pending).length ? "on-device" : notesState.syncStatus;
+  const [reminderNoteId, setReminderNoteId] = useState<string | null>(null);
+  const [reminderNotice, setReminderNotice] = useState<string | null>(null);
+  const dismissReminderNotice = useCallback(() => setReminderNotice(null), []);
+  const reminderNote = notesState.notes.find((note) => note.id === reminderNoteId && !note.deletedAt);
   const [isDark, setIsDark] = useState(
     () => localStorage.getItem("scribe-theme") !== "light",
   );
@@ -134,6 +149,7 @@ function App() {
       "scribe-keyboard-shortcuts",
       "scribe-sidebar-collapsed",
       "scribe-note-sort",
+      "scribe-reminder-shortcuts",
     ].reduce(
       (total, key) =>
         total +
@@ -275,6 +291,9 @@ function App() {
 
   const handleDeleteNote = (note: Note) => {
     if (note.deletedAt) {
+      if (reminderState.reminders[note.id]?.dueAt) {
+        void reminderState.save(note.id, null).then((error) => { if (error) notesState.showError(error); });
+      }
       notesState.permanentlyDelete(note.id);
     } else {
       notesState.moveToTrash(note.id);
@@ -368,7 +387,7 @@ function App() {
         <TitleBar
           dark={isDark}
           onToggleTheme={() => setIsDark((value) => !value)}
-          syncStatus={notesState.syncStatus}
+          syncStatus={syncStatus}
         />
         <SettingsPage
           dark={isDark}
@@ -426,6 +445,17 @@ function App() {
           );
           else {
             items.push({ label: note.pinned ? "Unpin Note" : "Pin Note", action: () => notesState.togglePinned(note.id) });
+            items.push({ label: reminderState.reminders[note.id]?.dueAt ? "Edit reminder" : "Set reminder", disabled: reminderState.loading, action: () => setReminderNoteId(note.id) });
+            items.push({ label: reminderPresetActionLabel(defaultPreset),
+              disabled: reminderState.loading, action: async () => {
+                const dueAt = reminderPresetDate(defaultPreset).toISOString();
+                const error = await reminderState.save(note.id, dueAt, Number.parseInt(writingPreferences.reminderLead, 10) || 0);
+                if (error) notesState.showError(error); else setReminderNotice(`Reminder set for ${formatReminderTime(dueAt)}.`);
+              } });
+            if (reminderState.reminders[note.id]?.dueAt) items.push({ label: "Remove reminder", action: async () => {
+              const error = await reminderState.save(note.id, null);
+              if (error) notesState.showError(error); else setReminderNotice("Reminder removed. Saved locally.");
+            } });
             if (note.isDraft) items.push({ label: "Save draft", action: () => notesState.updateNote(note.id, { isDraft: false }) });
             items.push({ label: "Move to Unfiled", separator: true, disabled: note.folderId === null, action: () => notesState.updateNote(note.id, { folderId: null }) });
             notesState.folders.forEach((folder) => items.push({ label: `Move to ${folder.name}`, disabled: note.folderId === folder.id, action: () => notesState.updateNote(note.id, { folderId: folder.id }) }));
@@ -468,7 +498,7 @@ function App() {
         onOpenSettings={() => setPage("preferences")}
         inert={isComposerModalActive}
         settingsShortcut={formatShortcut(shortcuts.openSettings)}
-        syncStatus={notesState.syncStatus}
+        syncStatus={syncStatus}
         offlineMode={offlineMode}
         onToggleOfflineMode={() => changeOfflineMode(!offlineMode)}
       />
@@ -519,6 +549,8 @@ function App() {
           profile={accountProfile}
         />
         <NotesPane
+          reminders={reminderState.reminders}
+          onEditReminder={setReminderNoteId}
           notes={notesState.visibleNotes}
           folders={notesState.folders}
           selectedId={notesState.selectedId}
@@ -530,12 +562,15 @@ function App() {
           onTogglePinned={notesState.togglePinned}
           onCreateNote={openNewNote}
           shortcuts={shortcuts}
-          syncStatus={notesState.syncStatus}
+          syncStatus={syncStatus}
           sortOrder={notesState.sortOrder}
           onSortChange={notesState.setSortOrder}
           loading={notesState.loading && notesState.notes.length === 0}
         />
         {notesState.loading && notesState.notes.length === 0 ? <EditorSkeleton /> : <EditorPane
+          key={notesState.selectedNote?.id ?? "empty"}
+          reminder={notesState.selectedId ? reminderState.reminders[notesState.selectedId] : undefined}
+          onSetReminder={() => setReminderNoteId(notesState.selectedId)}
           note={notesState.selectedNote}
           folders={notesState.folders}
           onMoveToFolder={(noteId, folderId) =>
@@ -590,7 +625,22 @@ function App() {
           onModalActiveChange={setIsComposerModalActive}
         />
       )}
-      <SyncFeedback error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
+      {reminderNote && !reminderState.loading && <ReminderDialog
+        key={reminderNote.id}
+        reminder={reminderState.reminders[reminderNote.id]}
+        defaultLead={Number.parseInt(writingPreferences.reminderLead, 10) || 0}
+        pending={Boolean(reminderState.pending[reminderNote.id])}
+        offline={offlineMode || !navigator.onLine}
+        cloudError={reminderState.error}
+        onSave={async (dueAt, leadMinutes) => {
+          const error = await reminderState.save(reminderNote.id, dueAt, leadMinutes);
+          if (!error) setReminderNotice(dueAt ? "Reminder saved on this device." : "Reminder removed. Saved locally.");
+          return error;
+        }}
+        onClose={() => setReminderNoteId(null)}
+      />}
+      {reminderNotice && !notesState.error && !reminderState.error && <ReminderFeedback key={reminderNotice} message={reminderNotice} onDismiss={dismissReminderNotice} />}
+      <SyncFeedback error={notesState.error ?? reminderState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); }} />
     </main>
   );
 }

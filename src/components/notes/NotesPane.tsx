@@ -6,6 +6,7 @@ import { NoteCard } from "./NoteCard";
 import { NotesSkeleton } from "../feedback/LoadingFeedback";
 import { NoteSortDropdown } from "./NoteSortDropdown";
 import type { NoteSort } from "../../features/notes/noteSorting";
+import type { NoteReminder } from "../../features/reminders/reminderTypes";
 import {
   formatShortcut,
   type ShortcutBindings,
@@ -26,6 +27,8 @@ export function NotesPane({
   syncStatus,
   sortOrder,
   onSortChange,
+  reminders,
+  onEditReminder,
   loading = false,
 }: {
   notes: Note[];
@@ -42,6 +45,8 @@ export function NotesPane({
   syncStatus: "on-device" | "syncing" | "synced" | "offline" | "error";
   sortOrder: NoteSort;
   onSortChange: (value: NoteSort) => void;
+  reminders: Record<string, NoteReminder>;
+  onEditReminder: (noteId: string) => void;
   loading?: boolean;
 }) {
   const title =
@@ -87,6 +92,8 @@ export function NotesPane({
         ) : (
           notes.map((note) => (
             <NoteCard
+              reminder={reminders[note.id]}
+              onEditReminder={() => onEditReminder(note.id)}
               key={note.id}
               note={note}
               folderConfig={folders.find((item) => item.id === note.folderId)}

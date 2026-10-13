@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { Note, NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
 import { MarkdownPreview } from "../editor/MarkdownPreview";
+import { Bell } from "lucide-react";
+import { formatReminderTime, type NoteReminder } from "../../features/reminders/reminderTypes";
 
 export function NoteCard({
   note,
@@ -9,12 +11,16 @@ export function NoteCard({
   selected,
   onSelect,
   onTogglePinned,
+  reminder,
+  onEditReminder,
 }: {
   note: Note;
   folderConfig?: NoteFolder;
   selected: boolean;
   onSelect: () => void;
   onTogglePinned: () => void;
+  reminder?: NoteReminder;
+  onEditReminder: () => void;
 }) {
   const previewRef = useRef<HTMLDivElement>(null);
   const [previewOverflows, setPreviewOverflows] = useState(false);
@@ -136,6 +142,10 @@ export function NoteCard({
           </span>
         )}
       </div>
+      {!note.deletedAt && reminder?.dueAt && <button type="button" className="note-reminder-badge"
+        data-tooltip="Edit reminder" onClick={onEditReminder} aria-label={`Edit reminder: ${formatReminderTime(reminder.dueAt)}`}>
+        <Bell size={12} />{formatReminderTime(reminder.dueAt)}
+      </button>}
     </article>
   );
 }

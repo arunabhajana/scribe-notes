@@ -10,6 +10,7 @@ export type CloudStorageUsage = {
   usedBytes: number;
   noteBytes: number;
   folderBytes: number;
+  reminderBytes?: number;
   limitBytes: number;
 };
 

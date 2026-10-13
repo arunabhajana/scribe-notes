@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import type { Note } from "../../types/note";
+import type { NoteReminder } from "../../features/reminders/reminderTypes";
 import type { NoteFolder } from "../../types/note";
 import { EmptyEditor } from "./EmptyEditor";
 import { EditorFooter } from "./EditorFooter";
@@ -10,6 +11,8 @@ import { applyMarkdownAction } from "./markdownFormatting";
 import { isMacOS } from "../../features/shortcuts/keyboardShortcuts";
 
 type EditorPaneProps = {
+  reminder?: NoteReminder;
+  onSetReminder: () => void;
   note: Note | null;
   isTrash: boolean;
   deleteLabel: string;
@@ -34,6 +37,8 @@ type EditorPaneProps = {
 };
 
 export function EditorPane({
+  reminder,
+  onSetReminder,
   note,
   isTrash,
   deleteLabel,
@@ -49,9 +54,6 @@ export function EditorPane({
 }: EditorPaneProps) {
   const [bodyEditing, setBodyEditing] = useState(false);
   const bodyInputRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    setBodyEditing(false);
-  }, [note?.id]);
   const applyAction = (action: MarkdownAction) =>
     applyMarkdownAction(
       bodyInputRef.current,
@@ -93,6 +95,8 @@ export function EditorPane({
   return (
     <section className="editor-pane" data-context-note={note.id} data-sync-editing={bodyEditing ? "true" : undefined}>
       <EditorHeader
+        reminder={reminder}
+        onSetReminder={onSetReminder}
         note={note}
         titleEditable={!isTrash}
         onUpdateTitle={(title) => onUpdateNote(note.id, { title })}
