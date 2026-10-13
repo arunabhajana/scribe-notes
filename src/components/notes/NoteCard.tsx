@@ -1,9 +1,9 @@
-import { useLayoutEffect, useRef, useState } from "react";
 import type { Note, NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
 import { MarkdownPreview } from "../editor/MarkdownPreview";
 import { Bell } from "lucide-react";
 import { formatReminderTime, type NoteReminder } from "../../features/reminders/reminderTypes";
+import "./noteCard.css";
 
 export function NoteCard({
   note,
@@ -22,56 +22,6 @@ export function NoteCard({
   reminder?: NoteReminder;
   onEditReminder: () => void;
 }) {
-  const previewRef = useRef<HTMLDivElement>(null);
-  const [previewOverflows, setPreviewOverflows] = useState(false);
-  useLayoutEffect(() => {
-    const previewElement = previewRef.current;
-    if (!previewElement) return;
-    const measureOverflow = () => {
-      const measurement = previewElement.cloneNode(true) as HTMLDivElement;
-      const markdown = measurement.firstElementChild as HTMLElement | null;
-      measurement.classList.remove("has-overflow");
-      Object.assign(measurement.style, {
-        position: "fixed",
-        left: "-10000px",
-        top: "0",
-        width: `${previewElement.clientWidth}px`,
-        height: "auto",
-        minHeight: "0",
-        maxHeight: "none",
-        overflow: "visible",
-        flex: "none",
-        visibility: "hidden",
-        pointerEvents: "none",
-      });
-      if (markdown) {
-        Object.assign(markdown.style, {
-          display: "block",
-          height: "auto",
-          maxHeight: "none",
-          overflow: "visible",
-          webkitLineClamp: "unset",
-          lineClamp: "unset",
-          webkitMaskImage: "none",
-          maskImage: "none",
-          fontWeight: "400",
-        });
-      }
-      previewElement.parentElement?.appendChild(measurement);
-      const overflows = measurement.scrollHeight > previewElement.clientHeight + 1;
-      measurement.remove();
-      setPreviewOverflows((previous) =>
-        previous === overflows ? previous : overflows,
-      );
-    };
-    measureOverflow();
-    const observer = new ResizeObserver(measureOverflow);
-    observer.observe(previewElement);
-    if (previewElement.firstElementChild)
-      observer.observe(previewElement.firstElementChild);
-    return () => observer.disconnect();
-  }, [note.body]);
-
   const relativeTime = new Intl.RelativeTimeFormat(undefined, {
     numeric: "auto",
   });
@@ -105,7 +55,7 @@ export function NoteCard({
           onSelect();
         }
       }}
-      className={`note-card ${selected ? "selected" : ""}`}
+      className={`note-card note-card-compact ${selected ? "selected" : ""}`}
     >
       <div className="note-card-title">
         <h2>{note.title || "Untitled Note"}</h2>
@@ -122,30 +72,26 @@ export function NoteCard({
         </button>
       </div>
       {note.body.trim() ? (
-        <div
-          ref={previewRef}
-          className={`note-card-preview ${previewOverflows ? "has-overflow" : ""}`}
-        >
+        <div className="note-card-preview">
           <MarkdownPreview value={note.body} />
         </div>
       ) : <p className="note-card-empty">No additional text</p>}
       <div className="card-meta">
-        <span className="card-updated">{updated}</span>
-        {note.folderId && (
-          <span className="folder-chip-row">
+        {note.folderId && folderConfig && (
             <span
               className={`folder-chip folder-chip-${folderConfig?.color ?? "violet"}`}
+              data-tooltip={folderConfig.name}
             >
               <span className="chip-dot" />
-              {folderConfig?.name}
+              <span className="card-folder-name">{folderConfig.name}</span>
             </span>
-          </span>
         )}
+        {!note.deletedAt && reminder?.dueAt && <button type="button" className="note-reminder-badge"
+          data-tooltip={`Reminder: ${formatReminderTime(reminder.dueAt)} · Click to edit`} onClick={onEditReminder} aria-label={`Edit reminder: ${formatReminderTime(reminder.dueAt)}`}>
+          <Bell size={12} /><span>{formatReminderTime(reminder.dueAt)}</span>
+        </button>}
+        <span className="card-updated" data-tooltip={`Last modified: ${new Date(note.updatedAt).toLocaleString(undefined, { hourCycle: "h23" })}`}>{updated}</span>
       </div>
-      {!note.deletedAt && reminder?.dueAt && <button type="button" className="note-reminder-badge"
-        data-tooltip="Edit reminder" onClick={onEditReminder} aria-label={`Edit reminder: ${formatReminderTime(reminder.dueAt)}`}>
-        <Bell size={12} />{formatReminderTime(reminder.dueAt)}
-      </button>}
     </article>
   );
 }
