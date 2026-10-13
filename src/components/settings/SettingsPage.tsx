@@ -1316,7 +1316,7 @@ function CategoryContent({
               <AppLogo variant="transparent" />
               <div>
                 <strong>Scribe for Windows</strong>
-                <span>Version 0.1.0 · Preview</span>
+                <span>Version {import.meta.env.VITE_APP_VERSION} · Preview</span>
               </div>
             </div>
             <div className="settings-info-banner">

@@ -6,6 +6,18 @@ Scribe is a desktop note-taking application designed to help you capture ideas, 
 
 > **Project status:** In development
 
+## App version
+
+`package.json` is the source of the app version. Tauri reads it directly, and the About page displays the same version.
+
+To change the version without creating a Git commit or tag:
+
+```powershell
+npm version 0.1.0 --no-git-tag-version
+```
+
+The version lifecycle script updates `src-tauri/Cargo.toml` and the app entry in `src-tauri/Cargo.lock`. If you edit `package.json` manually, run `npm run sync:version`. Synchronization also runs before `npm run dev`, `npm run build`, and `npm run tauri`.
+
 ## Features
 
 ### Notes

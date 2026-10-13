@@ -1,9 +1,14 @@
 {
   "name": "scribe-windows",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
+    "sync:version": "node scripts/sync-version.mjs",
+    "version": "npm run sync:version",
+    "predev": "npm run sync:version",
+    "prebuild": "npm run sync:version",
+    "pretauri": "npm run sync:version",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
