@@ -5,6 +5,7 @@ import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { needsDisplayName } from "../features/auth/accountProfile";
 import { useMfa } from "./useMfa";
+import { useDeviceSessions } from "./useDeviceSessions";
 import {
   authStorageKey,
   supabase,
@@ -32,6 +33,7 @@ export function useAuth() {
   const [authCallbackError, setAuthCallbackError] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   const [passwordRecoveryRequired, setPasswordRecoveryRequired] = useState(false);
+  const deviceInventory = useDeviceSessions(session, !mfa.loading && !mfa.required && !passwordRecoveryRequired);
   const [oauthPending, setOauthPending] = useState<SocialProvider | null>(null);
   const [linkedAccounts, setLinkedAccounts] = useState<{ provider: string; email?: string; name?: string }[]>([]);
   const [linkedIdentityCount, setLinkedIdentityCount] = useState(0);
@@ -452,6 +454,7 @@ export function useAuth() {
 
   return {
     mfa,
+    deviceInventory,
     user: session?.user ?? null,
     loading,
     configured: supabaseConfigured,

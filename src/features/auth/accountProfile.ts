@@ -1,9 +1,11 @@
 import type { User } from "@supabase/supabase-js";
+import type { DeviceInventory } from "../../hooks/useDeviceSessions";
 
 export type AccountProfile = {
   displayName: string;
   email: string;
   avatarColor?: string;
+  deviceInventory?: DeviceInventory;
   linkedAccounts?: { provider: string; email?: string; name?: string }[];
   linkedIdentityCount?: number;
   linkedAccountsLoaded?: boolean;

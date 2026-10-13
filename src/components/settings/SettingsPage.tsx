@@ -1,6 +1,7 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
 import { AppLogo } from "../AppLogo";
 import { MfaSettings } from "./MfaSettings";
+import { SignedInDevices } from "./SignedInDevices";
 import type { MfaController } from "../../hooks/useMfa";
 import { StatusToast } from "../feedback/LoadingFeedback";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_BYTES, CLOUD_STORAGE_LIMIT_MESSAGE, getCloudStorageUsage, type CloudStorageUsage } from "../../features/settings/cloudStorage";
@@ -14,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   Cloud,
-  Monitor,
   Globe,
   FileText,
   Folder,
@@ -23,7 +23,6 @@ import {
   HardDrive,
   LoaderCircle,
   ShieldCheck,
-  Smartphone,
   Trash2,
   X,
 } from "lucide-react";
@@ -149,8 +148,8 @@ const settingSearchIndex = [
   { label: "Reset password", detail: "Password reset controls are coming soon.", category: "account", terms: "password reset recovery" },
   { label: "Two-step verification", detail: "Protect sign-in with Authy or another authenticator app.", category: "account", terms: "2fa mfa two factor authentication security" },
   { label: "Linked accounts", detail: "Link or unlink Google and GitHub sign-in providers.", category: "account", terms: "social provider google github link unlink connected" },
-  { label: "Signed-in devices", detail: "Preview sessions for this PC, Chrome extension, and mobile app.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout" },
-  { label: "Sign out from all devices", detail: "Preview the option to sign out every device.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
+  { label: "Signed-in devices", detail: "View the signed-in sessions associated with your account.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout" },
+  { label: "Sign out from all devices", detail: "Device sign-out controls are coming soon.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
   { label: "Account data", detail: "Review upcoming export and deletion controls.", category: "account", terms: "privacy export delete data" },
   { label: "Export account data", detail: "Account export is coming soon.", category: "account", terms: "download backup export" },
   { label: "Delete account", detail: "Account deletion is coming soon.", category: "account", terms: "delete remove account privacy" },
@@ -643,23 +642,8 @@ function AccountSettings({
           </div>
         </div>
       )}
-      <SettingCard title="Signed-in devices" id={settingId("Signed-in devices")} description="Sample sessions · device management preview." accent="pink">
-        {[
-          { icon: Monitor, name: "This PC", platform: "Scribe for Windows · Windows 11", activity: "Active now", current: true },
-          { icon: Globe, name: "Chrome extension", platform: "Chrome · Windows 11", activity: "Last active 2 hours ago", current: false },
-          { icon: Smartphone, name: "Mobile app", platform: "Scribe Mobile · Android", activity: "Last active yesterday", current: false },
-        ].map(({ icon: Device, name, platform, activity, current }) => (
-          <div className="account-connection-row" key={name}>
-            <div className="account-icon-tile"><Device size={23} /></div>
-            <div className="account-connection-info">
-              <div className="device-name-line"><strong>{name}</strong>{current && <span className="device-current-badge">Current device</span>}</div>
-              <span>{platform}</span>
-              <small>{activity}</small>
-            </div>
-            {!current && <span className="settings-tooltip-target" tabIndex={0} data-tooltip="Preview only: device sign-out is not implemented"><button type="button" className="account-preview-action action-danger" disabled data-tooltip="Preview only: device sign-out is not implemented">Sign out</button></span>}
-          </div>
-        ))}
-        <div className="device-actions-footer"><span>Session controls are coming soon.</span><span className="settings-tooltip-target" tabIndex={0} data-tooltip="Preview only: signing out all devices is not implemented"><button type="button" className="account-preview-action action-danger" disabled data-tooltip="Preview only: signing out all devices is not implemented">Sign out from all devices</button></span></div>
+      <SettingCard title="Signed-in devices" id={settingId("Signed-in devices")} description="Sign-in sessions associated with your account." accent="pink">
+        <SignedInDevices inventory={profile.deviceInventory} />
       </SettingCard>
       <SettingCard
         title="Account data"

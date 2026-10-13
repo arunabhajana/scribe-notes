@@ -183,6 +183,7 @@ function App() {
   const accountProfile = {
     ...fallbackProfile,
     avatarColor: profileAvatarColor,
+    deviceInventory: auth.deviceInventory,
     displayName: (loadedProfile?.userId === auth.user?.id ? loadedProfile?.name : null) ?? fallbackProfile.displayName,
     linkedAccounts: auth.linkedAccounts,
     linkedIdentityCount: auth.linkedIdentityCount,

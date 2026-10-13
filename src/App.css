@@ -6599,6 +6599,10 @@
 .account-preview-action.action-link:not(:disabled):hover { background: #37c99418; border-color: #37c99475; }
 .device-actions-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 16px; border-top: 1px solid var(--border); }
 .device-actions-footer > span { font-size: 10px; color: var(--muted); line-height: 1.5; }
+.device-inventory-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0 12px; color: var(--muted); font-size: 10px; }
+.device-inventory-empty { display: flex; align-items: center; gap: 9px; padding: 14px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.device-inventory-error { margin: 4px 0 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, #ed626d 35%, var(--border)); border-radius: 8px; color: #d95664; background: color-mix(in srgb, #ed626d 8%, var(--surface)); font-size: 11px; line-height: 1.6; }
+.settings-dark .device-inventory-error { color: #f3aab4; }
 @media (max-width: 600px) { .account-connection-row { flex-wrap: wrap; gap: 11px; } .account-connection-info { min-width: 130px; } .device-actions-footer { align-items: flex-start; flex-direction: column; } }
 
 .settings-tooltip-target { display: inline-flex; flex-shrink: 0; border-radius: 7px; }

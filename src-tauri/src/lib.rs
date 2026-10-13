@@ -5,6 +5,28 @@ use tauri::{
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
 
+#[derive(serde::Serialize)]
+struct DeviceInfo {
+    name: String,
+    platform: String,
+}
+
+#[tauri::command]
+fn get_device_info() -> DeviceInfo {
+    let platform = match std::env::consts::OS {
+        "windows" => "Windows",
+        "macos" => "macOS",
+        "linux" => "Linux",
+        other => other,
+    };
+    let name = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "Scribe desktop".to_string());
+    DeviceInfo { name, platform: platform.to_string() }
+}
+
 #[tauri::command]
 fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     let manager = app.autolaunch();
@@ -41,7 +63,8 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             set_autostart_enabled,
-            get_autostart_enabled
+            get_autostart_enabled,
+            get_device_info
         ])
         .setup(|app| {
             #[cfg(all(debug_assertions, windows))]
