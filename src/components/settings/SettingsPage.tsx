@@ -3,6 +3,7 @@ import { AppLogo } from "../AppLogo";
 import { MfaSettings } from "./MfaSettings";
 import { SignedInDevices } from "./SignedInDevices";
 import { ReminderShortcutSettings } from "./ReminderShortcutSettings";
+import { scrollExpandedIntoView } from "../layout/scrollExpandedIntoView";
 import type { MfaController } from "../../hooks/useMfa";
 import { StatusToast } from "../feedback/LoadingFeedback";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_BYTES, CLOUD_STORAGE_LIMIT_MESSAGE, getCloudStorageUsage, type CloudStorageUsage } from "../../features/settings/cloudStorage";
@@ -213,6 +214,14 @@ function SettingSelect({
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const open = menu !== null;
+  useEffect(() => {
+    if (!open) return;
+    const frame = requestAnimationFrame(() => {
+      const selected = menuRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+      if (selected) scrollExpandedIntoView(selected);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, value]);
   const close = () => { setMenu(null); triggerRef.current?.focus(); };
   useEffect(() => {
     if (!open) return;
@@ -1533,7 +1542,7 @@ export function SettingsPage({
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
           const target = document.getElementById(result.targetId!);
-          target?.scrollIntoView({ behavior: "smooth", block: "center" });
+          if (target) scrollExpandedIntoView(target);
           target?.classList.add("setting-search-highlight");
           window.setTimeout(
             () => target?.classList.remove("setting-search-highlight"),

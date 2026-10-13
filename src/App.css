@@ -1459,6 +1459,8 @@
   backdrop-filter: blur(4px);
 }
 .folder-modal {
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
   width: min(390px, 100%);
   padding: 22px;
   border: 1px solid var(--border);

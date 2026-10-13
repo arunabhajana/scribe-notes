@@ -1,4 +1,5 @@
-import { useState, type FormEvent, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
+import { scrollExpandedIntoView } from "../layout/scrollExpandedIntoView";
 import { Icon } from "../Icon";
 import type { FolderColor, FolderIconName, NoteFolder } from "../../types/note";
 
@@ -43,6 +44,12 @@ export function CreateFolderDialog({
   const [color, setColor] = useState<FolderColor>(folder?.color ?? "violet");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState("");
+  const picker = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const frame = requestAnimationFrame(() => { if (picker.current) scrollExpandedIntoView(picker.current); });
+    return () => cancelAnimationFrame(frame);
+  }, [pickerOpen]);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!name.trim()) return;
@@ -85,7 +92,7 @@ export function CreateFolderDialog({
             setError("");
           }}
         />
-        {error && <span className="folder-error">{error}</span>}
+        {error && <span className="folder-error" role="alert">{error}</span>}
         <div className="folder-customize">
           <div>
             <strong>Make it yours</strong>
@@ -107,7 +114,7 @@ export function CreateFolderDialog({
           </button>
         </div>
         {pickerOpen && (
-          <div className="folder-picker">
+          <div ref={picker} className="folder-picker">
             <div className="folder-picker-label">ICON</div>
             <div className="folder-icon-grid">
               {folderIcons.map((option) => (
