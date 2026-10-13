@@ -1,5 +1,7 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
 import { AppLogo } from "../AppLogo";
+import { MfaSettings } from "./MfaSettings";
+import type { MfaController } from "../../hooks/useMfa";
 import { StatusToast } from "../feedback/LoadingFeedback";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_BYTES, CLOUD_STORAGE_LIMIT_MESSAGE, getCloudStorageUsage, type CloudStorageUsage } from "../../features/settings/cloudStorage";
 import { createPortal } from "react-dom";
@@ -145,7 +147,7 @@ const settingSearchIndex = [
   { label: "Email address", detail: "View the email address associated with your account; it cannot be changed here.", category: "account", terms: "email login address", targetId: "setting-display-name" },
   { label: "Password & security", detail: "Review account security controls.", category: "account", terms: "security password verification" },
   { label: "Reset password", detail: "Password reset controls are coming soon.", category: "account", terms: "password reset recovery" },
-  { label: "Two-step verification", detail: "Additional sign-in protection is coming soon.", category: "account", terms: "2fa mfa two factor authentication security" },
+  { label: "Two-step verification", detail: "Protect sign-in with Authy or another authenticator app.", category: "account", terms: "2fa mfa two factor authentication security" },
   { label: "Linked accounts", detail: "Link or unlink Google and GitHub sign-in providers.", category: "account", terms: "social provider google github link unlink connected" },
   { label: "Signed-in devices", detail: "Preview sessions for this PC, Chrome extension, and mobile app.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout" },
   { label: "Sign out from all devices", detail: "Preview the option to sign out every device.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
@@ -406,6 +408,7 @@ function AccountSettings({
   onLinkAccount,
   onUnlinkAccount,
   onRequestPasswordReset,
+  mfa,
 }: {
   profile: AccountProfile;
   onAvatarColorChange: (color: string) => void;
@@ -413,6 +416,7 @@ function AccountSettings({
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onRequestPasswordReset: (email: string) => Promise<string | null>;
+  mfa: MfaController;
 }) {
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -465,11 +469,14 @@ function AccountSettings({
 
   useEffect(() => {
     if (!linkStartedProvider || !profile.linkedAccounts?.some((item) => item.provider === linkStartedProvider)) return;
-    setAccountToast({
-      message: `${linkStartedProvider === "google" ? "Google" : "GitHub"} account linked.`,
-      kind: "success",
-    });
-    setLinkStartedProvider(null);
+    const timer = window.setTimeout(() => {
+      setAccountToast({
+        message: `${linkStartedProvider === "google" ? "Google" : "GitHub"} account linked.`,
+        kind: "success",
+      });
+      setLinkStartedProvider(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [linkStartedProvider, profile.linkedAccounts]);
 
   useEffect(() => {
@@ -566,7 +573,7 @@ function AccountSettings({
       </SettingCard>
       <SettingCard
         title="Password & security"
-        description="Supabase protects sign-in and email verification. Additional account controls are planned."
+        description="Manage your password and add an authenticator for extra sign-in protection."
         accent="pink"
         id={settingId("Password & security")}
       >
@@ -598,12 +605,7 @@ function AccountSettings({
             {requestingPasswordReset && <LoaderCircle size={15} className="spin" />}
           </button>
         </div>
-        <AccountSettingRow
-          id="Two-step verification"
-          label="Two-step verification"
-          detail="Add another layer of sign-in protection."
-          action="Coming soon"
-        />
+        <div id={settingId("Two-step verification")}><MfaSettings mfa={mfa} /></div>
       </SettingCard>
       <SettingCard title="Linked accounts" id={settingId("Linked accounts")} description="Connect Google or GitHub to this Scribe account." accent="pink">
         {(["google", "github"] as const).map((provider) => {
@@ -1045,6 +1047,7 @@ function CategoryContent({
   onLinkAccount,
   onUnlinkAccount,
   onRequestPasswordReset,
+  mfa,
   onLaunchAtStartupChange,
   folders,
   notes,
@@ -1073,6 +1076,7 @@ function CategoryContent({
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onRequestPasswordReset: (email: string) => Promise<string | null>;
+  mfa: MfaController;
   onLaunchAtStartupChange: (enabled: boolean) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
@@ -1148,7 +1152,7 @@ function CategoryContent({
         </>
       );
     case "account":
-      return <AccountSettings profile={profile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} />;
+      return <AccountSettings profile={profile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
     case "folders":
       return (
         <FolderManagementSettings
@@ -1423,6 +1427,7 @@ export function SettingsPage({
   onLinkAccount,
   onUnlinkAccount,
   onRequestPasswordReset,
+  mfa,
   onLaunchAtStartupChange,
   folders,
   notes,
@@ -1451,6 +1456,7 @@ export function SettingsPage({
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onUnlinkAccount: (provider: SocialProvider) => Promise<string | null>;
   onRequestPasswordReset: (email: string) => Promise<string | null>;
+  mfa: MfaController;
   onLaunchAtStartupChange: (enabled: boolean) => Promise<string | null>;
   folders: NoteFolder[];
   notes: Note[];
@@ -1652,6 +1658,7 @@ export function SettingsPage({
               onLinkAccount={onLinkAccount}
               onUnlinkAccount={onUnlinkAccount}
               onRequestPasswordReset={onRequestPasswordReset}
+              mfa={mfa}
               onLaunchAtStartupChange={onLaunchAtStartupChange}
               folders={folders}
               notes={notes}

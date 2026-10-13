@@ -13,6 +13,7 @@ import type { Note } from "./types/note";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { AuthPage } from "./components/auth/AuthPage";
 import { PasswordRecoveryPage } from "./components/auth/PasswordRecoveryPage";
+import { MfaChallengePage } from "./components/auth/MfaChallengePage";
 import { CompleteProfile } from "./components/auth/CompleteProfile";
 import { EditorSkeleton, LoadingSpinner, SyncFeedback } from "./components/feedback/LoadingFeedback";
 import { useAuth } from "./hooks/useAuth";
@@ -39,7 +40,8 @@ function App() {
   const [offlineMode, setOfflineMode] = useState(
     () => localStorage.getItem("scribe-offline-mode") === "true",
   );
-  const notesState = useNotes(auth.user, auth.configured, offlineMode);
+  const notesUser = !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null;
+  const notesState = useNotes(notesUser, auth.configured, offlineMode);
   const [isDark, setIsDark] = useState(
     () => localStorage.getItem("scribe-theme") !== "light",
   );
@@ -88,7 +90,7 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    if (!auth.user || !auth.configured)
+    if (!notesUser || !auth.configured)
       return () => {
         active = false;
       };
@@ -97,16 +99,16 @@ function App() {
         active = false;
       };
     void notesRepository
-      .loadProfileName(auth.user)
+      .loadProfileName(notesUser)
       .then((name) => {
         if (!active) return;
-        setLoadedProfile({ userId: auth.user!.id, name });
+        setLoadedProfile({ userId: notesUser.id, name });
       })
       .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [auth.user, auth.configured, offlineMode]);
+  }, [notesUser, auth.configured, offlineMode]);
 
   const authenticatedUserId = auth.user?.id;
   const refreshLinkedAccounts = auth.refreshLinkedAccounts;
@@ -211,7 +213,7 @@ function App() {
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (
-        !auth.user ||
+        !notesUser ||
         page !== "notes" ||
         isComposerModalActive ||
         event.defaultPrevented ||
@@ -258,7 +260,7 @@ function App() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [
     isComposerModalActive,
-    auth.user,
+    notesUser,
     notesState,
     openNewNote,
     page,
@@ -280,7 +282,7 @@ function App() {
     notesState.setSelectedId(id);
   };
 
-  if (auth.loading)
+  if (auth.loading || (auth.user && auth.mfa.loading))
     return (
       <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
         <TitleBar
@@ -321,6 +323,13 @@ function App() {
           onCancelProviderSignIn={auth.cancelProviderSignIn}
           onRequestPasswordReset={auth.requestPasswordReset}
         />
+      </div>
+    );
+  if (auth.mfa.required)
+    return (
+      <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
+        <TitleBar dark={isDark} onToggleTheme={() => changeTheme(!isDark)} />
+        <MfaChallengePage mfa={auth.mfa} onSignOut={auth.signOut} />
       </div>
     );
   if (auth.passwordRecoveryRequired)
@@ -375,6 +384,7 @@ function App() {
           onLinkAccount={auth.linkAccount}
           onUnlinkAccount={auth.unlinkAccount}
           onRequestPasswordReset={auth.requestPasswordReset}
+          mfa={auth.mfa}
           onLaunchAtStartupChange={changeLaunchAtStartup}
           folders={notesState.folders}
           unfiledPosition={notesState.unfiledPosition}

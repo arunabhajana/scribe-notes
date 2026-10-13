@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { needsDisplayName } from "../features/auth/accountProfile";
+import { useMfa } from "./useMfa";
 import {
   authStorageKey,
   supabase,
@@ -26,6 +27,7 @@ function linkedAccountsFromIdentities(identities: UserIdentity[]) {
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
+  const mfa = useMfa(session);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [authCallbackError, setAuthCallbackError] = useState("");
   const [authNotice, setAuthNotice] = useState("");
@@ -449,6 +451,7 @@ export function useAuth() {
   }, []);
 
   return {
+    mfa,
     user: session?.user ?? null,
     loading,
     configured: supabaseConfigured,
