@@ -1,10 +1,11 @@
 import { useWritingPreferences } from "../../features/settings/writingPreferences";
-import { useEffect, type RefObject } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
 import type { KeyboardEvent } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { Pencil } from "lucide-react";
 import { continueMarkdownList } from "./markdownFormatting";
 import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
+import { captureReadingPosition, restoreReadingPosition, type ReadingPosition } from "./editorReadingPosition";
 
 export function NoteBodyEditor({
   value,
@@ -24,11 +25,20 @@ export function NoteBodyEditor({
   onBeginEdit: () => void;
 }) {
   const [writingPreferences] = useWritingPreferences();
-  useEffect(() => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const readingPosition = useRef<ReadingPosition | null>(null);
+  const beginEdit = () => {
+    if (scrollRef.current) readingPosition.current = captureReadingPosition(scrollRef.current, value);
+    onBeginEdit();
+  };
+  useLayoutEffect(() => {
     if (!preview && !readOnly && inputRef.current) {
-      inputRef.current.focus();
-      const end = inputRef.current.value.length;
-      inputRef.current.setSelectionRange(end, end);
+      if (readingPosition.current && scrollRef.current) {
+        restoreReadingPosition(scrollRef.current, inputRef.current, readingPosition.current);
+        readingPosition.current = null;
+      } else {
+        inputRef.current.focus({ preventScroll: true });
+      }
     }
   }, [preview, readOnly, inputRef]);
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -40,7 +50,7 @@ export function NoteBodyEditor({
     onChange(setMarkdownTaskCheckedAtLine(value, lineIndex, checked));
   };
   return (
-    <div className="editor-scroll">
+    <div ref={scrollRef} className="editor-scroll">
       <article className={`editor-content ${preview ? "is-viewing" : "is-editing"}`}>
         {preview ? (
           <div
@@ -50,7 +60,7 @@ export function NoteBodyEditor({
             aria-label={readOnly ? undefined : "Note content. Click to edit."}
             onClick={(event) => {
               if (readOnly || (event.target as HTMLElement).closest("a, button, input")) return;
-              onBeginEdit();
+              beginEdit();
             }}
             onKeyDown={(event) => {
               if (
@@ -59,13 +69,13 @@ export function NoteBodyEditor({
                 (event.key === "Enter" || event.key === " ")
               ) {
                 event.preventDefault();
-                onBeginEdit();
+                beginEdit();
               }
             }}
           >
             {!readOnly && (
               <div className="editor-preview-actions">
-                <button type="button" className="editor-edit-hint body-edit-hint" onClick={onBeginEdit} data-tooltip="Edit Note content">
+                <button type="button" className="editor-edit-hint body-edit-hint" onClick={beginEdit} data-tooltip="Edit Note content">
                   <Pencil size={14} /><span>Click to edit</span>
                 </button>
               </div>

@@ -8,7 +8,7 @@ import { NOTES_SYNCED_EVENT } from "../features/notes/syncProtocol";
 
 export function useReminders(userId: string | null, offlineMode: boolean) {
   const [cache, setCache] = useState<ReminderCache | null>(null);
-  const [issue, setIssue] = useState<{ userId: string; message: string } | null>(null);
+  const [issue, setIssue] = useState<{ userId: string; message: string; kind: "local" | "cloud" } | null>(null);
   const [syncingFor, setSyncingFor] = useState<string | null>(null);
   const wake = useRef<() => void>(() => undefined);
 
@@ -19,7 +19,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
       void reminderStore.load(userId).then((value) => {
         if (active) setCache(value);
       }).catch(() => {
-        if (active) setIssue({ userId, message: "Could not open local reminder storage. Please reopen Scribe and try again." });
+        if (active) setIssue({ userId, kind: "local", message: "Could not open local reminder storage. Please reopen Scribe and try again." });
       });
     };
     const changed = (event: Event) => {
@@ -44,13 +44,16 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
       if (busy) { requested = true; return; }
       if (Date.now() < retryAt) return;
       busy = true;
+      let cloudRequestPending = false;
       try {
         const local = await reminderStore.load(userId);
         if (!active) return;
         const operations = Object.values(local.pending).slice(0, 50);
         if (!force && !operations.length && Date.now() - lastPull < 300_000) return;
         setSyncingFor(userId);
+        cloudRequestPending = true;
         const reply = await syncReminders(userId, operations, local.cursor);
+        cloudRequestPending = false;
         // Finish acknowledging this account even if the user signed out meanwhile.
         const committed = await reminderStore.commit(userId, reply);
         if (reply.acknowledged.length) window.dispatchEvent(new Event(CLOUD_STORAGE_CHANGED_EVENT));
@@ -68,7 +71,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
         failures++;
         retryAt = Date.now() + Math.min(300_000, 15_000 * 2 ** Math.min(failures - 1, 5));
         const message = cause && typeof cause === "object" && "message" in cause ? String(cause.message) : "";
-        if (active) setIssue({ userId, message: message.includes("SCRIBE_STORAGE_LIMIT_REACHED") ? CLOUD_STORAGE_LIMIT_MESSAGE : /schema cache|function .*does not exist/i.test(message)
+        if (active) setIssue({ userId, kind: cloudRequestPending ? "cloud" : "local", message: !cloudRequestPending ? "Could not update local reminder storage. Please reopen Scribe and try again." : message.includes("SCRIBE_STORAGE_LIMIT_REACHED") ? CLOUD_STORAGE_LIMIT_MESSAGE : /schema cache|function .*does not exist/i.test(message)
           ? "Reminders are saved locally. Apply the reminder migration in Supabase to enable cloud sync."
           : "Reminder sync is paused. Your reminders are safe on this device and will retry automatically." });
       } finally {
@@ -142,6 +145,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
     pending: cache?.userId === userId ? cache.pending : {},
     syncing: syncingFor === userId && userId !== null,
     error: issue?.userId === userId ? issue.message : null,
+    cloudSyncError: issue?.userId === userId && issue.kind === "cloud" ? issue.message : null,
     clearError: () => setIssue(null),
     save,
   };

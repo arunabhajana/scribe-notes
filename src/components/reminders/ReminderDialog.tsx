@@ -109,7 +109,7 @@ export function ReminderDialog({ reminder, defaultLead, pending, offline, cloudE
       <fieldset className="reminder-lead" disabled={busy}><legend>Also remind me before</legend><div>
         {[0, 5, 10, 15, 30, 60].map((minutes) => <button key={minutes} type="button" aria-pressed={lead === minutes} onClick={() => setLead(minutes)}>{minutes === 0 ? "At the time" : `${minutes}m before`}</button>)}
       </div></fieldset>
-      <p className="reminder-help">{offline ? "Saves on this device and syncs when you go online." : "Saves on this device immediately, then syncs to your account."} Notification delivery is coming later.</p>
+      <p className="reminder-help">{offline ? "Saves on this device and syncs when you go online." : "Saves on this device immediately, then syncs to your account."}</p>
       {cloudError && <p className="reminder-cloud-issue" role="status">{cloudError}</p>}
       {error && <p className="folder-error" role="alert">{error}</p>}
       <div className="modal-actions reminder-dialog-actions">

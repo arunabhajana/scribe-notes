@@ -4,6 +4,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
+mod desktop_notifications;
 
 #[derive(serde::Serialize)]
 struct DeviceInfo {
@@ -64,9 +65,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_autostart_enabled,
             get_autostart_enabled,
-            get_device_info
+            get_device_info,
+            desktop_notifications::configure_desktop_notifications,
+            desktop_notifications::show_desktop_notification
         ])
         .setup(|app| {
+            desktop_notifications::initialize(app.handle())?;
             #[cfg(all(debug_assertions, windows))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;

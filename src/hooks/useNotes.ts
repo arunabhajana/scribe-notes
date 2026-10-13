@@ -129,6 +129,7 @@ export function useNotes(
   const [search, setSearch] = useState("");
   const [loadedForUser, setLoadedForUser] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cloudSyncError, setCloudSyncError] = useState<{ userId: string; message: string } | null>(null);
   const [pendingWrites, setPendingWrites] = useState(0);
   const [online, setOnline] = useState(true);
   const [hasPendingSync, setHasPendingSync] = useState(false);
@@ -232,6 +233,7 @@ export function useNotes(
     let finishWrite: (() => void) | undefined;
     let hasLease = false;
     let submittedBatchId: string | undefined;
+    let cloudResponseReceived = false;
     const editsAtStart = new Map(editGeneration.current);
     try {
       hasLease = await offlineStore.acquireSyncLease(user.id, syncOwnerId.current, 60_000);
@@ -242,6 +244,7 @@ export function useNotes(
       finishWrite = beginWrite();
       submittedBatchId = prepared.batch.id;
       const reply = await notesRepository.sync(user, prepared.batch, prepared.cursor);
+      cloudResponseReceived = true;
       if (prepared.batch.operations.length || reply.changes.length) window.dispatchEvent(new Event(CLOUD_STORAGE_CHANGED_EVENT));
       finishWrite();
       finishWrite = undefined;
@@ -290,6 +293,7 @@ export function useNotes(
       const recoveredError = lastCloudError.current;
       setError((current) => current === recoveredError ? null : current);
       lastCloudError.current = null;
+      setCloudSyncError(null);
       if (local.conflicts) setError("Another device changed the same data. Your edits were preserved in conflict copies; conflicting deletions were canceled.");
       if (reply.hasMore || (local.outbox.length && prepared.batch.operations.length === 50)) {
         // Drain large queues in bounded batches, leaving time for local edits.
@@ -307,6 +311,7 @@ export function useNotes(
       if (activeUserId.current === user.id) {
         lastCloudError.current = quotaReached ? CLOUD_STORAGE_LIMIT_MESSAGE : `Cloud sync paused. Local changes are kept on this device and will retry automatically: ${messageFor(cause)}`;
         setError(lastCloudError.current);
+        setCloudSyncError(submittedBatchId && !cloudResponseReceived ? { userId: user.id, message: lastCloudError.current } : null);
       }
     } finally {
       if (hasLease) await offlineStore.releaseSyncLease(user.id, syncOwnerId.current).catch(() => undefined);
@@ -734,6 +739,9 @@ export function useNotes(
     setSearch,
     folders,
     loading,
+    cacheReady: Boolean(user && notesForUser === user.id),
+    cloudReady: Boolean(user && pulledForUser === user.id),
+    cloudSyncError: cloudSyncError?.userId === user?.id ? cloudSyncError?.message ?? null : null,
     error,
     createNote,
     updateNote,

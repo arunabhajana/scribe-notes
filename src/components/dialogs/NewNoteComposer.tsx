@@ -79,9 +79,13 @@ export function NewNoteComposer({
       setFolderMenuOpen(false);
       onModalActiveChange(true);
     };
+    const minimizeDraft = () => { setMinimized(true); setFolderMenuOpen(false); onModalActiveChange(false); };
     window.addEventListener("scribe:restore-note-draft", restoreDraft);
-    return () =>
+    window.addEventListener("scribe:minimize-note-draft", minimizeDraft);
+    return () => {
       window.removeEventListener("scribe:restore-note-draft", restoreDraft);
+      window.removeEventListener("scribe:minimize-note-draft", minimizeDraft);
+    };
   }, [onModalActiveChange]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {

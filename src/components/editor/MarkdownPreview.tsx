@@ -31,12 +31,13 @@ function listItem(line: string) {
 function markdownToHtml(markdown: string, tasksInteractive: boolean) {
   const lines = escapeHtml(markdown).replace(/\r\n?/g, "\n").split("\n");
   const blocks: string[] = [];
-  let paragraph: string[] = [];
+  let paragraph: Array<{ text: string; line: number }> = [];
   let list: { type: "ul" | "ol" | "tasks"; items: Array<{ content: string; checked: boolean; line: number }> } | null = null;
-  let code: string[] | null = null;
+  let code: Array<{ text: string; line: number }> | null = null;
+  const codeHtml = () => code?.map((item) => `<span data-source-line="${item.line}">${item.text || "&#8203;"}</span>`).join("\n") ?? "";
   const flushParagraph = () => {
     if (paragraph.length)
-      blocks.push(`<p>${paragraph.map(inlineMarkdown).join("<br>")}</p>`);
+      blocks.push(`<p>${paragraph.map((item) => `<span data-source-line="${item.line}">${inlineMarkdown(item.text)}</span>`).join("<br>")}</p>`);
     paragraph = [];
   };
   const flushList = () => {
@@ -44,9 +45,9 @@ function markdownToHtml(markdown: string, tasksInteractive: boolean) {
       blocks.push(
         list.type === "tasks"
           ? `<ul class="task-list">${list.items.map((item) => {
-              return `<li class="task-list-item${item.checked ? " is-checked" : ""}"><input class="task-checkbox" type="checkbox" data-task-line="${item.line}" aria-label="${item.checked ? "Mark incomplete" : "Mark complete"}: ${item.content}" ${tasksInteractive ? "" : "disabled"} ${item.checked ? "checked" : ""}><span class="task-content">${inlineMarkdown(item.content)}</span></li>`;
+              return `<li data-source-line="${item.line}" class="task-list-item${item.checked ? " is-checked" : ""}"><input class="task-checkbox" type="checkbox" data-task-line="${item.line}" aria-label="${item.checked ? "Mark incomplete" : "Mark complete"}: ${item.content}" ${tasksInteractive ? "" : "disabled"} ${item.checked ? "checked" : ""}><span class="task-content">${inlineMarkdown(item.content)}</span></li>`;
             }).join("")}</ul>`
-          : `<${list.type}>${list.items.map((item) => `<li>${inlineMarkdown(item.content)}</li>`).join("")}</${list.type}>`,
+          : `<${list.type}>${list.items.map((item) => `<li data-source-line="${item.line}">${inlineMarkdown(item.content)}</li>`).join("")}</${list.type}>`,
       );
     list = null;
   };
@@ -56,13 +57,13 @@ function markdownToHtml(markdown: string, tasksInteractive: boolean) {
       flushParagraph();
       flushList();
       if (code) {
-        blocks.push(`<pre><code>${code.join("\n")}</code></pre>`);
+        blocks.push(`<pre><code>${codeHtml()}</code></pre>`);
         code = null;
       } else code = [];
       continue;
     }
     if (code) {
-      code.push(line);
+      code.push({ text: line, line: lineIndex });
       continue;
     }
     if (!line.trim()) {
@@ -83,21 +84,21 @@ function markdownToHtml(markdown: string, tasksInteractive: boolean) {
     const quote = line.match(/^\s*&gt;\s?(.*)$/);
     if (quote) {
       flushParagraph();
-      blocks.push(`<blockquote>${inlineMarkdown(quote[1])}</blockquote>`);
+      blocks.push(`<blockquote data-source-line="${lineIndex}">${inlineMarkdown(quote[1])}</blockquote>`);
       continue;
     }
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       flushParagraph();
       const level = heading[1].length;
-      blocks.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      blocks.push(`<h${level} data-source-line="${lineIndex}">${inlineMarkdown(heading[2])}</h${level}>`);
       continue;
     }
-    paragraph.push(line);
+    paragraph.push({ text: line, line: lineIndex });
   }
   flushParagraph();
   flushList();
-  if (code) blocks.push(`<pre><code>${code.join("\n")}</code></pre>`);
+  if (code) blocks.push(`<pre><code>${codeHtml()}</code></pre>`);
   return blocks.join("");
 }
 

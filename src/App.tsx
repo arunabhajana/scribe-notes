@@ -9,6 +9,8 @@ import { NotesPane } from "./components/notes/NotesPane";
 import { Sidebar } from "./components/layout/Sidebar";
 import { useNotes } from "./hooks/useNotes";
 import { useReminders } from "./hooks/useReminders";
+import { useDesktopNotifications, useNotificationActivation } from "./hooks/useDesktopNotifications";
+import type { NotificationTarget } from "./features/notifications/desktopNotifications";
 import { ReminderDialog } from "./components/reminders/ReminderDialog";
 import { ReminderFeedback } from "./components/reminders/ReminderFeedback";
 import { reminderPresetActionLabel, reminderPresetDate, useReminderShortcuts } from "./features/settings/reminderShortcuts";
@@ -76,6 +78,40 @@ function App() {
     () => localStorage.getItem("scribe-sidebar-collapsed") === "true",
   );
   const [page, setPage] = useState<AppPage>("notes");
+  const [notificationTarget, setNotificationTarget] = useState<NotificationTarget | null>(null);
+  useNotificationActivation(setNotificationTarget);
+  const desktopNotifications = useDesktopNotifications({ userId: notesUser?.id ?? null, notes: notesState.notes, reminders: reminderState.reminders,
+    ready: notesState.cacheReady && !reminderState.loading, desktop: writingPreferences.desktop,
+    enabled: writingPreferences.reminders, sounds: writingPreferences.sounds,
+    cloudSyncError: offlineMode ? null : notesState.cloudSyncError ?? reminderState.cloudSyncError });
+  const showNoteError = notesState.showError;
+  const selectNoteSection = notesState.selectSection;
+  const selectNoteId = notesState.setSelectedId;
+  const clearNoteSearch = notesState.setSearch;
+  useEffect(() => {
+    if (!notificationTarget || !notesUser || !notesState.cacheReady) return;
+    if (notificationTarget.userId !== notesUser.id) {
+      showNoteError("This notification belongs to another account. Sign in to that account to open its note.");
+      return;
+    }
+    const note = notificationTarget.noteId ? notesState.notes.find((item) => item.id === notificationTarget.noteId && !item.deletedAt) : null;
+    if (notificationTarget.noteId && !note) {
+      if (!notesState.cloudReady && navigator.onLine && !offlineMode) return;
+      const frame = requestAnimationFrame(() => {
+        showNoteError("This note is no longer available on this device, or it has been moved to Trash.");
+        setNotificationTarget(null);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    const frame = requestAnimationFrame(() => {
+      setPage("notes"); clearNoteSearch(""); selectNoteSection(note?.isDraft ? "drafts" : "all");
+      if (note) selectNoteId(note.id);
+      window.dispatchEvent(new Event("scribe:minimize-note-draft"));
+      setNotificationTarget(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [notificationTarget, notesUser, notesState.cacheReady, notesState.cloudReady, notesState.notes, offlineMode,
+    showNoteError, selectNoteSection, selectNoteId, clearNoteSearch]);
   const [shortcuts, setShortcuts] =
     useState<ShortcutBindings>(getShortcutBindings);
   const [accent, setAccent] = useState<AccentColor>(
@@ -639,8 +675,8 @@ function App() {
         }}
         onClose={() => setReminderNoteId(null)}
       />}
-      {reminderNotice && !notesState.error && !reminderState.error && <ReminderFeedback key={reminderNotice} message={reminderNotice} onDismiss={dismissReminderNotice} />}
-      <SyncFeedback error={notesState.error ?? reminderState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); }} />
+      {reminderNotice && !notesState.error && !reminderState.error && !desktopNotifications.error && <ReminderFeedback key={reminderNotice} message={reminderNotice} onDismiss={dismissReminderNotice} />}
+      <SyncFeedback error={notesState.error ?? reminderState.error ?? desktopNotifications.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); desktopNotifications.clearError(); }} />
     </main>
   );
 }

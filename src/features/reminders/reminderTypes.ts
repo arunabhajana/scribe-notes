@@ -20,5 +20,5 @@ export type ReminderReply = {
   hasMore: boolean;
 };
 export function formatReminderTime(dueAt: string) {
-  return new Date(dueAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(dueAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 }
