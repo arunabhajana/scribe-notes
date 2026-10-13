@@ -6,6 +6,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { needsDisplayName } from "../features/auth/accountProfile";
 import { useMfa } from "./useMfa";
 import { useDeviceSessions } from "./useDeviceSessions";
+import { useSessionGuard } from "./useSessionGuard";
 import {
   authStorageKey,
   supabase,
@@ -42,6 +43,23 @@ export function useAuth() {
   const handledCallbacks = useRef(new Set<string>());
   const oauthStarting = useRef(false);
   const identityRequest = useRef(0);
+
+  const handleRevokedSession = useCallback(async (message: string) => {
+    setLoading(true);
+    setSession(null);
+    setPasswordRecoveryRequired(false);
+    setAuthCallbackError("");
+    setAuthNotice(message);
+    try {
+      const result = await supabase?.auth.signOut({ scope: "local" });
+      if (result?.error) localStorage.removeItem(authStorageKey);
+    } catch {
+      try { localStorage.removeItem(authStorageKey); }
+      catch { setAuthNotice("This session was signed out. Restart the app if local session cleanup failed."); }
+    }
+    finally { setLoading(false); }
+  }, []);
+  useSessionGuard(session, handleRevokedSession);
 
   const refreshLinkedAccounts = useCallback(async () => {
     if (!supabase) return "Supabase is not configured.";
@@ -424,7 +442,7 @@ export function useAuth() {
     let remoteError: string | null;
     let storageError: string | null = null;
     try {
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: "local" });
       remoteError = error?.message ?? null;
     } catch (error) {
       remoteError =

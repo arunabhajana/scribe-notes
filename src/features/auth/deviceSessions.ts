@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { supabase } from "./supabaseClient";
+export type SignOutScope = "single" | "others" | "all";
 
 export type SignedInDevice = {
   sessionId: string;
@@ -56,4 +57,19 @@ export async function getSignedInDevices(): Promise<SignedInDevice[]> {
       clientType: ["windows", "extension", "mobile", "web"].includes(row.client_type) ? row.client_type : "unknown",
       signedInAt: row.signed_in_at, lastSeenAt: row.last_seen_at, current: row.is_current };
   });
+}
+
+export async function revokeDeviceSessions(scope: SignOutScope, sessionId: string | undefined, accessToken: string): Promise<{ revokedCount: number; currentRevoked: boolean }> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase.rpc("revoke_device_sessions", { p_scope: scope, p_session_id: sessionId ?? null }).setHeader("Authorization", `Bearer ${accessToken}`).abortSignal(AbortSignal.timeout(15_000));
+  if (error) throw error;
+  if (typeof data?.revokedCount !== "number" || typeof data?.currentRevoked !== "boolean") throw new Error("Invalid sign-out response.");
+  return data;
+}
+
+export function deviceSignOutError(error: unknown) {
+  const message = typeof error === "string" ? error : error && typeof error === "object" && "message" in error ? String(error.message) : "";
+  if (/schema cache|could not find.*function|does not exist/i.test(message)) return "Device sign-out needs the latest Supabase session sign-out migration. Apply it and retry.";
+  if (/two-step|verified.*session|SCRIBE_SESSION_REVOKED/i.test(message)) return "Verify your account or sign in again before signing out devices.";
+  return "Could not confirm device sign-out. Check your connection, refresh the list, and retry.";
 }

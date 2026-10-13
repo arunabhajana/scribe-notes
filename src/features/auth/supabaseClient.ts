@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { isTauri } from "@tauri-apps/api/core";
+import { sessionAwareFetch } from "./sessionEvents";
 
 export const authStorageKey = "com.scribe.notes.supabase.auth";
 
@@ -15,6 +16,7 @@ export const supabaseConfigured = Boolean(
 
 export const supabase = supabaseConfigured
   ? createClient(supabaseUrl!, supabasePublishableKey!, {
+      global: { fetch: sessionAwareFetch },
       auth: {
         autoRefreshToken: true,
         detectSessionInUrl: !isTauri(),

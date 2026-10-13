@@ -6603,6 +6603,10 @@
 .device-inventory-empty { display: flex; align-items: center; gap: 9px; padding: 14px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .device-inventory-error { margin: 4px 0 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, #ed626d 35%, var(--border)); border-radius: 8px; color: #d95664; background: color-mix(in srgb, #ed626d 8%, var(--surface)); font-size: 11px; line-height: 1.6; }
 .settings-dark .device-inventory-error { color: #f3aab4; }
+.device-signout-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.device-signout-confirmation { display: grid; gap: 10px; margin-top: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 12px; }
+.device-signout-confirmation p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.device-signout-confirmation > div { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 600px) { .account-connection-row { flex-wrap: wrap; gap: 11px; } .account-connection-info { min-width: 130px; } .device-actions-footer { align-items: flex-start; flex-direction: column; } }
 
 .settings-tooltip-target { display: inline-flex; flex-shrink: 0; border-radius: 7px; }

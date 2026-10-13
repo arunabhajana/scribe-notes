@@ -149,7 +149,7 @@ const settingSearchIndex = [
   { label: "Two-step verification", detail: "Protect sign-in with Authy or another authenticator app.", category: "account", terms: "2fa mfa two factor authentication security" },
   { label: "Linked accounts", detail: "Link or unlink Google and GitHub sign-in providers.", category: "account", terms: "social provider google github link unlink connected" },
   { label: "Signed-in devices", detail: "View the signed-in sessions associated with your account.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout" },
-  { label: "Sign out from all devices", detail: "Device sign-out controls are coming soon.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
+  { label: "Sign out from all devices", detail: "End every sign-in session, including this device.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
   { label: "Account data", detail: "Review upcoming export and deletion controls.", category: "account", terms: "privacy export delete data" },
   { label: "Export account data", detail: "Account export is coming soon.", category: "account", terms: "download backup export" },
   { label: "Delete account", detail: "Account deletion is coming soon.", category: "account", terms: "delete remove account privacy" },
