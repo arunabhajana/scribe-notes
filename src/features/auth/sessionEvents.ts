@@ -13,7 +13,23 @@ export function notifySessionRevoked(sessionId: string, message = "Your session 
 }
 
 export async function sessionAwareFetch(input: RequestInfo | URL, init?: RequestInit) {
-  const response = await fetch(input, init);
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  // A stuck user lookup otherwise holds Auth's session lock indefinitely.
+  const userLookup = /\/auth\/v1\/user\/?$/.test(url.pathname) && (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase() === "GET";
+  const controller = userLookup ? new AbortController() : null;
+  const originalSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+  const signal = controller ? originalSignal ? AbortSignal.any([originalSignal, controller.signal]) : controller.signal : originalSignal;
+  const timer = controller ? setTimeout(() => controller.abort(), 12_000) : undefined;
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, signal });
+    if (controller) {
+      // Keep the deadline through body download, not only until headers arrive.
+      const body = await response.arrayBuffer();
+      response = new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+    }
+  }
+  finally { clearTimeout(timer); }
   if (!response.ok) {
     try {
       const body = await response.clone().json();

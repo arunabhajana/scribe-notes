@@ -33,7 +33,7 @@ export function MfaChallengePage({ mfa, onSignOut }: { mfa: MfaController; onSig
       </aside>
       <div className="auth-panel-wrap"><section className="auth-panel">
         <div className="auth-panel-heading"><span className="auth-eyebrow">TWO-STEP VERIFICATION</span>
-          <h2>Verify it’s you</h2><p>Your account has an authenticator enabled.</p></div>
+          <h2>{mfa.error ? "Check account security" : "Verify it’s you"}</h2><p>{mfa.error ? "We couldn’t confirm this session. Try checking again." : "Your account has an authenticator enabled."}</p></div>
         {mfa.error ? <><div className="auth-feedback auth-error" role="alert">{mfa.error}</div>
           <button className="auth-submit auth-recovery-submit" disabled={busy} onClick={async () => { setBusy(true); try { await mfa.refresh(); } finally { setBusy(false); } }}>{busy ? "Checking…" : "Try again"}</button></> :
           <form className="auth-form" onSubmit={(event) => void submit(event)}>

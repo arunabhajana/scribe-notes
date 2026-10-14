@@ -4,19 +4,26 @@ import { supabase } from "../features/auth/supabaseClient";
 
 export type TotpFactor = { id: string; name: string };
 export type TotpEnrollment = { id: string; qrCode: string; secret: string };
-type MfaState = { sessionKey: string; factors: TotpFactor[]; required: boolean; error: string };
+type MfaState = { sessionKey: string; factors: TotpFactor[]; confirmed: boolean; required: boolean; blockingError: boolean; error: string };
+
+function verifiedTotpFactors(factors: Session["user"]["factors"] = []): TotpFactor[] {
+  return factors.filter((factor) => factor.factor_type === "totp" && factor.status === "verified")
+    .map((factor) => ({ id: factor.id, name: factor.friendly_name || "Authenticator app" }));
+}
 
 function sessionClaims(session: Session | null) {
   try {
     const payload = session?.access_token.split(".")[1];
-    if (!payload) return { key: "", aal: "" };
+    if (!payload) return { key: "", aal: "", expires: 0 };
     const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
-    return { key: `${session!.user.id}:${claims.session_id || session!.access_token}`, aal: String(claims.aal || "") };
-  } catch { return { key: session?.access_token ?? "", aal: "" }; }
+    return { key: `${session!.user.id}:${claims.session_id || session!.access_token}`, aal: String(claims.aal || ""), expires: Number(claims.exp) || 0 };
+  } catch { return { key: session?.access_token ?? "", aal: "", expires: 0 }; }
 }
 
 function mfaError(error: unknown) {
   const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  if (error instanceof Error && (/abort|timeout|failed to fetch|network/i.test(error.message) || error.name === "AbortError"))
+    return "Account security could not be reached. Check your connection and try again.";
   if (code === "mfa_verification_failed") return "That code did not match. Try the latest code from your authenticator.";
   if (code === "mfa_factor_name_conflict") return "An authenticator already has that name. Choose a different name.";
   if (code === "too_many_enrolled_mfa_factors") return "An authenticator is already enrolled. Remove it before setting up another.";
@@ -37,37 +44,60 @@ async function securityRead<T>(operation: Promise<T>): Promise<T> {
 
 export function useMfa(session: Session | null) {
   const token = session?.access_token ?? "";
-  const { key: sessionKey, aal } = sessionClaims(session);
+  const { key: sessionKey, aal, expires } = sessionClaims(session);
+  const cachedFactors = verifiedTotpFactors(session?.user.factors);
+  const claimsRef = useRef({ aal, expires, userId: session?.user.id, factors: cachedFactors });
   const sessionKeyRef = useRef(sessionKey);
   const tokenRef = useRef(token);
   useLayoutEffect(() => {
     sessionKeyRef.current = sessionKey;
     tokenRef.current = token;
-  }, [sessionKey, token]);
+    claimsRef.current = { aal, expires, userId: session?.user.id, factors: verifiedTotpFactors(session?.user.factors) };
+  }, [sessionKey, token, aal, expires, session?.user.id, session?.user.factors]);
   const request = useRef(0);
-  const [state, setState] = useState<MfaState>({ sessionKey: "", factors: [], required: false, error: "" });
+  const [state, setState] = useState<MfaState>({ sessionKey: "", factors: [], confirmed: false, required: false, blockingError: false, error: "" });
+  const inFlight = useRef<{ token: string; promise: Promise<void> } | null>(null);
+  const lastAttempt = useRef({ key: "", time: 0 });
   const [notice, setNotice] = useState("");
 
   const refresh = useCallback(async () => {
     const expectedToken = tokenRef.current;
     const expectedKey = sessionKeyRef.current;
+    const client = supabase;
+    if (!client || !expectedToken) return;
+    if (inFlight.current?.token === expectedToken) return inFlight.current.promise;
     const id = ++request.current;
-    if (!supabase || !expectedToken) return;
-    try {
-      // listFactors fetches the user from Auth, rather than trusting old JWT metadata.
-      const factors = await securityRead(supabase.auth.mfa.listFactors());
-      if (factors.error) throw factors.error;
-      const assurance = await securityRead(supabase.auth.mfa.getAuthenticatorAssuranceLevel());
-      if (assurance.error) throw assurance.error;
-      if (id !== request.current || tokenRef.current !== expectedToken) return;
-      setState({ sessionKey: expectedKey,
-        factors: factors.data.totp.map((factor) => ({ id: factor.id, name: factor.friendly_name || "Authenticator app" })),
-        required: factors.data.all.some((factor) => factor.status === "verified") && assurance.data.currentLevel !== "aal2",
-        error: "" });
-    } catch (error) {
-      if (id === request.current && tokenRef.current === expectedToken)
-        setState({ sessionKey: expectedKey, factors: [], required: true, error: mfaError(error) });
-    }
+    lastAttempt.current = { key: expectedKey, time: Date.now() };
+    const run = async () => {
+      try {
+        // Explicit JWT avoids waiting behind Auth's refresh/session lock. One
+        // server lookup supplies factors; the current token supplies its AAL.
+        const result = await securityRead(client.auth.getUser(expectedToken));
+        if (result.error) throw result.error;
+        if (id !== request.current || tokenRef.current !== expectedToken) return;
+        if (!result.data.user || result.data.user.id !== claimsRef.current.userId)
+          throw Object.assign(new Error("The account session changed. Sign in again."), { status: 401 });
+        const factors = result.data.user.factors ?? [];
+        setState({ sessionKey: expectedKey, confirmed: true, factors: verifiedTotpFactors(factors),
+          required: factors.some((factor) => factor.status === "verified") && claimsRef.current.aal !== "aal2",
+          blockingError: false, error: "" });
+      } catch (error) {
+        if (id !== request.current || tokenRef.current !== expectedToken) return;
+        const status = typeof error === "object" && error && "status" in error ? Number(error.status) : 0;
+        const valid = claimsRef.current.expires > Date.now() / 1000;
+        setState((previous) => {
+          const sameSession = previous.sessionKey === expectedKey;
+          const confirmed = sameSession && previous.confirmed;
+          const blockingError = status === 401 || status === 403 || !valid || !confirmed;
+          return { sessionKey: expectedKey, confirmed, factors: sameSession ? previous.factors : claimsRef.current.factors,
+            required: sameSession ? previous.required : claimsRef.current.aal !== "aal2", blockingError, error: mfaError(error) };
+        });
+      }
+    };
+    const promise = run();
+    inFlight.current = { token: expectedToken, promise };
+    try { await promise; }
+    finally { if (inFlight.current?.promise === promise) inFlight.current = null; }
   }, []);
 
   useEffect(() => {
@@ -82,7 +112,10 @@ export function useMfa(session: Session | null) {
 
   useEffect(() => {
     if (!token) return;
-    const onFocus = () => void refresh();
+    const onFocus = () => {
+      if (lastAttempt.current.key === sessionKeyRef.current && Date.now() - lastAttempt.current.time < 60_000) return;
+      void refresh();
+    };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [token, refresh]);
@@ -149,9 +182,9 @@ export function useMfa(session: Session | null) {
 
   return {
     loading: Boolean(token && state.sessionKey !== sessionKey),
-    required: Boolean(token && (state.sessionKey !== sessionKey || state.error || ((state.required || session?.user.factors?.some((factor) => factor.status === "verified")) && aal !== "aal2"))),
+    required: Boolean(token && (state.sessionKey !== sessionKey || state.blockingError || (!(aal === "aal2" && expires > Date.now() / 1000) && (state.required || session?.user.factors?.some((factor) => factor.status === "verified"))))),
     error: state.sessionKey === sessionKey ? state.error : "",
-    factors: state.sessionKey === sessionKey ? state.factors : [],
+    factors: state.sessionKey === sessionKey ? state.factors : cachedFactors,
     refresh, enroll, verify, remove, cancelEnrollment, notice,
     announceEnabled,
     clearNotice,
