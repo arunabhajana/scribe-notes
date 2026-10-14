@@ -9,4 +9,6 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
 export default defineConfig({
   define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(version) },
   plugins: [react() , tailwindcss()],
+  server: { host: '127.0.0.1', strictPort: true, cors: false },
+  build: { sourcemap: false },
 })

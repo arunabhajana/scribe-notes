@@ -94,15 +94,19 @@ impl NotificationInbox {
             alerts.drain(..excess);
         }
         self.persist(&alerts)?;
-        let _ = app.emit("scribe:in-app-notification", alert);
+        let _ = app.emit_to("main", "scribe:in-app-notification", alert);
         Ok(())
     }
 }
 #[tauri::command]
 pub fn get_in_app_notifications(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
     user_id: String,
     inbox: State<'_, NotificationInbox>,
 ) -> Result<Vec<serde_json::Value>, String> {
+    crate::security::require_main(&window)?;
+    crate::security::require_account(&app, &user_id)?;
     Ok(inbox
         .alerts
         .lock()
@@ -114,10 +118,14 @@ pub fn get_in_app_notifications(
 }
 #[tauri::command]
 pub fn dismiss_in_app_notification(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
     user_id: String,
     id: String,
     inbox: State<'_, NotificationInbox>,
 ) -> Result<(), String> {
+    crate::security::require_main(&window)?;
+    crate::security::require_account(&app, &user_id)?;
     let mut alerts = inbox
         .alerts
         .lock()
@@ -128,9 +136,16 @@ pub fn dismiss_in_app_notification(
 
 #[tauri::command]
 pub fn configure_desktop_notifications(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
     config: NotificationConfig,
     service: State<'_, NotificationService>,
 ) -> Result<(), String> {
+    crate::security::require_main(&window)?;
+    if let Some(user) = &config.user_id { crate::security::require_account(&app, user)?; }
+    if config.reminders.len() > 20000 || config.reminders.iter().any(|reminder| uuid::Uuid::parse_str(&reminder.note_id).is_err() || reminder.title.len() > 8192 || reminder.lead_minutes > 60) {
+        return Err("Invalid reminder notification plan.".into());
+    }
     #[cfg(windows)]
     if config
         .user_id
@@ -147,9 +162,13 @@ pub fn configure_desktop_notifications(
 
 #[tauri::command]
 pub fn show_desktop_notification(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
     message: NotificationMessage,
     service: State<'_, NotificationService>,
 ) -> Result<(), String> {
+    if window.label() != "main" && !(window.label() == "quick-capture" && matches!(message.kind, NotificationKind::QuickCapture)) { return Err("Invalid notification window.".into()); }
+    crate::security::require_account(&app, &message.user_id)?;
     #[cfg(windows)]
     if uuid::Uuid::parse_str(&message.user_id).is_err() {
         return Err("Invalid notification account.".into());
@@ -543,6 +562,7 @@ mod windows_impl {
             let Some(user) = config.user_id.as_ref() else {
                 return Ok(());
             };
+            if crate::quick_capture::active_account(app).as_ref() != Some(user) { return Ok(()); }
             let timestamp = now();
             let mut desktop_error = None;
             for plan in &config.reminders {
@@ -730,7 +750,7 @@ mod windows_impl {
                     }
                 }
                 Ok(Work::Show(message)) => {
-                    if config.enabled && config.user_id.as_ref() == Some(&message.user_id) {
+                    if config.enabled && config.user_id.as_ref() == Some(&message.user_id) && crate::quick_capture::active_account(&app).as_ref() == Some(&message.user_id) {
                         let is_sync_error = matches!(&message.kind, NotificationKind::SyncError);
                         if is_sync_error {
                             if sync_failure.is_none() {
@@ -820,6 +840,7 @@ mod windows_impl {
                 if config.enabled
                     && config.desktop
                     && config.user_id.as_ref() == Some(user)
+                    && crate::quick_capture::active_account(&app).as_ref() == Some(user)
                     && !*sent
                     && now() - *started >= 120_000
                     && now() >= *next_attempt

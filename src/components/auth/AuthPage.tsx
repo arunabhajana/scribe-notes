@@ -325,13 +325,13 @@ export function AuthPage({
                           isSignUp ? "new-password" : "current-password"
                         }
                         required
-                        minLength={6}
+                        minLength={isSignUp ? 12 : 1}
                         maxLength={1024}
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
                         placeholder={
                           isSignUp
-                            ? "At least 6 characters"
+                            ? "At least 12 characters"
                             : "Enter your password"
                         }
                       />
@@ -370,7 +370,7 @@ export function AuthPage({
                           type={showPassword ? "text" : "password"}
                           autoComplete="new-password"
                           required
-                          minLength={6}
+                          minLength={12}
                           maxLength={1024}
                           value={confirmPassword}
                           onChange={(event) =>

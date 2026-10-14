@@ -7,6 +7,7 @@ import { needsDisplayName } from "../features/auth/accountProfile";
 import { useMfa } from "./useMfa";
 import { useDeviceSessions } from "./useDeviceSessions";
 import { useSessionGuard } from "./useSessionGuard";
+import { clearEmailIntent, hasEmailIntent, rememberEmailIntent } from "../features/auth/callbackIntent";
 import {
   authStorageKey,
   supabase,
@@ -208,6 +209,7 @@ export function useAuth() {
 
   const handleAuthCallback = useCallback(async (rawUrl: string) => {
     if (!supabase) return;
+    if (rawUrl.length > 16_384) return;
     let callback: URL;
     try {
       callback = new URL(rawUrl);
@@ -217,7 +219,7 @@ export function useAuth() {
     if (
       callback.protocol !== "com.scribe.notes:" ||
       callback.hostname !== "auth" ||
-      callback.pathname !== "/callback"
+      callback.pathname !== "/callback" || callback.username || callback.password || callback.port
     )
       return;
 
@@ -263,12 +265,26 @@ export function useAuth() {
     const refreshToken = hash.get("refresh_token");
     if (accessToken && refreshToken) {
       try {
+        // Old email templates can return implicit tokens. Validate the token on
+        // our project and bind it to an email flow started on this installation.
+        // OAuth uses PKCE above; unsolicited bearer-token links never sign in.
+        const type = params.get("type") ?? hash.get("type");
+        if (type !== "signup" && type !== "recovery") {
+          setAuthCallbackError("This sign-in link is unsupported. Start sign-in in Scribe and try again.");
+          return;
+        }
+        const verified = await supabase.auth.getUser(accessToken);
+        if (verified.error || !verified.data.user?.email || !hasEmailIntent(type, verified.data.user.email)) {
+          setAuthCallbackError("Start email confirmation or password reset in Scribe on this device, then open the new email link.");
+          return;
+        }
         const { error } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken,
         });
         setAuthCallbackError(error?.message ?? "");
         if (!error) {
+          clearEmailIntent();
           if (isRecoveryCallback) setPasswordRecoveryRequired(true);
           await refreshLinkedAccounts();
         }
@@ -384,11 +400,14 @@ export function useAuth() {
     const normalizedEmail = email.trim();
     if (!normalizedEmail) return "Enter your email address first.";
     try {
+      rememberEmailIntent("recovery", normalizedEmail);
       const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo: isTauri() ? "com.scribe.notes://auth/callback" : window.location.origin,
       });
+      if (error) clearEmailIntent();
       return error?.message ?? null;
     } catch {
+      clearEmailIntent();
       return "Could not send the reset email. Check your connection and try again.";
     }
   }, []);
@@ -396,7 +415,7 @@ export function useAuth() {
   const updateRecoveredPassword = useCallback(async (password: string) => {
     if (!supabase) return "Password reset is unavailable until Supabase is configured.";
     if (!session) return "Your reset session expired. Request a new password reset email.";
-    if (password.length < 6) return "Use at least 6 characters for your new password.";
+    if (password.length < 12) return "Use at least 12 characters for your new password.";
     try {
       const { error } = await supabase.auth.updateUser({ password });
       return error?.message ?? null;
@@ -419,6 +438,8 @@ export function useAuth() {
           confirmationRequired: false,
         };
       setAuthNotice("");
+      if (password.length < 12) return { error: "Use at least 12 characters for your password.", confirmationRequired: false };
+      rememberEmailIntent("signup", email);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -429,7 +450,8 @@ export function useAuth() {
             : window.location.origin,
         },
       });
-      if (error) return { error: error.message, confirmationRequired: false };
+      if (error) { clearEmailIntent(); return { error: error.message, confirmationRequired: false }; }
+      if (data.session) clearEmailIntent();
       return { error: null, confirmationRequired: !data.session };
     },
     [],

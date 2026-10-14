@@ -7,6 +7,7 @@ use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
 mod desktop_notifications;
 mod spelling_context_menu;
 mod quick_capture;
+mod security;
 
 #[derive(serde::Serialize)]
 struct DeviceInfo {
@@ -15,7 +16,8 @@ struct DeviceInfo {
 }
 
 #[tauri::command]
-fn get_device_info() -> DeviceInfo {
+fn get_device_info(window: tauri::WebviewWindow) -> Result<DeviceInfo, String> {
+    security::require_main(&window)?;
     let platform = match std::env::consts::OS {
         "windows" => "Windows",
         "macos" => "macOS",
@@ -27,11 +29,12 @@ fn get_device_info() -> DeviceInfo {
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "Scribe desktop".to_string());
-    DeviceInfo { name, platform: platform.to_string() }
+    Ok(DeviceInfo { name, platform: platform.to_string() })
 }
 
 #[tauri::command]
-fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+fn set_autostart_enabled(app: AppHandle, window: tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
+    security::require_main(&window)?;
     let manager = app.autolaunch();
     let result = if enabled {
         manager.enable()
@@ -42,7 +45,8 @@ fn set_autostart_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_autostart_enabled(app: AppHandle) -> Result<bool, String> {
+fn get_autostart_enabled(app: AppHandle, window: tauri::WebviewWindow) -> Result<bool, String> {
+    security::require_main(&window)?;
     app.autolaunch()
         .is_enabled()
         .map_err(|error| error.to_string())

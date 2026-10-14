@@ -2,6 +2,9 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEffect } from "react";
 import type { ShortcutBinding } from "../shortcuts/keyboardShortcuts";
 
+let accountUpdate: Promise<void> = Promise.resolve();
+export function waitForCaptureAccount() { return accountUpdate; }
+
 export async function registerCaptureShortcut(binding: ShortcutBinding) {
   if (isTauri()) await invoke("set_capture_shortcut", { binding });
 }
@@ -16,7 +19,8 @@ export async function setCaptureEnabled(enabled: boolean) {
 export function useQuickCapture(userId: string | null, binding: ShortcutBinding, enabled: boolean, showError: (message: string) => void) {
   useEffect(() => {
     if (!isTauri()) return;
-    void invoke("set_capture_account", { userId }).catch(() => showError("Quick capture could not access your account. Restart Scribe to try again."));
+    accountUpdate = invoke<void>("set_capture_account", { userId });
+    void accountUpdate.catch(() => showError("Quick capture could not access your account. Restart Scribe to try again."));
   }, [userId, showError]);
   useEffect(() => {
     let active = true;

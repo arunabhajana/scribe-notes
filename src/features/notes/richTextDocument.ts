@@ -194,11 +194,10 @@ function inlineToMarkdown(nodes: RichTextNode[]): string {
 }
 
 export function documentToMarkdown(value: unknown): string {
+  validateDocument(value);
   if (typeof value === "string") return value;
-  if (!value || typeof value !== "object") return "";
   const document = value as Partial<RichTextDocument>;
-  if (!Array.isArray(document.content)) return "";
-  return document.content
+  return document.content!
     .map((node) => {
       if (node.type === "legacyMarkdown") return node.text;
       if (node.type === "paragraph") return inlineToMarkdown(node.content);
@@ -231,4 +230,49 @@ export function documentToMarkdown(value: unknown): string {
       return "";
     })
     .join("\n\n");
+}
+
+// Cloud JSON is untrusted. Reject malformed documents before traversing them;
+// the sync caller keeps the last durable cache rather than saving an empty note.
+function validateDocument(value: unknown): void {
+  const invalid = () => { throw new Error("A cloud note has unsupported content. Your local notes were kept. Contact support before retrying this note."); };
+  if (typeof value === "string") { if (value.length > 10 * 1024 * 1024) invalid(); return; }
+  const record = (item: unknown): Record<string, unknown> => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) invalid();
+    return item as Record<string, unknown>;
+  };
+  const doc = record(value);
+  if (doc.type !== "doc" || doc.version !== 1 || !Array.isArray(doc.content)) invalid();
+  const children: Record<string, string[]> = {
+    doc: ["paragraph", "heading", "codeBlock", "blockquote", "bulletList", "orderedList", "taskList", "legacyMarkdown"],
+    paragraph: ["text", "hardBreak"], heading: ["text", "hardBreak"], codeBlock: ["text"],
+    blockquote: ["paragraph"], bulletList: ["listItem"], orderedList: ["listItem"], taskList: ["taskItem"],
+    listItem: ["paragraph"], taskItem: ["paragraph"],
+  };
+  const stack = (doc.content as unknown[]).map((item) => ({ item, depth: 1, parent: "doc" }));
+  let nodes = 0, characters = 0;
+  while (stack.length) {
+    const entry = stack.pop()!;
+    if (++nodes > 200_000 || entry.depth > 32) invalid();
+    const node = record(entry.item);
+    if (!children[entry.parent]?.includes(String(node.type))) invalid();
+    if (node.type === "text" || node.type === "legacyMarkdown") {
+      if (typeof node.text !== "string") invalid();
+      characters += (node.text as string).length;
+      if (characters > 10 * 1024 * 1024) invalid();
+      if (node.marks !== undefined) {
+        if (!Array.isArray(node.marks) || node.marks.length > 16) invalid();
+        for (const item of node.marks as unknown[]) {
+          const mark = record(item);
+          if (!["bold", "italic", "code", "link"].includes(String(mark.type))) invalid();
+          if (mark.type === "link" && typeof record(mark.attrs).href !== "string") invalid();
+        }
+      }
+    } else if (node.type !== "hardBreak") {
+      if (!["paragraph", "heading", "codeBlock", "blockquote", "bulletList", "orderedList", "taskList", "listItem", "taskItem"].includes(String(node.type)) || !Array.isArray(node.content)) invalid();
+      if (node.type === "heading" && ![1, 2, 3].includes(record(node.attrs).level as number)) invalid();
+      if (node.type === "taskItem" && typeof record(node.attrs).checked !== "boolean") invalid();
+      for (const item of node.content as unknown[]) stack.push({ item, depth: entry.depth + 1, parent: String(node.type) });
+    }
+  }
 }

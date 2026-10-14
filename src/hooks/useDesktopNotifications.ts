@@ -49,7 +49,7 @@ export function useDesktopNotifications({ userId, notes, reminders, ready, deskt
       if (note.deletedAt || !reminder?.dueAt) return [];
       const dueAt = Date.parse(reminder.dueAt); const updatedAt = Date.parse(reminder.updatedAt);
       return Number.isFinite(dueAt) && Number.isFinite(updatedAt)
-        ? [{ noteId: note.id, title: note.title, dueAt, updatedAt, leadMinutes: reminder.leadMinutes }] : [];
+        ? [{ noteId: note.id, title: note.title.slice(0, 500), dueAt, updatedAt, leadMinutes: reminder.leadMinutes }] : [];
     }) : [] });
   const recovery = useRef<{ userId: string | null; failed: boolean; error: string | null }>({ userId: null, failed: false, error: null });
   useEffect(() => {

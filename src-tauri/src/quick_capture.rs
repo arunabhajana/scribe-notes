@@ -382,6 +382,9 @@ pub fn set_capture_account(
     if window.label() != "main" {
         return Err("Account changes must come from Scribe.".into());
     }
+    if user_id.as_ref().is_some_and(|id| uuid::Uuid::parse_str(id).is_err()) {
+        return Err("Invalid capture account.".into());
+    }
     *app.state::<CaptureState>()
         .user_id
         .lock()
@@ -393,8 +396,13 @@ pub fn set_capture_account(
 }
 
 #[tauri::command]
-pub fn get_capture_account(app: AppHandle) -> Option<String> {
-    app.state::<CaptureState>()
+pub fn get_capture_account(app: AppHandle, window: tauri::WebviewWindow) -> Result<Option<String>, String> {
+    if !["main", "quick-capture"].contains(&window.label()) { return Err("Invalid Scribe window.".into()); }
+    Ok(active_account(&app))
+}
+
+pub fn active_account(app: &AppHandle) -> Option<String> {
+    app.try_state::<CaptureState>()?
         .user_id
         .lock()
         .ok()
@@ -411,7 +419,8 @@ pub fn capture_saved(
     if window.label() != "quick-capture" {
         return Err("Invalid capture window.".into());
     }
-    if get_capture_account(app.clone()).as_deref() != Some(user_id.as_str()) {
+    if uuid::Uuid::parse_str(&note_id).is_err() { return Err("Invalid captured note.".into()); }
+    if active_account(&app).as_deref() != Some(user_id.as_str()) {
         return Err("Your account changed. Open Scribe to finish saving.".into());
     }
     app.emit_to(

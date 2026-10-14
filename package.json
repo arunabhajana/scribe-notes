@@ -1,13 +1,16 @@
 {
   "name": "scribe-windows",
   "private": true,
+  "license": "MIT",
   "version": "0.1.1",
   "type": "module",
   "scripts": {
     "sync:version": "node scripts/sync-version.mjs",
     "version": "npm run sync:version",
     "predev": "npm run sync:version",
-    "prebuild": "npm run sync:version",
+    "security:config": "node scripts/check-production-security.mjs",
+    "security:check": "node scripts/security-regressions.mjs && node scripts/security-secrets.mjs",
+    "prebuild": "npm run sync:version && npm run security:config",
     "pretauri": "npm run sync:version",
     "dev": "vite",
     "build": "tsc -b && vite build",

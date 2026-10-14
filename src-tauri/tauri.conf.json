@@ -23,7 +23,14 @@
             }
         ],
         "security": {
-            "csp": null
+            "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://yyhjxemoxkelswrakabm.supabase.co wss://yyhjxemoxkelswrakabm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; frame-ancestors 'none'",
+            "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost http://localhost:5173 ws://localhost:5173 https://yyhjxemoxkelswrakabm.supabase.co wss://yyhjxemoxkelswrakabm.supabase.co; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'",
+            "headers": {
+                "X-Content-Type-Options": "nosniff",
+                "Cross-Origin-Opener-Policy": "same-origin",
+                "Cross-Origin-Resource-Policy": "same-origin",
+                "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+            }
         }
     },
     "plugins": {
