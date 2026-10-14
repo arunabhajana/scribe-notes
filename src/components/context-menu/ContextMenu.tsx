@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { StatusToast } from "../feedback/LoadingFeedback";
+import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 import { MenuContext, type ContextMenuItem } from "./contextMenuState";
 type Menu = { x: number; y: number; items: ContextMenuItem[]; target: HTMLElement | null };
@@ -14,11 +16,19 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     setMenu(items.length ? { x: x || rect?.left || 8, y: y || rect?.bottom || 8, items, target: target ?? null } : null);
   };
   useEffect(() => {
-    const handler = (event: MouseEvent) => {
+    let pendingNative: MouseEvent | null = null;
+    let active = true;
+    let unlisten: (() => void) | undefined;
+    const handler = (event: MouseEvent, nativeResolved = false) => {
       if (event.defaultPrevented) return;
-      event.preventDefault();
       const target = event.target as HTMLElement;
       const input = target.closest<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
+      if (!nativeResolved && isTauri() && input?.spellcheck && !input.readOnly && !input.disabled && !["password", "checkbox", "radio", "button", "submit"].includes(input.type)) {
+        pendingNative = event;
+        setMenu(null);
+        return;
+      }
+      event.preventDefault();
       const selection = window.getSelection()?.toString() ?? "";
       if (input && !["password", "checkbox", "radio", "button", "submit"].includes(input.type)) {
         const start = input.selectionStart ?? 0, end = input.selectionEnd ?? 0;
@@ -40,8 +50,14 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
         open(event.clientX, event.clientY, [{ label: "Copy", action: () => navigator.clipboard.writeText(selection) }], target);
       } else setMenu(null);
     };
-    document.addEventListener("contextmenu", handler);
-    return () => document.removeEventListener("contextmenu", handler);
+    const onContextMenu = (event: MouseEvent) => handler(event);
+    if (isTauri()) void listen("scribe:editable-context-menu", () => {
+      const event = pendingNative;
+      pendingNative = null;
+      if (active && event && (event.target as HTMLElement).isConnected && performance.now() - event.timeStamp < 1500) handler(event, true);
+    }).then((stop) => { if (active) unlisten = stop; else stop(); }).catch(() => undefined);
+    document.addEventListener("contextmenu", onContextMenu);
+    return () => { active = false; unlisten?.(); document.removeEventListener("contextmenu", onContextMenu); };
   }, []);
   useEffect(() => {
     if (!menu) return;

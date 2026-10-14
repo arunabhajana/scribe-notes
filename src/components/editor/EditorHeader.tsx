@@ -4,6 +4,7 @@ import { formatReminderTime, type NoteReminder } from "../../features/reminders/
 import type { Note, NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
 import "./editorHeader.css";
+import { useWritingPreferences } from "../../features/settings/writingPreferences";
 
 export function EditorHeader({
   note,
@@ -35,6 +36,7 @@ export function EditorHeader({
   onSetReminder: () => void;
 }) {
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const [writingPreferences] = useWritingPreferences();
   const [titleEditing, setTitleEditing] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -49,6 +51,7 @@ export function EditorHeader({
           <input
             ref={titleInputRef}
             className="note-title-input"
+            spellCheck={writingPreferences.spellcheck}
             value={note.title}
             onChange={(event) => onUpdateTitle(event.target.value)}
             onBlur={() => setTitleEditing(false)}

@@ -5,6 +5,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
 mod desktop_notifications;
+mod spelling_context_menu;
 
 #[derive(serde::Serialize)]
 struct DeviceInfo {
@@ -72,6 +73,7 @@ pub fn run() {
             desktop_notifications::dismiss_in_app_notification
         ])
         .setup(|app| {
+            spelling_context_menu::initialize(app.handle())?;
             desktop_notifications::initialize(app.handle())?;
             #[cfg(all(debug_assertions, windows))]
             {
