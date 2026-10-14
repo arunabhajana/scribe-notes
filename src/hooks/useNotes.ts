@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { User } from "@supabase/supabase-js";
 import { sortNotes } from "../features/notes/noteSorting";
 import { useNoteSortPreferences } from "./useNoteSortPreferences";
@@ -325,6 +327,34 @@ export function useNotes(
     }
   }, [user, configured, offlineMode, online, notesForUser, beginWrite, hasPendingSync]);
   useEffect(() => { flushOutboxRef.current = (forcePull = false) => { void flushOutbox(forcePull); }; }, [flushOutbox]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!isTauri() || !userId || !configured || loadedForUser !== userId) return;
+    let active = true;
+    const reconcile = async (id?: string) => {
+      try {
+        const found = id ? [await offlineStore.getNote(userId, id)] : (await offlineStore.load(userId)).notes;
+        if (!active || activeUserId.current !== userId) return;
+        const added = found.filter((note): note is Note => Boolean(note && !note.deletedAt && !notesRef.current.some((existing) => existing.id === note.id)));
+        if (!added.length) return;
+        for (const note of added) editGeneration.current.set(`note:${note.id}`, 1);
+        setNotes((current) => [...added.filter((note) => !current.some((existing) => existing.id === note.id)), ...current]);
+        setHasPendingSync(true);
+        // Reuse the normal batching, lease and editing protection. No new sync
+        // client or cloud read is started by the capture window.
+        window.setTimeout(() => flushOutboxRef.current(), 180);
+      } catch { if (active) setError("Could not load a captured note. It is saved locally; reopen Scribe to try again."); }
+    };
+    const listener = listen<{ userId: string; noteId: string }>("scribe:capture-saved", ({ payload }) => {
+      if (payload.userId === userId) void reconcile(payload.noteId);
+    });
+    const onFocus = () => { void reconcile(); };
+    window.addEventListener("focus", onFocus);
+    // Covers a capture committed before this listener finished installing.
+    void listener.then(() => { if (active) void reconcile(); });
+    return () => { active = false; window.removeEventListener("focus", onFocus); void listener.then((unlisten) => unlisten()); };
+  }, [user?.id, configured, loadedForUser]);
 
   useEffect(() => {
     const updateOnlineStatus = () => setOnline(navigator.onLine);

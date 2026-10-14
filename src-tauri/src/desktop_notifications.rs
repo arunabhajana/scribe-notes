@@ -38,6 +38,7 @@ pub enum NotificationKind {
 pub struct NotificationMessage {
     kind: NotificationKind,
     user_id: String,
+    in_app: Option<bool>,
 }
 
 enum Work {
@@ -454,7 +455,7 @@ mod windows_impl {
             let logo_uri = tauri::Url::from_file_path(&self.logo)
                 .map_err(|_| "Could not locate the notification logo")?;
             let content = format!(
-                "<toast activationType=\"protocol\" launch=\"{}\"><visual><binding template=\"ToastGeneric\"><image placement=\"appLogoOverride\" src=\"{}\"/><text>{}</text><text>{}</text>{}</binding></visual>{}{}</toast>",
+                "<toast duration=\"long\" activationType=\"protocol\" launch=\"{}\"><visual><binding template=\"ToastGeneric\"><image placement=\"appLogoOverride\" src=\"{}\"/><text>{}</text><text>{}</text>{}</binding></visual>{}{}</toast>",
                 xml(uri),
                 xml(logo_uri.as_str()),
                 xml(title),
@@ -469,6 +470,7 @@ mod windows_impl {
                 .map_err(|e| e.to_string())?;
             let toast =
                 ToastNotification::CreateToastNotification(&document).map_err(|e| e.to_string())?;
+            toast.SetSuppressPopup(false).map_err(|e| format!("Enable notification banner: {e}"))?;
             toast
                 .SetTag(&HSTRING::from(tag))
                 .map_err(|e| e.to_string())?;
@@ -767,8 +769,14 @@ mod windows_impl {
                                 message.user_id
                             );
                             let alert_id = key(&[&message.user_id, tag, &now().to_string()]);
-                            if let Err(error) = inbox.publish(&app, serde_json::json!({ "id": alert_id,
-                                "userId": message.user_id, "kind": tag, "title": title, "body": body, "createdAt": now() })) { report(&config, &error); }
+                            let foreground = app_focused(&app) || (tag == "quick-capture" && message.in_app.unwrap_or(false));
+                            let alert = serde_json::json!({ "id": alert_id,
+                                "userId": message.user_id, "kind": tag, "title": title, "body": body, "createdAt": now() });
+                            // Capture success is transient feedback: use one route.
+                            // Reminders and sync issues still retain their inbox.
+                            if tag != "quick-capture" || foreground || !config.desktop {
+                                if let Err(error) = inbox.publish(&app, alert.clone()) { report(&config, &error); }
+                            }
                             if tag == "quick-capture" {
                                 play_sound(tag, config.sound);
                             }
@@ -776,7 +784,7 @@ mod windows_impl {
                                 native.record(id.clone());
                             }
                             if !config.desktop
-                                || app_focused(&app)
+                                || foreground
                                 || tag == "sync-restored"
                                 || is_sync_error
                             {
@@ -791,8 +799,11 @@ mod windows_impl {
                                         }
                                     }
                                 }
-                                Ok(false) => {}
+                                Ok(false) => {
+                                    if tag == "quick-capture" { let _ = inbox.publish(&app, alert.clone()); }
+                                }
                                 Err(error) => {
+                                    if tag == "quick-capture" { let _ = inbox.publish(&app, alert); }
                                     report(&config, &error);
                                 }
                             }

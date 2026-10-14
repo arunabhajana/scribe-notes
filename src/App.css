@@ -3794,6 +3794,8 @@
 .app-tooltip-right {
   transform: translateY(-50%);
 }
+.app-tooltip-bottom { transform: translate(-50%, 0); }
+.app-tooltip-bottom::after { content: ""; position: absolute; width: 6px; height: 6px; top: -4px; left: var(--tooltip-arrow-left, calc(50% - 3px)); background: inherit; border-top: 1px solid #454650; border-left: 1px solid #454650; transform: rotate(45deg); }
 .app-tooltip-top::after,
 .app-tooltip-right::after {
   position: absolute;

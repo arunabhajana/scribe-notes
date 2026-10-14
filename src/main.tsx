@@ -1,12 +1,11 @@
 import { ContextMenuProvider } from "./components/context-menu/ContextMenu";
-import { StrictMode } from "react";
+import { StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import App from "./App.tsx";
-import { AutoRevealValidation } from "./components/layout/AutoRevealValidation";
+import Surface from "./Surface";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ContextMenuProvider><App /><AutoRevealValidation /></ContextMenuProvider>
+    <Suspense fallback={null}><ContextMenuProvider><Surface /></ContextMenuProvider></Suspense>
   </StrictMode>,
 );

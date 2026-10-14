@@ -12,12 +12,13 @@ function localFields(value: Date) {
   return { date: `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`, time: `${pad(value.getHours())}:${pad(value.getMinutes())}` };
 }
 
-export function ReminderDialog({ reminder, defaultLead, pending, offline, cloudError, onSave, onClose }: {
+export function ReminderDialog({ reminder, defaultLead, pending, offline, cloudError, saveHint, onSave, onClose }: {
   reminder?: NoteReminder;
   defaultLead: number;
   pending: boolean;
   offline: boolean;
   cloudError: string | null;
+  saveHint?: string;
   onSave: (dueAt: string | null, leadMinutes: number) => Promise<string | null>;
   onClose: () => void;
 }) {
@@ -71,6 +72,7 @@ export function ReminderDialog({ reminder, defaultLead, pending, offline, cloudE
   }}>
     <form ref={form} tabIndex={-1} className="folder-modal reminder-modal" role="dialog" aria-modal="true" aria-labelledby="reminder-dialog-title" onSubmit={(event) => { void submit(event); }} onKeyDown={(event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); if (!busy) onClose(); }
+      if (event.ctrlKey && event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); event.stopPropagation(); if (!busy) form.current?.requestSubmit(); }
       if (event.key === "Tab") {
         const controls = form.current?.querySelectorAll<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), input:not(:disabled)');
         if (!controls?.length) return;
@@ -109,7 +111,7 @@ export function ReminderDialog({ reminder, defaultLead, pending, offline, cloudE
       <fieldset className="reminder-lead" disabled={busy}><legend>Also remind me before</legend><div>
         {[0, 5, 10, 15, 30, 60].map((minutes) => <button key={minutes} type="button" aria-pressed={lead === minutes} onClick={() => setLead(minutes)}>{minutes === 0 ? "At the time" : `${minutes}m before`}</button>)}
       </div></fieldset>
-      <p className="reminder-help">{offline ? "Saves on this device and syncs when you go online." : "Saves on this device immediately, then syncs to your account."}</p>
+      <p className="reminder-help">{saveHint ?? (offline ? "Saves on this device and syncs when you go online." : "Saves on this device immediately, then syncs to your account.")}</p>
       {cloudError && <p className="reminder-cloud-issue" role="status">{cloudError}</p>}
       {error && <p className="folder-error" role="alert">{error}</p>}
       <div className="modal-actions reminder-dialog-actions">

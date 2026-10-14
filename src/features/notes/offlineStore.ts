@@ -92,6 +92,27 @@ function transactionDone(transaction: IDBTransaction) {
 }
 
 export const offlineStore = {
+  async loadFolders(userId: string): Promise<NoteFolder[]> {
+    const db = await openDatabase();
+    const request = db.transaction("folders", "readonly").objectStore("folders").index("userId").getAll(userId) as IDBRequest<CacheFolder[]>;
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result.map(({ key: _key, userId: _owner, ...folder }) => { void _key; void _owner; return folder; }).sort((a, b) => a.sortOrder - b.sortOrder));
+      request.onerror = () => reject(request.error);
+    });
+  },
+  async getNote(userId: string, id: string): Promise<Note | null> {
+    const db = await openDatabase();
+    const request = db.transaction("notes", "readonly").objectStore("notes").get(rowKey(userId, id)) as IDBRequest<CacheNote | undefined>;
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => {
+        if (!request.result) { resolve(null); return; }
+        const { key: _key, userId: _userId, ...note } = request.result;
+        void _key; void _userId;
+        resolve(note);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  },
   // Only use for a definite server rollback (such as quota rejection), never
   // for network failures where the server might have committed the receipt.
   async rejectBatch(userId: string, batchId: string) {

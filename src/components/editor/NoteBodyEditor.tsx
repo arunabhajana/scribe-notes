@@ -2,6 +2,7 @@ import { useWritingPreferences } from "../../features/settings/writingPreference
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import type { KeyboardEvent } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { LinkPreviews } from "./LinkPreviews";
 import { BookOpen, Pencil } from "lucide-react";
 import { continueMarkdownList } from "./markdownFormatting";
 import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
@@ -115,6 +116,7 @@ export function NoteBodyEditor({
               value={value}
               onToggleTask={readOnly ? undefined : toggleTask}
             />
+            <LinkPreviews value={value} />
 
           </div>
         ) : (

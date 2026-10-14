@@ -5,7 +5,7 @@ type TooltipState = {
   text: string;
   left: number;
   top: number;
-  placement: "top" | "right";
+  placement: "top" | "bottom" | "right";
   target: Element;
 };
 
@@ -26,11 +26,14 @@ export function TooltipLayer() {
         left: rect ? rect.left + rect.width / 2 : tooltip.left,
       };
     }
-    if (next.placement === "top") {
+    if (next.placement === "top" || next.placement === "bottom") {
+      const targetBounds = tooltip.target.getBoundingClientRect();
+      const below = next.placement === "bottom" || targetBounds.top < bounds.height + safeGap + 10;
       next = {
         ...next,
+        placement: below ? "bottom" : "top",
         left: Math.max(bounds.width / 2 + safeGap, Math.min(window.innerWidth - bounds.width / 2 - safeGap, next.left)),
-        top: Math.max(bounds.height + safeGap, Math.min(window.innerHeight - safeGap, next.top)),
+        top: below ? Math.min(window.innerHeight - bounds.height - safeGap, targetBounds.bottom + safeGap) : Math.max(bounds.height + safeGap, Math.min(window.innerHeight - safeGap, next.top)),
       };
       const targetCenter = tooltip.target.getBoundingClientRect().left + tooltip.target.getBoundingClientRect().width / 2;
       const arrowLeft = Math.max(10, Math.min(bounds.width - 16, targetCenter - (next.left - bounds.width / 2) - 3));
@@ -88,6 +91,8 @@ export function TooltipLayer() {
     document.addEventListener("pointerout", move);
     document.addEventListener("focusin", schedule);
     document.addEventListener("focusout", hide);
+    document.addEventListener("pointerdown", hide);
+    window.addEventListener("blur", hide);
     window.addEventListener("scroll", hide, true);
     window.addEventListener("resize", hide);
     return () => {
@@ -97,6 +102,8 @@ export function TooltipLayer() {
       document.removeEventListener("pointerout", move);
       document.removeEventListener("focusin", schedule);
       document.removeEventListener("focusout", hide);
+      document.removeEventListener("pointerdown", hide);
+      window.removeEventListener("blur", hide);
       window.removeEventListener("scroll", hide, true);
       window.removeEventListener("resize", hide);
     };

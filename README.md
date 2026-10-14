@@ -45,6 +45,16 @@ The version lifecycle script updates `src-tauri/Cargo.toml` and the app entry in
 - Keyboard shortcuts for common actions.
 - Windows-native desktop integration through Tauri.
 
+### Quick capture
+
+Press **Ctrl + Shift + Space** from any app to open the capture window. Scribe must be running; it can be minimized or in the system tray. Customize this global shortcut in **Settings → Keyboard shortcuts**; the binding is saved on this device.
+
+Add an optional title and your note, choose a folder or reminder if needed, then press **Ctrl + Enter** or **Save note**. The note and its reminder are saved on this device before entering the existing cloud sync queues. **Esc** or the close button keeps your unfinished capture, folder and reminder locally for the next time you open it. Drafts are kept separately for each account. Quick capture requires a signed-in account and does not bypass two-step verification.
+
+Use **Tab / Shift + Tab** to navigate, and arrow keys to choose a folder. Smart paste preserves copied links; paste a URL over selected text to make a Markdown link. **Ctrl + Shift + V** pastes plain text. Capture uses your notification and sound preferences: in-app feedback when returning to a focused Scribe window, or a desktop notification when capturing from another app.
+
+Capture reminders use a compact date/time picker and the default reminder lead time from settings. Links appear as local preview cards in capture and reading mode, without background requests for website metadata or images.
+
 ### Cloud and account support
 - Supabase authentication.
 - Cloud-backed notes and folder storage.

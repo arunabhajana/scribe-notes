@@ -15,6 +15,12 @@ export function AppNotifications({ alerts, onDismiss, onOpen }: {
     const timer = window.setTimeout(() => { void onDismiss(restoredId); }, 6000);
     return () => window.clearTimeout(timer);
   }, [restoredId, onDismiss]);
+  const captureId = alerts.find((alert) => alert.kind === "quick-capture")?.id;
+  useEffect(() => {
+    if (!captureId) return;
+    const timer = window.setTimeout(() => { void onDismiss(captureId); }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [captureId, onDismiss]);
   const cards = alerts.filter((alert) => alert.kind !== "sync-error" && alert.kind !== "sync-restored");
   if (!alerts.length) return null;
   return <section className="app-notification-stack" aria-label="Notifications" aria-live="polite" aria-relevant="additions">
@@ -23,7 +29,7 @@ export function AppNotifications({ alerts, onDismiss, onOpen }: {
       <div><strong>{syncAlert.title}</strong><p>{syncAlert.body}</p></div>
       <button type="button" className="app-notification-close" aria-label="Dismiss sync notification" onClick={() => { void onDismiss(syncAlert.id); }}><X size={15} /></button>
     </div>}
-    {cards.length > 3 && <span className="app-notification-count">{cards.length} reminders · dismiss to see more</span>}
+    {cards.length > 3 && <span className="app-notification-count">{cards.length} notifications · dismiss to see more</span>}
     {cards.slice(-3).reverse().map((alert) => <article className={`app-notification is-${alert.kind}`} key={alert.id}>
       <header><AppLogo variant="transparent" /><span>Scribe</span>
         <span className="app-notification-category">{alert.kind === "reminder" ? <><Bell size={12} />Reminder</> : alert.kind === "sync-error" ? <><CloudOff size={12} />Sync error</> : <><CheckCircle2 size={12} />{alert.kind === "sync-restored" ? "Sync restored" : "Captured"}</>}</span>

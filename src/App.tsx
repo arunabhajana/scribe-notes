@@ -8,6 +8,7 @@ import { EditorPane } from "./components/editor/EditorPane";
 import { NotesPane } from "./components/notes/NotesPane";
 import { Sidebar } from "./components/layout/Sidebar";
 import { useNotes } from "./hooks/useNotes";
+import { registerCaptureShortcut, useQuickCapture } from "./features/capture/captureBridge";
 import { useReminders } from "./hooks/useReminders";
 import { useDesktopNotifications, useNotificationActivation } from "./hooks/useDesktopNotifications";
 import type { NotificationTarget } from "./features/notifications/desktopNotifications";
@@ -116,6 +117,7 @@ function App() {
     showNoteError, selectNoteSection, selectNoteId, clearNoteSearch]);
   const [shortcuts, setShortcuts] =
     useState<ShortcutBindings>(getShortcutBindings);
+  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, showNoteError);
   const [accent, setAccent] = useState<AccentColor>(
     () => (localStorage.getItem("scribe-accent") as AccentColor) || "violet",
   );
@@ -248,9 +250,15 @@ function App() {
     linkedAccountsError: auth.linkedAccountsError,
   };
 
-  const changeShortcuts = (value: ShortcutBindings) => {
+  const changeShortcuts = async (value: ShortcutBindings) => {
+    const globalChanged = value.quickCapture.key !== shortcuts.quickCapture.key || value.quickCapture.shift !== shortcuts.quickCapture.shift;
+    if (globalChanged) await registerCaptureShortcut(value.quickCapture);
+    try { localStorage.setItem("scribe-keyboard-shortcuts", JSON.stringify(value)); }
+    catch {
+      if (globalChanged) await registerCaptureShortcut(shortcuts.quickCapture).catch(() => undefined);
+      throw "Could not save shortcuts on this device. Check local storage and try again.";
+    }
     setShortcuts(value);
-    localStorage.setItem("scribe-keyboard-shortcuts", JSON.stringify(value));
   };
 
   const toggleSidebar = useCallback(() => {
@@ -280,7 +288,7 @@ function App() {
       )
         return;
       const action = shortcutActions.find((item) =>
-        matchesShortcut(event, shortcuts[item.id]),
+        item.id !== "quickCapture" && matchesShortcut(event, shortcuts[item.id]),
       );
       if (!action) return;
       event.preventDefault();

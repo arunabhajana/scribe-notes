@@ -1,4 +1,5 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
+import { pauseCaptureShortcut } from "../../features/capture/captureBridge";
 import { AppLogo } from "../AppLogo";
 import { MfaSettings } from "./MfaSettings";
 import { SignedInDevices } from "./SignedInDevices";
@@ -686,13 +687,19 @@ function KeyboardShortcutSettings({
   onChange,
 }: {
   shortcuts: ShortcutBindings;
-  onChange: (value: ShortcutBindings) => void;
+  onChange: (value: ShortcutBindings) => Promise<void>;
 }) {
   const [recording, setRecording] = useState<ShortcutId | null>(null);
   const [error, setError] = useState("");
+  const applying = useRef(false);
   useEffect(() => {
     if (!recording) return;
-    const capture = (event: KeyboardEvent) => {
+    let disposed = false;
+    let paused = false;
+    void pauseCaptureShortcut(true).then(() => { paused = true; }).catch(() => {
+      if (!disposed) setError("Could not pause the global shortcut for recording. Try again.");
+    });
+    const capture = async (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setRecording(null);
         setError("");
@@ -702,8 +709,9 @@ function KeyboardShortcutSettings({
       if (!command || event.altKey || event.key.length !== 1) return;
       event.preventDefault();
       event.stopPropagation();
+      if (!paused || applying.current) return;
       const key = event.key.toLowerCase();
-      if ((key === "b" || key === "i") && !event.shiftKey) {
+      if ((key === "b" || key === "i" || key === "u") && !event.shiftKey) {
         setError(
           `${getModifierLabel()} + ${key.toUpperCase()} is reserved for text formatting.`,
         );
@@ -719,12 +727,22 @@ function KeyboardShortcutSettings({
         setError(`That shortcut is already assigned to ${conflict.label}.`);
         return;
       }
-      onChange({ ...shortcuts, [recording]: { key, shift: event.shiftKey } });
-      setRecording(null);
-      setError("");
+      try {
+        applying.current = true;
+        await onChange({ ...shortcuts, [recording]: { key, shift: event.shiftKey } });
+        setRecording((current) => current === recording ? null : current); setError("");
+      } catch (cause) {
+        if (!disposed) setError(typeof cause === "string" ? cause : "Could not save this shortcut. Try another combination.");
+      } finally { applying.current = false; }
     };
     window.addEventListener("keydown", capture, true);
-    return () => window.removeEventListener("keydown", capture, true);
+    return () => {
+      disposed = true;
+      window.removeEventListener("keydown", capture, true);
+      void pauseCaptureShortcut(false).catch((cause: unknown) => {
+        window.dispatchEvent(new CustomEvent("scribe:capture-shortcut-error", { detail: typeof cause === "string" ? cause : "Quick capture could not restore its shortcut. Choose another in Settings." }));
+      });
+    };
   }, [recording, shortcuts, onChange]);
 
   return (
@@ -794,7 +812,7 @@ function KeyboardShortcutSettings({
         className="shortcut-reset-button"
         data-tooltip="Restore all app shortcuts to their defaults"
         onClick={() => {
-          onChange(defaultShortcutBindings);
+          void onChange(defaultShortcutBindings).catch((cause: unknown) => setError(typeof cause === "string" ? cause : "Could not restore shortcuts. Try again."));
           setRecording(null);
           setError("");
         }}
@@ -1063,7 +1081,7 @@ function CategoryContent({
   fontFamily: string;
   onFontFamilyChange: (value: string) => void;
   shortcuts: ShortcutBindings;
-  onShortcutsChange: (value: ShortcutBindings) => void;
+  onShortcutsChange: (value: ShortcutBindings) => Promise<void>;
   offlineMode: boolean;
   onOfflineModeChange: (enabled: boolean) => void;
   storageMetrics: StorageMetrics;
@@ -1446,7 +1464,7 @@ export function SettingsPage({
   onToggleTheme: (value: boolean) => void;
   onClose: () => void;
   shortcuts: ShortcutBindings;
-  onShortcutsChange: (value: ShortcutBindings) => void;
+  onShortcutsChange: (value: ShortcutBindings) => Promise<void>;
   offlineMode: boolean;
   onOfflineModeChange: (enabled: boolean) => void;
   storageMetrics: StorageMetrics;

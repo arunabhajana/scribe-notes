@@ -1,4 +1,5 @@
 export const shortcutActions = [
+  { id: "quickCapture", label: "Quick capture · Global", description: "Capture a note from any app while Scribe is running, including in the system tray." },
   { id: "toggleEditMode", label: "Toggle editing / reading mode", description: "Switch the selected note between editing and reading mode." },
   { id: "newNote", label: "New Note", description: "Start a new Note." },
   { id: "search", label: "Search Notes", description: "Focus Note search." },
@@ -36,6 +37,7 @@ export type ShortcutBinding = { key: string; shift: boolean };
 export type ShortcutBindings = Record<ShortcutId, ShortcutBinding>;
 
 export const defaultShortcutBindings: ShortcutBindings = {
+  quickCapture: { key: " ", shift: true },
   toggleEditMode: { key: "e", shift: false },
   newNote: { key: "n", shift: false },
   search: { key: "k", shift: false },
@@ -94,7 +96,7 @@ export function getAltModifierLabel() {
 }
 
 export function formatShortcut(binding: ShortcutBinding) {
-  return `${getModifierLabel()} + ${binding.shift ? "Shift + " : ""}${binding.key === "," ? "," : binding.key.toUpperCase()}`;
+  return `${getModifierLabel()} + ${binding.shift ? "Shift + " : ""}${binding.key === " " ? "Space" : binding.key.toUpperCase()}`;
 }
 
 export function matchesShortcut(

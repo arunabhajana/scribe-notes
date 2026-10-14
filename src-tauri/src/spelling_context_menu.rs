@@ -1,9 +1,14 @@
 use tauri::{AppHandle, Manager};
 
 pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
+    initialize_window(app, "main")
+}
+
+pub fn initialize_window(app: &AppHandle, label: &str) -> tauri::Result<()> {
     #[cfg(windows)]
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(label) {
         let handle = app.clone();
+        let label = label.to_string();
         window.with_webview(move |webview| {
             use tauri::Emitter;
             use webview2_com::{
@@ -60,7 +65,7 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
                                 }
                             } else {
                                 args.SetHandled(true)?;
-                                let _ = handle.emit("scribe:editable-context-menu", ());
+                                let _ = handle.emit_to(&label, "scribe:editable-context-menu", ());
                             }
                             Ok(())
                         }));

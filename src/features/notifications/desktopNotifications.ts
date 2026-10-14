@@ -21,8 +21,8 @@ export async function notifySyncError(userId: string) {
   if (isTauri()) await invoke("show_desktop_notification", { message: { kind: "syncError", userId } });
 }
 // Call this only AFTER quick capture's local save commits, when that feature is added.
-export async function notifyQuickCaptureSaved(userId: string) {
-  if (isTauri()) await invoke("show_desktop_notification", { message: { kind: "quickCapture", userId } });
+export async function notifyQuickCaptureSaved(userId: string, inApp?: boolean) {
+  if (isTauri()) await invoke("show_desktop_notification", { message: { kind: "quickCapture", userId, inApp } });
 }
 
 export type NotificationTarget = { userId: string; noteId: string | null };

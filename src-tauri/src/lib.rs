@@ -6,6 +6,7 @@ use tauri::{
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
 mod desktop_notifications;
 mod spelling_context_menu;
+mod quick_capture;
 
 #[derive(serde::Serialize)]
 struct DeviceInfo {
@@ -67,6 +68,13 @@ pub fn run() {
             set_autostart_enabled,
             get_autostart_enabled,
             get_device_info,
+            quick_capture::set_capture_shortcut,
+            quick_capture::pause_capture_shortcut,
+            quick_capture::set_capture_account,
+            quick_capture::get_capture_account,
+            quick_capture::capture_saved,
+            quick_capture::finish_capture,
+            quick_capture::open_capture_main,
             desktop_notifications::configure_desktop_notifications,
             desktop_notifications::show_desktop_notification,
             desktop_notifications::get_in_app_notifications,
@@ -75,6 +83,8 @@ pub fn run() {
         .setup(|app| {
             spelling_context_menu::initialize(app.handle())?;
             desktop_notifications::initialize(app.handle())?;
+            quick_capture::initialize(app.handle())?;
+            spelling_context_menu::initialize_window(app.handle(), "quick-capture")?;
             #[cfg(all(debug_assertions, windows))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
