@@ -2,8 +2,18 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export type ReminderNotificationPlan = { noteId: string; title: string; dueAt: number; updatedAt: number; leadMinutes: number };
 export type DesktopNotificationConfig = {
-  userId: string | null; enabled: boolean; remindersEnabled: boolean; sound: boolean; reminders: ReminderNotificationPlan[];
+  userId: string | null; enabled: boolean; desktop: boolean; remindersEnabled: boolean; sound: boolean; reminders: ReminderNotificationPlan[];
 };
+export type InAppNotification = { id: string; userId: string; kind: "reminder" | "sync-error" | "sync-restored" | "quick-capture"; title: string; body: string; noteId?: string; dueAt?: number; createdAt: number };
+export async function getInAppNotifications(userId: string): Promise<InAppNotification[]> {
+  return isTauri() ? invoke("get_in_app_notifications", { userId }) : [];
+}
+export async function dismissInAppNotification(userId: string, id: string) {
+  if (isTauri()) await invoke("dismiss_in_app_notification", { userId, id });
+}
+export async function notifySyncRestored(userId: string) {
+  if (isTauri()) await invoke("show_desktop_notification", { message: { kind: "syncRestored", userId } });
+}
 export async function configureDesktopNotifications(config: DesktopNotificationConfig) {
   if (isTauri()) await invoke("configure_desktop_notifications", { config });
 }

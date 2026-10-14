@@ -1,0 +1,25 @@
+.app-notification-stack { position: fixed; z-index: 15000; right: 20px; bottom: 64px; width: min(360px, calc(100vw - 40px)); max-height: calc(100vh - 130px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; }
+.app-notification { flex: none; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); box-shadow: 0 8px 28px #0003; }
+.app-notification header { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; }
+.app-notification header .app-logo { width: 20px; height: 20px; min-width: 20px; background: transparent; box-shadow: none; }
+.app-notification-category { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--muted); font-size: 10px; font-weight: 500; }
+.app-notification.is-reminder .app-notification-category { color: var(--accent); }
+.app-notification.is-sync-error .app-notification-category { color: var(--danger); }
+.app-notification h3 { margin: 13px 0 5px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.app-notification p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.app-notification time { display: block; margin-top: 6px; font-size: 10px; color: var(--muted); }
+.app-notification button { cursor: pointer; font: 600 11px/1.4 "DM Sans", sans-serif; }
+.app-notification-close { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; color: var(--muted); background: transparent; }
+.app-notification-close:hover { color: var(--text); background: var(--surface-3); }
+.app-notification-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.app-notification-actions button { min-height: 30px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 7px; color: var(--text); background: transparent; }
+.app-notification-actions button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.app-notification-actions .notification-open { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.app-notification-actions button:disabled { opacity: .45; cursor: default; }
+.app-notification button:focus-visible, .app-notification-actions > span:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.app-notification-count { align-self: flex-end; padding: 5px 9px; border-radius: 6px; font-size: 10px; color: var(--muted); background: var(--surface-2); }
+.app-sync-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); background: var(--surface-2); box-shadow: 0 6px 20px #0002; }
+.app-sync-notice > svg { flex: none; margin-top: 2px; }
+.app-sync-notice > div { flex: 1; min-width: 0; }
+.app-sync-notice strong { color: var(--text); font-size: 11px; font-weight: 600; }
+.app-sync-notice p { margin: 4px 0 0; font-size: 10px; line-height: 1.5; }

@@ -67,7 +67,9 @@ pub fn run() {
             get_autostart_enabled,
             get_device_info,
             desktop_notifications::configure_desktop_notifications,
-            desktop_notifications::show_desktop_notification
+            desktop_notifications::show_desktop_notification,
+            desktop_notifications::get_in_app_notifications,
+            desktop_notifications::dismiss_in_app_notification
         ])
         .setup(|app| {
             desktop_notifications::initialize(app.handle())?;

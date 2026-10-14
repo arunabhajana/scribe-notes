@@ -13,6 +13,7 @@ import { useDesktopNotifications, useNotificationActivation } from "./hooks/useD
 import type { NotificationTarget } from "./features/notifications/desktopNotifications";
 import { ReminderDialog } from "./components/reminders/ReminderDialog";
 import { ReminderFeedback } from "./components/reminders/ReminderFeedback";
+import { AppNotifications } from "./components/feedback/AppNotifications";
 import { reminderPresetActionLabel, reminderPresetDate, useReminderShortcuts } from "./features/settings/reminderShortcuts";
 import { formatReminderTime } from "./features/reminders/reminderTypes";
 import { notesRepository } from "./features/notes/notesRepository";
@@ -83,6 +84,7 @@ function App() {
   const desktopNotifications = useDesktopNotifications({ userId: notesUser?.id ?? null, notes: notesState.notes, reminders: reminderState.reminders,
     ready: notesState.cacheReady && !reminderState.loading, desktop: writingPreferences.desktop,
     enabled: writingPreferences.reminders, sounds: writingPreferences.sounds,
+    cloudSyncHealthy: !offlineMode && notesState.syncStatus === "synced" && !reminderState.loading && !reminderState.syncing && !reminderState.error && !Object.keys(reminderState.pending).length,
     cloudSyncError: offlineMode ? null : notesState.cloudSyncError ?? reminderState.cloudSyncError });
   const showNoteError = notesState.showError;
   const selectNoteSection = notesState.selectSection;
@@ -680,6 +682,7 @@ function App() {
         }}
         onClose={() => setReminderNoteId(null)}
       />}
+      <AppNotifications alerts={desktopNotifications.alerts} onDismiss={desktopNotifications.dismiss} onOpen={setNotificationTarget} />
       {reminderNotice && !notesState.error && !reminderState.error && !desktopNotifications.error && <ReminderFeedback key={reminderNotice} message={reminderNotice} onDismiss={dismissReminderNotice} />}
       <SyncFeedback error={notesState.error ?? reminderState.error ?? desktopNotifications.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); desktopNotifications.clearError(); }} />
     </main>

@@ -1276,7 +1276,7 @@ function CategoryContent({
             />
             <SettingToggle
               label="Desktop notifications"
-              detail="Show desktop alerts for reminders, quick capture, and sync errors."
+              detail="Show reminders while Scribe is in the background, and sync errors that persist for two minutes."
               checked={toggles.desktop}
               onChange={toggle("desktop")}
               color="amber"
@@ -1284,7 +1284,7 @@ function CategoryContent({
             <SettingSelect label="Remind me before" detail="An extra alert before the scheduled time. The reminder still alerts when due. Applies to new reminders; you can change it for each note." value={preferences.reminderLead} options={["At the time", "5 minutes", "10 minutes", "15 minutes", "30 minutes", "60 minutes"]} onChange={change("reminderLead")} />
             <SettingToggle
               label="Sounds"
-              detail="Play a sound with desktop notifications."
+              detail="Play reminder and quick capture sounds, including while Scribe is minimized or in the tray. Sync feedback stays quiet."
               checked={toggles.sounds}
               onChange={toggle("sounds")}
               color="amber"
