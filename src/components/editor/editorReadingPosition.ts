@@ -43,7 +43,10 @@ export function captureClickedPosition(container: HTMLElement, value: string, x:
   const before = document.createRange();
   before.selectNodeContents(anchor);
   before.setEnd(caret.offsetNode, caret.offset);
-  const visibleOffset = before.toString().length;
+  const fragment = before.cloneContents();
+  fragment.querySelectorAll<HTMLElement>("[data-preview-text]").forEach((link) => { link.textContent = link.dataset.previewText ?? ""; });
+  fragment.querySelectorAll("[data-preview-extra]").forEach((element) => element.remove());
+  const visibleOffset = fragment.textContent?.length ?? 0;
   const raw = source[0].replace(/[\r\n]+$/, "");
   const characters = visibleSourceOffsets(raw, Boolean(anchor.closest("pre")));
   const offset = characters[visibleOffset]?.offset ?? (characters.at(-1)?.offset ?? -1) + 1;

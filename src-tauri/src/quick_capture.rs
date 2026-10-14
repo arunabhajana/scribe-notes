@@ -10,6 +10,7 @@ pub struct Binding {
 pub struct CaptureState {
     user_id: Mutex<Option<String>>,
     return_to_main: Mutex<bool>,
+    enabled: std::sync::atomic::AtomicBool,
     #[cfg(windows)]
     worker: Mutex<Option<(std::sync::mpsc::Sender<Request>, u32)>>,
 }
@@ -17,6 +18,7 @@ pub struct CaptureState {
 struct Request {
     binding: Option<Binding>,
     paused: Option<bool>,
+    enabled: Option<bool>,
     reply: std::sync::mpsc::Sender<Result<(), String>>,
 }
 
@@ -24,6 +26,7 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
     app.manage(CaptureState {
         user_id: Mutex::new(None),
         return_to_main: Mutex::new(false),
+        enabled: std::sync::atomic::AtomicBool::new(true),
         #[cfg(windows)]
         worker: Mutex::new(None),
     });
@@ -84,28 +87,71 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
                 u32,
             )> = None;
             let mut paused = false;
+            let mut enabled = true;
             while GetMessageW(&mut message, None, 0, 0).0 > 0 {
                 if message.message == WM_HOTKEY {
                     let app = handle.clone();
                     let _ = handle.run_on_main_thread(move || show(&app));
                 }
                 while let Ok(request) = receiver.try_recv() {
+                    if let Some(value) = request.enabled {
+                        let result = if value == enabled {
+                            Ok(())
+                        } else if !value {
+                            if !paused {
+                                if let Some((_, id, _, _)) = &current {
+                                    let _ = UnregisterHotKey(None, *id);
+                                }
+                            }
+                            enabled = false;
+                            Ok(())
+                        } else {
+                            let result = if paused {
+                                Ok(())
+                            } else {
+                                current
+                                    .as_ref()
+                                    .map(|(_, id, modifiers, vk)| {
+                                        RegisterHotKey(None, *id, *modifiers, *vk)
+                                    })
+                                    .unwrap_or(Ok(()))
+                            };
+                            if result.is_ok() {
+                                enabled = true;
+                            }
+                            result.map_err(|_| "Quick capture could not enable its shortcut. Choose a different shortcut in Settings.".to_string())
+                        };
+                        if result.is_ok() {
+                            handle
+                                .state::<CaptureState>()
+                                .enabled
+                                .store(value, std::sync::atomic::Ordering::Release);
+                        }
+                        let _ = request.reply.send(result);
+                        continue;
+                    }
                     if let Some(value) = request.paused {
                         let result = if value == paused {
                             Ok(())
                         } else if value {
-                            if let Some((_, id, _, _)) = &current {
-                                let _ = UnregisterHotKey(None, *id);
+                            if enabled {
+                                if let Some((_, id, _, _)) = &current {
+                                    let _ = UnregisterHotKey(None, *id);
+                                }
                             }
                             paused = true;
                             Ok(())
                         } else {
-                            let result = current
-                                .as_ref()
-                                .map(|(_, id, modifiers, vk)| {
-                                    RegisterHotKey(None, *id, *modifiers, *vk)
-                                })
-                                .unwrap_or(Ok(()));
+                            let result = if !enabled {
+                                Ok(())
+                            } else {
+                                current
+                                    .as_ref()
+                                    .map(|(_, id, modifiers, vk)| {
+                                        RegisterHotKey(None, *id, *modifiers, *vk)
+                                    })
+                                    .unwrap_or(Ok(()))
+                            };
                             if result.is_ok() {
                                 paused = false;
                             }
@@ -148,8 +194,8 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
                         let vk = (scan as u16 & 255) as u32;
                         match RegisterHotKey(None, id, modifiers, vk) {
                             Ok(()) => {
-                                if !paused { if let Some((_, previous, _, _)) = &current { let _ = UnregisterHotKey(None, *previous); } }
-                                if paused { let _ = UnregisterHotKey(None, id); }
+                                if !paused && enabled { if let Some((_, previous, _, _)) = &current { let _ = UnregisterHotKey(None, *previous); } }
+                                if paused || !enabled { let _ = UnregisterHotKey(None, id); }
                                 current = Some((binding, id, modifiers, vk)); Ok(())
                             }
                             Err(_) => Err("That global shortcut is unavailable or used by another app. Choose a different shortcut.".into()),
@@ -172,6 +218,13 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
 
 // A capture window never restores or changes the main window's state.
 fn show(app: &AppHandle) {
+    if !app
+        .state::<CaptureState>()
+        .enabled
+        .load(std::sync::atomic::Ordering::Acquire)
+    {
+        return;
+    }
     if let Some(window) = app.get_webview_window("quick-capture") {
         if !window.is_focused().unwrap_or(false) {
             let focused = app.get_webview_window("main").is_some_and(|main| {
@@ -241,7 +294,7 @@ pub async fn set_capture_shortcut(
     if window.label() != "main" {
         return Err("This action is only available in Scribe settings.".into());
     }
-    update_shortcut(app, Some(binding), None).await
+    update_shortcut(app, Some(binding), None, None).await
 }
 
 #[tauri::command]
@@ -253,13 +306,32 @@ pub async fn pause_capture_shortcut(
     if window.label() != "main" {
         return Err("This action is only available in Scribe settings.".into());
     }
-    update_shortcut(app, None, Some(paused)).await
+    update_shortcut(app, None, Some(paused), None).await
+}
+
+#[tauri::command]
+pub async fn set_capture_enabled(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    enabled: bool,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Change quick capture from Scribe settings.".into());
+    }
+    update_shortcut(app.clone(), None, None, Some(enabled)).await?;
+    if !enabled {
+        if let Some(capture) = app.get_webview_window("quick-capture") {
+            let _ = capture.hide();
+        }
+    }
+    Ok(())
 }
 
 async fn update_shortcut(
     app: AppHandle,
     binding: Option<Binding>,
     paused: Option<bool>,
+    enabled: Option<bool>,
 ) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -279,6 +351,7 @@ async fn update_shortcut(
                 .send(Request {
                     binding,
                     paused,
+                    enabled,
                     reply,
                 })
                 .map_err(|_| "Global capture is not available.")?;
@@ -295,7 +368,7 @@ async fn update_shortcut(
     }
     #[cfg(not(windows))]
     {
-        let _ = (app, binding, paused);
+        let _ = (app, binding, paused, enabled);
         Err("Global capture is currently available on Windows.".into())
     }
 }

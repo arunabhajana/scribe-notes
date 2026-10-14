@@ -53,7 +53,9 @@ Add an optional title and your note, choose a folder or reminder if needed, then
 
 Use **Tab / Shift + Tab** to navigate, and arrow keys to choose a folder. Smart paste preserves copied links; paste a URL over selected text to make a Markdown link. **Ctrl + Shift + V** pastes plain text. Capture uses your notification and sound preferences: in-app feedback when returning to a focused Scribe window, or a desktop notification when capturing from another app.
 
-Capture reminders use a compact date/time picker and the default reminder lead time from settings. Links appear as local preview cards in capture and reading mode, without background requests for website metadata or images.
+Capture reminders use a compact date/time picker and the default reminder lead time from settings. Links appear in place as local preview cards in reading mode and compact note-card previews; capture also shows pasted links. No background requests are made for website metadata or images.
+
+**Settings → Windows** groups launch at startup, close to system tray, and Quick Capture. Quick Capture is on by default; disabling it releases the global shortcut and keeps unfinished captures locally. This preference is saved on this device.
 
 ### Cloud and account support
 - Supabase authentication.

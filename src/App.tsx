@@ -117,7 +117,7 @@ function App() {
     showNoteError, selectNoteSection, selectNoteId, clearNoteSearch]);
   const [shortcuts, setShortcuts] =
     useState<ShortcutBindings>(getShortcutBindings);
-  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, showNoteError);
+  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, writingPreferences.quickCapture, showNoteError);
   const [accent, setAccent] = useState<AccentColor>(
     () => (localStorage.getItem("scribe-accent") as AccentColor) || "violet",
   );

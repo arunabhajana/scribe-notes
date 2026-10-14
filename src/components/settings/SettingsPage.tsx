@@ -89,10 +89,10 @@ const categories: Category[] = [
   },
   {
     id: "editor",
-    label: "Editor",
-    icon: "note",
+    label: "Windows",
+    icon: "windows",
     color: "green",
-    description: "Tune your writing environment.",
+    description: "Startup, system tray, and quick capture on this device.",
   },
   {
     id: "notifications",
@@ -128,14 +128,15 @@ const settingId = (label: string) =>
   `setting-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
 const settingSearchIndex = [
-  { label: "Launch at startup", detail: "Open Scribe when you sign in to your computer.", category: "general", terms: "startup launch windows open boot" },
-  { label: "Close to system tray", detail: "Keep Scribe running in the system tray when you close its window.", category: "general", terms: "close minimize tray notification area hide background" },
+  { label: "Launch at startup", detail: "Open Scribe when you sign in to your computer.", category: "editor", terms: "startup launch windows open boot" },
+  { label: "Close to system tray", detail: "Keep Scribe running in the system tray when you close its window.", category: "editor", terms: "close minimize tray notification area hide background" },
   { label: "Offline mode", detail: "Keep changes locally and pause cloud sync.", category: "general", terms: "offline network internet sync pause local" },
   { label: "Dark appearance", detail: "Use the Midnight dark theme.", category: "appearance", terms: "theme night midnight dark", targetId: "setting-color-mood" },
   { label: "Light appearance", detail: "Use the Daylight light theme.", category: "appearance", terms: "theme day daylight light", targetId: "setting-color-mood" },
   { label: "Accent color", detail: "Choose the accent used throughout Scribe.", category: "appearance", terms: "colour color swatches accent" },
   { label: "Font family", detail: "Choose the typeface for Note content.", category: "appearance", terms: "typography font typeface georgia monospace dm sans" },
   { label: "Text size", detail: "Adjust Note text size.", category: "appearance", terms: "typography font size small medium large" },
+  { label: "Quick capture", detail: "Capture notes from any app with a global shortcut.", category: "editor", terms: "windows global hotkey capture overlay background enable disable" },
   { label: "Spell check", detail: "Underline possible spelling mistakes as you type.", category: "editor", terms: "spelling writing proofread" },
   { label: "Desktop notifications", detail: "Save your desktop alert preference.", category: "notifications", terms: "desktop notification alerts enable disable" },
   { label: "Sounds", detail: "Save your sound preference for app interactions.", category: "notifications", terms: "audio sound notification mute" },
@@ -1116,7 +1117,7 @@ function CategoryContent({
   const [startupError, setStartupError] = useState("");
   const toggles = preferences;
   const values = { size: preferences.size };
-  const toggle = (key: "minimizeToTray" | "spellcheck" | "reminders" | "desktop" | "sounds") => (value: boolean) => updatePreferences({ [key]: value });
+  const toggle = (key: "minimizeToTray" | "quickCapture" | "spellcheck" | "reminders" | "desktop" | "sounds") => (value: boolean) => updatePreferences({ [key]: value });
   const changeLaunchAtStartup = async (enabled: boolean) => {
     setStartupPending(true);
     setStartupError("");
@@ -1136,26 +1137,10 @@ function CategoryContent({
       return (
         <>
           <SettingCard
-            title="A smoother start"
-            description="A few small choices that make Scribe yours."
+            title="Cloud connection"
+            description="Choose how Scribe syncs on this device."
             accent="blue"
           >
-            <SettingToggle
-              label="Launch at startup"
-              detail="Open Scribe when you sign in to your computer."
-              checked={toggles.launch}
-              onChange={(value) => void changeLaunchAtStartup(value)}
-              color="blue"
-              disabled={startupPending}
-            />
-            {startupError && <p role="alert" className="settings-inline-error">{startupError}</p>}
-            <SettingToggle
-              label="Close to system tray"
-              detail="Keep Scribe running in the system tray when you close its window. Open or quit Scribe from the tray icon."
-              checked={toggles.minimizeToTray}
-              onChange={toggle("minimizeToTray")}
-              color="blue"
-            />
             <SettingToggle
               label="Offline mode"
               detail="Keep changes on this device and pause cloud sync until you turn this off."
@@ -1262,6 +1247,25 @@ function CategoryContent({
     case "editor":
       return (
         <>
+          <SettingCard title="Windows integration" description="Control startup and background capture." accent="green">
+            <SettingToggle
+              label="Launch at startup"
+              detail="Open Scribe when you sign in to your computer."
+              checked={toggles.launch}
+              onChange={(value) => void changeLaunchAtStartup(value)}
+              color="blue"
+              disabled={startupPending}
+            />
+            {startupError && <p role="alert" className="settings-inline-error">{startupError}</p>}
+            <SettingToggle
+              label="Close to system tray"
+              detail="Keep Scribe running in the system tray when you close its window. Open or quit Scribe from the tray icon."
+              checked={toggles.minimizeToTray}
+              onChange={toggle("minimizeToTray")}
+              color="blue"
+            />
+            <SettingToggle label="Quick capture" detail={`Capture notes from any app with ${formatShortcut(shortcuts.quickCapture)} while Scribe is running. Change the binding in Shortcuts.`} checked={toggles.quickCapture} onChange={toggle("quickCapture")} color="green" />
+          </SettingCard>
           <SettingCard
             title="Writing setup"
             description="Set up a calm, comfortable place to write."

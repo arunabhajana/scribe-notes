@@ -1,3 +1,9 @@
+import { inlineLinkPreview } from "./inlineLinkPreview";
+import { isTauri } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useState } from "react";
+import "./linkPreviews.css";
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -8,17 +14,22 @@ function escapeHtml(value: string) {
 }
 
 function inlineMarkdown(escaped: string) {
+  const tokens: string[] = [];
+  const token = (html: string) => { tokens.push(html); return `\uE000${tokens.length - 1}\uE001`; };
   return escaped
+    .replace(/`([^`\n]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"[\]]+)/g, (match: string, code: string | undefined, label: string | undefined, markdownUrl: string | undefined, bareUrl: string | undefined) => {
+      if (code !== undefined) return token(`<code>${code}</code>`);
+      const url = markdownUrl ?? bareUrl?.split(/&(?:lt|gt|quot|#39);/)[0].replace(/[),.;!?]+$/, "");
+      if (!url) return match;
+      const preview = inlineLinkPreview(url, label);
+      return preview ? token(preview) + (bareUrl ? bareUrl.slice(url.length) : "") : match;
+    })
     .replace(/&lt;u&gt;(.+?)&lt;\/u&gt;/g, "<u>$1</u>")
-    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_\n]+)__/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
     .replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>")
-    .replace(
-      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noreferrer">$1</a>',
-    );
+    .replace(/\uE000(\d+)\uE001/g, (match, index: string) => tokens[Number(index)] ?? match);
 }
 
 function listItem(line: string) {
@@ -110,6 +121,7 @@ export function MarkdownPreview({
   value: string;
   onToggleTask?: (lineIndex: number, checked: boolean) => void;
 }) {
+  const [linkError, setLinkError] = useState("");
   if (!value.trim())
     return (
       <div className="markdown-preview-empty">
@@ -117,10 +129,17 @@ export function MarkdownPreview({
       </div>
     );
   return (
+    <>
     <div
       className="markdown-preview"
       dangerouslySetInnerHTML={{ __html: markdownToHtml(value, Boolean(onToggleTask)) }}
       onClick={(event) => {
+        const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("a.inline-link-preview");
+        if (link) {
+          event.stopPropagation();
+          if (isTauri()) { event.preventDefault(); setLinkError(""); void openUrl(link.href).catch(() => setLinkError("Could not open this link. Copy its address to open it in your browser.")); }
+          return;
+        }
         const checkbox = (event.target as HTMLElement).closest<HTMLInputElement>(
           ".task-checkbox[data-task-line]",
         );
@@ -130,5 +149,7 @@ export function MarkdownPreview({
         if (Number.isInteger(lineIndex)) onToggleTask(lineIndex, checkbox.checked);
       }}
     />
+    {linkError && <p className="link-preview-error" role="status">{linkError}</p>}
+    </>
   );
 }

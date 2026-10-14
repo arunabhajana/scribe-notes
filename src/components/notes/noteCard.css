@@ -85,3 +85,10 @@
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+.note-card-compact .note-card-preview:has(.inline-link-preview) { flex: 0 0 auto; height: auto; min-height: 54px; max-height: 94px; overflow: hidden; }
+.note-card-compact .note-card-preview:has(.inline-link-preview) .markdown-preview { display: block; max-height: 94px; }
+.note-card-compact .note-card-preview .inline-link-preview { padding: 4px 7px; margin: 2px 0; gap: 7px; border-radius: 6px; min-height: 36px; }
+.note-card-compact .note-card-preview .link-preview-icon { width: 24px; height: 24px; }
+.note-card-compact .note-card-preview .inline-link-preview .link-preview-copy strong { font-size: 11px; font-weight: 550; line-height: 14px; }
+.note-card-compact .note-card-preview .link-preview-copy > span { font-size: 9px; line-height: 12px; }
+.note-card-compact .note-card-preview .link-preview-copy { gap: 1px; }

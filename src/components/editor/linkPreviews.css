@@ -17,3 +17,5 @@
 .link-previews.is-compact .link-preview-copy { gap: 2px; }
 .link-previews.is-compact .link-preview-copy strong { font-size: 11px; }
 @media (prefers-reduced-motion: reduce) { .link-preview-card { transition: none; } }
+.markdown-preview .inline-link-preview { display: flex; width: 100%; max-width: 540px; margin: 8px 0; text-decoration: none; }
+.markdown-preview .inline-link-preview .link-preview-copy strong { font-size: 12px; font-weight: 600; color: var(--text); }

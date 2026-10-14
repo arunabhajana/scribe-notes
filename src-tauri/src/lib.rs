@@ -69,6 +69,7 @@ pub fn run() {
             get_autostart_enabled,
             get_device_info,
             quick_capture::set_capture_shortcut,
+            quick_capture::set_capture_enabled,
             quick_capture::pause_capture_shortcut,
             quick_capture::set_capture_account,
             quick_capture::get_capture_account,
