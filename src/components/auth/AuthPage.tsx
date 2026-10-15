@@ -15,6 +15,7 @@ import { LoadingSpinner } from "../feedback/LoadingFeedback";
 import type { SocialProvider } from "../../hooks/useAuth";
 import { PrivacyPolicyLink, TermsAgreement } from "./TermsAgreement";
 import { PasswordFeedback } from "./PasswordFeedback";
+import { ProviderSignInPending } from "./ProviderSignInPending";
 import "./authForm.css";
 import "./localProfile.css";
 import { authFieldErrors, emailError, type AuthField } from "../../features/auth/signupValidation";
@@ -250,10 +251,10 @@ export function AuthPage({
                     {isSignUp ? "START WITH SCRIBE" : "WELCOME BACK"}
                   </span>
                   <h2>
-                    {isSignUp ? "Create your account" : "Sign in to Scribe"}
+                    {oauthPending ? "Continue in your browser" : isSignUp ? "Create your account" : "Sign in to Scribe"}
                   </h2>
                   <p>
-                    {isSignUp
+                    {oauthPending ? `Finish signing in with ${oauthPending === "google" ? "Google" : "GitHub"}, then return to Scribe.` : isSignUp
                       ? "A home for all the thoughts worth keeping."
                       : "Pick up where your thoughts left off."}
                   </p>
@@ -282,19 +283,14 @@ export function AuthPage({
                     If an account exists for that email, a password reset link is on its way.
                   </div>
                 )}
+                {oauthPending ? <ProviderSignInPending provider={oauthPending} onCancel={onCancelProviderSignIn} /> : <>
+                {offlineProfileName && <div className="auth-offline-transfer-notice"><strong>Your offline notes stay on this device.</strong><p>Signing in or creating an account opens a separate workspace. It does not transfer or upload notes from your offline profile. You can return using “Continue as {offlineProfileName}” below.</p></div>}
                 {isSignUp && <span className="auth-method-label">Sign up with</span>}
                 <SocialSignInButtons
                   compact={isSignUp}
                   disabled={submitting || !configured || Boolean(oauthPending)}
                   onSignIn={(provider) => void signInWithProvider(provider)}
                 />
-                {oauthPending && (
-                  <div className="auth-oauth-pending" role="status">
-                    <LoadingSpinner />
-                    <span>Finish signing in with {oauthPending === "google" ? "Google" : "GitHub"} in your browser, then return to Scribe.</span>
-                    <button type="button" className="auth-back-button" disabled={submitting} onClick={onCancelProviderSignIn}>Back to sign in</button>
-                  </div>
-                )}
                 <div className="auth-divider">
                   <span />
                   {isSignUp ? "or use your email" : "continue with email"}
@@ -460,6 +456,7 @@ export function AuthPage({
                     Your session stays saved in this app on this device. Sign out to remove it.
                   </span>
                 </div>}
+                </>}
               </>
             )}
           </section>

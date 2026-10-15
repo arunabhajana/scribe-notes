@@ -1,3 +1,4 @@
+import { WORKSPACE_DELETION_CHANGED, workspaceDeletionStatus } from "../features/auth/workspaceDeletionState";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -68,6 +69,7 @@ function saveLocalFolderOrder(
   unfiledPosition: number,
 ) {
   try {
+    if (workspaceDeletionStatus(userId)) return;
     localStorage.setItem(
       folderOrderStorageKey(userId),
       JSON.stringify(folders.map((folder) => folder.id)),
@@ -186,6 +188,7 @@ export function useNotes(
   const clearError = useCallback(() => setError(null), []);
   const showError = useCallback((message: string) => setError(message), []);
   const persistLocally = useCallback((ownerId: string, key: string, run: () => Promise<void>) => {
+    if (workspaceDeletionStatus(ownerId)) return;
     const taskKey = `${ownerId}:${key}`;
     const task = { run, running: true, ownerId };
     localRetries.current.set(taskKey, task);
@@ -203,6 +206,7 @@ export function useNotes(
           }
         }
       }).catch((cause: unknown) => {
+        if (workspaceDeletionStatus(ownerId)) { localRetries.current.delete(taskKey); return; }
         if (localRetries.current.get(taskKey) === task && activeUserId.current === ownerId) {
           lastLocalError.current = `Local save failed; keep Scribe open while it retries. These latest changes are not yet protected against a crash: ${messageFor(cause)}`;
           setError(lastLocalError.current);
@@ -493,6 +497,17 @@ export function useNotes(
     setFolderId(null);
     setSearch("");
   }, []);
+  useEffect(() => {
+    const deleted = () => {
+      if (notesForUser && workspaceDeletionStatus(notesForUser)) {
+        for (const [key, task] of localRetries.current) if (task.ownerId === notesForUser) localRetries.current.delete(key);
+        clearUserData();
+      }
+    };
+    window.addEventListener(WORKSPACE_DELETION_CHANGED, deleted);
+    window.addEventListener("storage", deleted);
+    return () => { window.removeEventListener(WORKSPACE_DELETION_CHANGED, deleted); window.removeEventListener("storage", deleted); };
+  }, [notesForUser, clearUserData]);
 
   const selectedNote =
     notes.find(

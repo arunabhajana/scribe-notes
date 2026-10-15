@@ -83,7 +83,8 @@ pub fn run() {
             desktop_notifications::configure_desktop_notifications,
             desktop_notifications::show_desktop_notification,
             desktop_notifications::get_in_app_notifications,
-            desktop_notifications::dismiss_in_app_notification
+            desktop_notifications::dismiss_in_app_notification,
+            desktop_notifications::clear_workspace_notifications
         ])
         .setup(|app| {
             spelling_context_menu::initialize(app.handle())?;

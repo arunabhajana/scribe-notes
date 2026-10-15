@@ -16,3 +16,6 @@
 .auth-offline-entry button:hover { border-color: var(--accent); background: var(--accent-soft); }
 .auth-offline-entry p { margin: 8px 0 0; color: var(--auth-muted); font-size: 10px; }
 .auth-offline-entry button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.auth-offline-transfer-notice { margin: 0 0 20px; padding: 13px 15px; border: 1px solid var(--auth-border); border-radius: 9px; background: var(--auth-raised); }
+.auth-offline-transfer-notice strong { color: var(--auth-text); font-size: 11px; font-weight: 600; }
+.auth-offline-transfer-notice p { margin: 6px 0 0; color: var(--auth-muted); font-size: 10px; line-height: 1.7; }

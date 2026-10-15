@@ -56,6 +56,7 @@ pub struct NotificationService(Sender<Work>);
 #[derive(Clone)]
 pub struct NotificationInbox {
     alerts: Arc<Mutex<Vec<serde_json::Value>>>,
+    deleted_workspaces: Arc<Mutex<std::collections::HashSet<String>>>,
     path: std::path::PathBuf,
 }
 impl NotificationInbox {
@@ -75,6 +76,8 @@ impl NotificationInbox {
         std::fs::rename(temp, &self.path).map_err(|e| e.to_string())
     }
     fn publish(&self, app: &AppHandle, alert: serde_json::Value) -> Result<(), String> {
+        let deleted = self.deleted_workspaces.lock().map_err(|_| "Notification storage is busy")?;
+        if alert["userId"].as_str().is_some_and(|id| deleted.contains(id)) { return Ok(()); }
         let mut alerts = self
             .alerts
             .lock()
@@ -97,6 +100,25 @@ impl NotificationInbox {
         let _ = app.emit_to("main", "scribe:in-app-notification", alert);
         Ok(())
     }
+}
+#[tauri::command]
+pub fn clear_workspace_notifications(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    user_id: String,
+    inbox: State<'_, NotificationInbox>,
+) -> Result<(), String> {
+    crate::security::require_main(&window)?;
+    if uuid::Uuid::parse_str(&user_id).is_err() { return Err("Invalid workspace.".into()); }
+    if crate::quick_capture::active_account(&app).is_some_and(|id| id != user_id) {
+        return Err("Switch to this workspace before deleting its notifications.".into());
+    }
+    // Same lock order as publish: a late worker cannot restore deleted history.
+    let mut deleted = inbox.deleted_workspaces.lock().map_err(|_| "Notification storage is busy")?;
+    deleted.insert(user_id.clone());
+    let mut alerts = inbox.alerts.lock().map_err(|_| "Notification storage is busy")?;
+    alerts.retain(|alert| alert["userId"] != user_id);
+    inbox.persist(&alerts)
 }
 #[tauri::command]
 pub fn get_in_app_notifications(
@@ -188,6 +210,7 @@ pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default();
     let inbox = NotificationInbox {
         alerts: Arc::new(Mutex::new(alerts)),
+        deleted_workspaces: Arc::new(Mutex::new(std::collections::HashSet::new())),
         path,
     };
     app.manage(inbox.clone());

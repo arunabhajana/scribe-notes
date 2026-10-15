@@ -1,8 +1,9 @@
 import type { Note, NoteFolder } from "../../types/note";
+import { assertWorkspaceWritable } from "../auth/workspaceDeletionState";
 import type { SyncBatch, SyncReply } from "./syncProtocol";
 import { encodeSyncOperations } from "./syncProtocol";
 
-type SyncState = { userId: string; cursor: string | null; inFlight?: SyncBatch };
+type SyncState = { userId: string; cursor: string | null; inFlight?: SyncBatch; deleted?: boolean };
 
 export type OutboxOperation = {
   key: [string, "note" | "folder", string];
@@ -91,7 +92,43 @@ function transactionDone(transaction: IDBTransaction) {
   });
 }
 
+function workspaceWrite(db: IDBDatabase, userId: string, stores: string | string[]) {
+  assertWorkspaceWritable(userId);
+  const names = Array.isArray(stores) ? stores : [stores];
+  const tx = db.transaction([...new Set([...names, "syncState"])], "readwrite", { durability: "strict" });
+  // Check inside the same transaction too. A suspended capture window can resume
+  // after deletion even if its earlier localStorage check had already passed.
+  const guard = tx.objectStore("syncState").get(userId) as IDBRequest<SyncState | undefined>;
+  guard.onsuccess = () => { if (guard.result?.deleted) tx.abort(); };
+  return tx;
+}
+
 export const offlineStore = {
+  async inspectWorkspace(userId: string) {
+    const db = await openDatabase();
+    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases"], "readonly");
+    const done = transactionDone(tx);
+    const requests = ["notes", "folders", "outbox"].map(name => tx.objectStore(name).index("userId").getAll(userId));
+    requests.push(...["syncState", "syncLeases"].map(name => tx.objectStore(name).get(userId)));
+    const rows = await Promise.all(requests.map(request => new Promise<unknown>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result ?? null);
+      request.onerror = () => reject(request.error);
+    })));
+    await done;
+    return { bytes: new TextEncoder().encode(JSON.stringify(rows)).byteLength };
+  },
+  async deleteWorkspace(userId: string) {
+    const db = await openDatabase();
+    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases"], "readwrite", { durability: "strict" });
+    const done = transactionDone(tx);
+    for (const name of ["notes", "folders", "outbox"]) {
+      const request = tx.objectStore(name).index("userId").openCursor(IDBKeyRange.only(userId));
+      request.onsuccess = () => { const cursor = request.result; if (cursor) { cursor.delete(); cursor.continue(); } };
+    }
+    tx.objectStore("syncState").put({ userId, cursor: null, deleted: true } satisfies SyncState);
+    tx.objectStore("syncLeases").delete(userId);
+    await done;
+  },
   async loadFolders(userId: string): Promise<NoteFolder[]> {
     const db = await openDatabase();
     const request = db.transaction("folders", "readonly").objectStore("folders").index("userId").getAll(userId) as IDBRequest<CacheFolder[]>;
@@ -117,7 +154,7 @@ export const offlineStore = {
   // for network failures where the server might have committed the receipt.
   async rejectBatch(userId: string, batchId: string) {
     const db = await openDatabase();
-    const tx = db.transaction("syncState", "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, "syncState");
     const done = transactionDone(tx);
     const store = tx.objectStore("syncState");
     const request = store.get(userId) as IDBRequest<SyncState | undefined>;
@@ -129,7 +166,7 @@ export const offlineStore = {
   },
   async prepareBatch(userId: string): Promise<{ batch: SyncBatch; cursor: string | null }> {
     const db = await openDatabase();
-    const tx = db.transaction(["outbox", "syncState"], "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, ["outbox", "syncState"]);
     const done = transactionDone(tx);
     const stateRequest = tx.objectStore("syncState").get(userId) as IDBRequest<SyncState | undefined>;
     const queueRequest = tx.objectStore("outbox").index("userId").getAll(userId) as IDBRequest<OutboxOperation[]>;
@@ -157,7 +194,7 @@ export const offlineStore = {
 
   async commitBatch(userId: string, batch: SyncBatch, reply: SyncReply) {
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "folders", "outbox", "syncState"], "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, ["notes", "folders", "outbox", "syncState"]);
     const done = transactionDone(tx);
     const requests = ["notes", "folders", "outbox"].map((store) =>
       tx.objectStore(store).index("userId").getAll(userId));
@@ -333,7 +370,7 @@ export const offlineStore = {
     created = false,
   ) {
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "outbox"], "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, ["notes", "outbox"]);
     const cache = tx.objectStore("notes");
     const cached = cache.get(rowKey(userId, note.id)) as IDBRequest<CacheNote | undefined>;
     const store = tx.objectStore("outbox");
@@ -364,7 +401,7 @@ export const offlineStore = {
     created = false,
   ) {
     const db = await openDatabase();
-    const tx = db.transaction(["folders", "outbox"], "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, ["folders", "outbox"]);
     tx.objectStore("folders").put({
       ...folder,
       userId,
@@ -401,7 +438,7 @@ export const offlineStore = {
   ) {
     const db = await openDatabase();
     const cacheName = entity === "note" ? "notes" : "folders";
-    const tx = db.transaction([cacheName, "outbox"], "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, [cacheName, "outbox"]);
     tx.objectStore(cacheName).delete(rowKey(userId, entityId));
     const store = tx.objectStore("outbox");
     const key: OutboxOperation["key"] = [userId, entity, entityId];
@@ -427,7 +464,7 @@ export const offlineStore = {
 
   async deleteFolderAndDetach(userId: string, folder: NoteFolder, notes: { before: Note; after: Note }[]) {
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "folders", "outbox"], "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, ["notes", "folders", "outbox"]);
     const done = transactionDone(tx);
     const store = tx.objectStore("outbox");
     tx.objectStore("folders").delete(rowKey(userId, folder.id));
@@ -455,7 +492,7 @@ export const offlineStore = {
 
   async acquireSyncLease(userId: string, ownerId: string, durationMs = 30_000) {
     const db = await openDatabase();
-    const tx = db.transaction("syncLeases", "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, "syncLeases");
     const store = tx.objectStore("syncLeases");
     const get = store.get(userId) as IDBRequest<
       { userId: string; ownerId: string; expiresAt: number } | undefined
@@ -475,7 +512,7 @@ export const offlineStore = {
 
   async releaseSyncLease(userId: string, ownerId: string) {
     const db = await openDatabase();
-    const tx = db.transaction("syncLeases", "readwrite", { durability: "strict" });
+    const tx = workspaceWrite(db, userId, "syncLeases");
     const store = tx.objectStore("syncLeases");
     const get = store.get(userId) as IDBRequest<
       { userId: string; ownerId: string } | undefined

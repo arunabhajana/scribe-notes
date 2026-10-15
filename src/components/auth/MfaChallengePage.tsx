@@ -4,6 +4,7 @@ import type { MfaController } from "../../hooks/useMfa";
 import { AppLogo } from "../AppLogo";
 import { LoadingSpinner } from "../feedback/LoadingFeedback";
 import { TotpCodeField } from "./TotpCodeField";
+import "./authActions.css";
 
 export function MfaChallengePage({ mfa, onSignOut }: { mfa: MfaController; onSignOut: () => Promise<string | null> }) {
   const [selectedId, setSelectedId] = useState("");
@@ -23,7 +24,7 @@ export function MfaChallengePage({ mfa, onSignOut }: { mfa: MfaController; onSig
     } finally { setBusy(false); }
   }
 
-  return <main className="auth-screen">
+  return <main className="auth-screen auth-mfa-screen">
     <section className="auth-layout auth-recovery-layout" aria-label="Two-step verification">
       <aside className="auth-story">
         <div className="auth-brand"><AppLogo variant="transparent" /><span>Scribe</span></div>
@@ -43,7 +44,7 @@ export function MfaChallengePage({ mfa, onSignOut }: { mfa: MfaController; onSig
             <button className="auth-submit auth-recovery-submit" disabled={busy || !factorId || code.length !== 6}>{busy ? <>Verifying… <LoadingSpinner /></> : "Verify and continue"}</button>
           </form>}
         <div className="auth-demo-notice"><ShieldCheck size={14} /><span>Lost your authenticator? Account recovery requires help from the account administrator.</span></div>
-        <button type="button" className="auth-back-button" disabled={busy} onClick={() => void onSignOut()}><ArrowLeft size={14} />Back to sign in</button>
+        <button type="button" className="auth-secondary-button auth-mfa-back" disabled={busy} onClick={() => void onSignOut()}><ArrowLeft size={14} />Back to sign in</button>
       </section></div>
     </section>
   </main>;

@@ -1,3 +1,4 @@
+import { assertWorkspaceWritable, workspaceDeletionStatus } from "../auth/workspaceDeletionState";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -24,6 +25,14 @@ import "../../App.css";
 type Draft = { id: string; title: string; body: string; folderId: string | null; reminder: { dueAt: string; leadMinutes: number } | null };
 const emptyDraft = (): Draft => ({ id: crypto.randomUUID(), title: "", body: "", folderId: null, reminder: null });
 const draftKey = (userId: string) => `scribe-quick-capture-draft:${userId}`;
+function saveDraft(userId: string, value: Draft) {
+  assertWorkspaceWritable(userId);
+  localStorage.setItem(draftKey(userId), JSON.stringify(value));
+  if (workspaceDeletionStatus(userId)) {
+    localStorage.removeItem(draftKey(userId));
+    assertWorkspaceWritable(userId);
+  }
+}
 
 export default function QuickCapture() {
   const [account, setAccount] = useState<string | null>(null);
@@ -102,9 +111,10 @@ function QuickCaptureContent({ account, setAccount }: { account: string | null; 
 
   const close = () => { if (!savingRef.current) void getCurrentWindow().hide(); };
   const changeDraft = (value: Draft) => {
+    if (account && workspaceDeletionStatus(account)) { setError("This offline profile is being deleted."); return; }
     setDraft(value);
     if (account) {
-      try { localStorage.setItem(draftKey(account), JSON.stringify(value)); setError(""); }
+      try { saveDraft(account, value); setError(""); }
       catch { setError("Draft recovery is unavailable. Save your note before closing Scribe."); }
     }
   };
@@ -124,7 +134,7 @@ function QuickCaptureContent({ account, setAccount }: { account: string | null; 
       // Keep the capture ID stable across retries. Reminders for a new note
       // remain queued until that note reaches the cloud; they are never sent
       // from a second sync client in this window.
-      localStorage.setItem(draftKey(owner), JSON.stringify(draft));
+      saveDraft(owner, draft);
       const reminderCache = await reminderStore.load(owner);
       if (draft.reminder || reminderCache.reminders[note.id]?.dueAt) {
         await reminderStore.set(owner, note.id, draft.reminder?.dueAt ?? null, draft.reminder ? parseInt(preferences.reminderLead) || 0 : 0);

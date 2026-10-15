@@ -160,6 +160,7 @@ const settingSearchIndex = [
   { label: "Account data", detail: "Review upcoming export and deletion controls.", category: "account", terms: "privacy export delete data" },
   { label: "Export account data", detail: "Account export is coming soon.", category: "account", terms: "download backup export" },
   { label: "Delete account", detail: "Account deletion is coming soon.", category: "account", terms: "delete remove account privacy" },
+  { label: "Delete offline profile", detail: "Review and permanently delete this workspace’s local data.", category: "account", terms: "offline local profile delete remove erase privacy" },
   { label: "About Scribe", detail: "View version and product information.", category: "about", terms: "version information app", targetId: "setting-scribe" },
 ];
 
@@ -425,6 +426,7 @@ function ProviderLogo({ provider }: { provider: "google" | "github" }) {
 function AccountSettings({
   profile,
   onSignIn,
+  onDeleteOfflineProfile,
   onAvatarColorChange,
   onUpdateDisplayName,
   onLinkAccount,
@@ -434,6 +436,7 @@ function AccountSettings({
 }: {
   profile: AccountProfile;
   onSignIn: () => void;
+  onDeleteOfflineProfile: () => void;
   onAvatarColorChange: (color: string) => void;
   onUpdateDisplayName: (name: string) => Promise<string | null>;
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
@@ -598,6 +601,12 @@ function AccountSettings({
         <AccountRequiredNotice onSignIn={onSignIn} />
         <SettingCard title="Account features" description="These features need a signed-in account." accent="pink">
           <fieldset disabled className="offline-account-features">{["Email address", "Password reset", "Two-step verification", "Google & GitHub linking", "Signed-in devices", "Export account data", "Delete Data", "Delete account"].map(label => <div className="offline-account-feature" key={label}><span>{label}</span><button type="button">Sign in required</button></div>)}</fieldset>
+        </SettingCard>
+        <SettingCard title="Delete offline profile" description="Permanently remove this profile and its data from this device." accent="pink">
+          <div className="account-setting-row">
+            <div><strong>Only this workspace</strong><span>Review what will be deleted. Other workspaces stay untouched.</span></div>
+            <button type="button" className="offline-profile-delete-button" onClick={onDeleteOfflineProfile}>Delete offline profile</button>
+          </div>
         </SettingCard>
         {accountToast && <div className="status-toast-stack"><div className={`status-toast is-${accountToast.kind}`} role="status"><span>{accountToast.message}</span><button type="button" aria-label="Dismiss notification" onClick={() => setAccountToast(null)}><X size={15} /></button></div></div>}
       </> : <>
@@ -1064,6 +1073,7 @@ function FolderManagementSettings({
 function CategoryContent({
   category,
   onSignIn,
+  onDeleteOfflineProfile,
   dark,
   setDark,
   accent,
@@ -1094,6 +1104,7 @@ function CategoryContent({
 }: {
   category: Category;
   onSignIn: () => void;
+  onDeleteOfflineProfile: () => void;
   dark: boolean;
   setDark: (value: boolean) => void;
   accent: AccentColor;
@@ -1160,7 +1171,7 @@ function CategoryContent({
             description="Optional. Off by default for this account on this device."
             accent="blue"
           >
-            {profile.localOnly && <AccountRequiredNotice onSignIn={onSignIn} detail="Sign in to sync notes across devices. Your offline profile and notes stay on this device." />}
+            {profile.localOnly && <AccountRequiredNotice onSignIn={onSignIn} detail="Cloud sync is available in an online workspace. Signing in does not transfer or upload notes from your offline profile." />}
             <fieldset disabled={profile.localOnly} className={`offline-account-features${profile.localOnly ? " offline-feature-switch" : ""}`}>
             <SettingToggle
               label="Cloud sync"
@@ -1174,7 +1185,7 @@ function CategoryContent({
         </>
       );
     case "account":
-      return <AccountSettings profile={profile} onSignIn={onSignIn} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
+      return <AccountSettings profile={profile} onSignIn={onSignIn} onDeleteOfflineProfile={onDeleteOfflineProfile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
     case "folders":
       return (
         <FolderManagementSettings
@@ -1454,6 +1465,7 @@ function SettingsSearchResults({
 
 export function SettingsPage({
   onSignIn,
+  onDeleteOfflineProfile,
   dark,
   accent,
   onAccentChange,
@@ -1484,6 +1496,7 @@ export function SettingsPage({
   unfiledPosition,
 }: {
   onSignIn: () => void;
+  onDeleteOfflineProfile: () => void;
   dark: boolean;
   accent: AccentColor;
   onAccentChange: (value: AccentColor) => void;
@@ -1528,6 +1541,7 @@ export function SettingsPage({
   const matchingSettings = useMemo(
     () =>
       settingSearchIndex
+        .filter(item => item.label !== "Delete offline profile" || profile.localOnly)
         .filter((item) =>
           `${item.label} ${item.detail} ${item.terms} ${categories.find((category) => category.id === item.category)?.label ?? ""}`
             .toLowerCase()
@@ -1539,7 +1553,7 @@ export function SettingsPage({
             (category) => category.id === item.category,
           )!,
         })),
-    [normalizedQuery],
+    [normalizedQuery, profile.localOnly],
   );
   const matchingCategoryResults = useMemo(
     () =>
@@ -1686,6 +1700,7 @@ export function SettingsPage({
           ) : (
             <CategoryContent
               onSignIn={onSignIn}
+              onDeleteOfflineProfile={onDeleteOfflineProfile}
               key={activeCategory.id}
               category={activeCategory}
               dark={dark}

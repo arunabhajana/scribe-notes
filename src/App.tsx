@@ -1,3 +1,5 @@
+import { DeleteOfflineProfileDialog } from "./components/settings/DeleteOfflineProfileDialog";
+import { useWorkspaceDeletionStatus } from "./features/auth/workspaceDeletionState";
 import { useContextMenu, type ContextMenuItem } from "./components/context-menu/contextMenuState";
 import { useWritingPreferences } from "./features/settings/writingPreferences";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -54,12 +56,19 @@ function App() {
   const local = useLocalProfile();
   const [accountEntry, setAccountEntry] = useState(false);
   const [localSetup, setLocalSetup] = useState(false);
+  const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
+  const deletionStatus = useWorkspaceDeletionStatus(local.profile?.id ?? null);
   const workspaceId = auth.loading ? null : auth.user?.id ?? (accountEntry ? null : local.profile?.id ?? null);
-  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} /></WorkspacePreferencesProvider>;
+  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} localDeletionBlocked={Boolean(deletionStatus)} localCapturePaused={deleteProfileOpen || Boolean(deletionStatus)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} />
+    {!auth.loading && !auth.user && local.profile && (deleteProfileOpen || deletionStatus) && <DeleteOfflineProfileDialog
+      key={local.profile.id} profile={local.profile} interrupted={Boolean(deletionStatus)} onClose={() => setDeleteProfileOpen(false)}
+      onDeleted={() => { setDeleteProfileOpen(false); setLocalSetup(false); setAccountEntry(true); }} />}
+  </WorkspacePreferencesProvider>;
 }
 
-function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup }: {
+function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup, localDeletionBlocked, localCapturePaused, onDeleteOfflineProfile }: {
   auth: ReturnType<typeof useAuth>; local: ReturnType<typeof useLocalProfile>;
+  localDeletionBlocked: boolean; localCapturePaused: boolean; onDeleteOfflineProfile: () => void;
   accountEntry: boolean; setAccountEntry: (value: boolean) => void;
   localSetup: boolean; setLocalSetup: (value: boolean) => void;
 }) {
@@ -73,10 +82,10 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const offlineMode = !cloudSync.enabled;
   const [syncConfirmation, setSyncConfirmation] = useState<{ userId: string; enabling: boolean } | null>(null);
   const localWorkspaceId = usingLocalProfile ? local.profile?.id : undefined;
-  const notesUser = useMemo(() => auth.loading ? null : auth.user
+  const notesUser = useMemo(() => auth.loading || (usingLocalProfile && localDeletionBlocked) ? null : auth.user
     ? accountTerms.ready && !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null
     : localWorkspaceId ? { id: localWorkspaceId } : null,
-  [auth.loading, auth.user, accountTerms.ready, auth.mfa.loading, auth.mfa.required, auth.passwordRecoveryRequired, localWorkspaceId]);
+  [auth.loading, auth.user, accountTerms.ready, auth.mfa.loading, auth.mfa.required, auth.passwordRecoveryRequired, localWorkspaceId, usingLocalProfile, localDeletionBlocked]);
   const notesState = useNotes(notesUser, Boolean(notesUser), offlineMode);
   const reminderState = useReminders(notesUser?.id ?? null, offlineMode);
   const syncStatus = notesState.syncStatus === "error" || reminderState.error ? "error"
@@ -139,19 +148,19 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     showNoteError, selectNoteSection, selectNoteId, clearNoteSearch]);
   const [shortcutPreference, saveShortcuts] = useWorkspacePreference("scribe-keyboard-shortcuts");
   const shortcuts = useMemo(() => parseShortcutBindings(shortcutPreference), [shortcutPreference]);
-  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, Boolean(notesUser) && writingPreferences.quickCapture, showNoteError);
+  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, Boolean(notesUser) && writingPreferences.quickCapture && !(usingLocalProfile && localCapturePaused), showNoteError);
   const [accentPreference, saveAccent] = useWorkspacePreference("scribe-accent");
   const accent: AccentColor = accentPreference && accentPreference in accentColors ? accentPreference as AccentColor : "violet";
 
   useEffect(() => {
-    if (!isTauri() || !preferenceWorkspaceId) return;
+    if (!isTauri() || !preferenceWorkspaceId || (usingLocalProfile && localDeletionBlocked)) return;
     let active = true;
     void invoke("set_autostart_enabled", { enabled: writingPreferences.launch })
       .catch(() => { if (active) showNoteError("Could not apply this workspace’s startup preference. Try changing it in Settings."); });
     return () => {
       active = false;
     };
-  }, [preferenceWorkspaceId, writingPreferences.launch, showNoteError]);
+  }, [preferenceWorkspaceId, writingPreferences.launch, showNoteError, usingLocalProfile, localDeletionBlocked]);
 
   const changeLaunchAtStartup = useCallback(async (enabled: boolean) => {
     if (!isTauri()) return "Launch at startup is available in the installed Windows app.";
@@ -484,6 +493,14 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         <SettingsPage
           key={preferenceWorkspaceId}
           onSignIn={openSignIn}
+          onDeleteOfflineProfile={() => {
+            if (!usingLocalProfile) return;
+            if (isComposerOpen) {
+              showNoteError("Save or close your draft before deleting this profile.");
+              setPage("notes"); window.dispatchEvent(new Event("scribe:restore-note-draft")); return;
+            }
+            onDeleteOfflineProfile();
+          }}
           dark={isDark}
           accent={accent}
           onAccentChange={changeAccent}

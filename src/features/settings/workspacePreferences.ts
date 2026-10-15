@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useSyncExternalStore } from "react";
+import { workspaceDeletionStatus } from "../auth/workspaceDeletionState";
 
 export const WorkspacePreferencesContext = createContext<string | null>(null);
 const changed = "scribe-workspace-preferences-changed";
@@ -7,6 +8,7 @@ export function readWorkspacePreference(workspaceId: string | null, name: string
   try { return localStorage.getItem(workspacePreferenceKey(workspaceId, name)); } catch { return null; }
 }
 export function writeWorkspacePreference(workspaceId: string | null, name: string, value: string) {
+  if (workspaceId && workspaceDeletionStatus(workspaceId)) return;
   localStorage.setItem(workspacePreferenceKey(workspaceId, name), value);
   window.dispatchEvent(new Event(changed));
 }
@@ -25,6 +27,7 @@ export function useWorkspacePreference(name: string) {
 // Claim shared legacy settings once. Other workspaces start with defaults.
 export function migrateLegacyPreferences(workspaceId: string) {
   try {
+    if (workspaceDeletionStatus(workspaceId)) return;
     if (readWorkspacePreference(workspaceId, "scribe-note-sort") === null) {
       const previous = JSON.parse(localStorage.getItem("scribe-note-sort") ?? "{}");
       const own = previous && typeof previous === "object" && !Array.isArray(previous)

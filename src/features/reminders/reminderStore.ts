@@ -1,4 +1,5 @@
 import type { NoteReminder, ReminderCache, ReminderReply } from "./reminderTypes";
+import { assertWorkspaceWritable } from "../auth/workspaceDeletionState";
 
 export const REMINDERS_CHANGED_EVENT = "scribe:reminders-changed";
 let database: Promise<IDBDatabase> | undefined;
@@ -23,12 +24,17 @@ const empty = (userId: string): ReminderCache => ({ userId, reminders: {}, pendi
 
 async function transaction(userId: string, update?: (cache: ReminderCache) => ReminderCache) {
   const db = await openDatabase();
+  if (update) assertWorkspaceWritable(userId);
   return new Promise<ReminderCache>((resolve, reject) => {
     const tx = db.transaction("accounts", update ? "readwrite" : "readonly", { durability: "strict" });
     const store = tx.objectStore("accounts");
-    const request = store.get(userId) as IDBRequest<ReminderCache | undefined>;
+    const request = store.get(userId) as IDBRequest<(ReminderCache & { deleted?: boolean }) | undefined>;
     let result: ReminderCache;
     request.onsuccess = () => {
+      if (request.result?.deleted) {
+        if (update) { tx.abort(); return; }
+        result = empty(userId); return;
+      }
       result = request.result ?? empty(userId);
       if (update) { result = update(result); store.put(result); }
     };
@@ -44,6 +50,16 @@ async function transaction(userId: string, update?: (cache: ReminderCache) => Re
 }
 
 export const reminderStore = {
+  async deleteWorkspace(userId: string) {
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("accounts", "readwrite", { durability: "strict" });
+      // A content-free tombstone also rejects writes from suspended windows.
+      tx.objectStore("accounts").put({ userId, deleted: true });
+      tx.oncomplete = () => resolve();
+      tx.onerror = tx.onabort = () => reject(tx.error ?? new Error("Could not delete local reminders."));
+    });
+  },
   load: (userId: string) => transaction(userId),
   async set(userId: string, noteId: string, dueAt: string | null, leadMinutes: number) {
     const reminder: NoteReminder = { noteId, dueAt, leadMinutes, updatedAt: new Date().toISOString() };

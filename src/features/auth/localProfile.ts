@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
+import { assertWorkspaceWritable } from "./workspaceDeletionState";
 
 export type LocalProfile = { id: string; displayName: string; avatarColor: string };
 const key = "scribe-local-profile-v1";
@@ -16,6 +17,12 @@ function parse(value: string | null): LocalProfile | null {
       && typeof profile.avatarColor === "string" && /^#[\da-f]{6}$/i.test(profile.avatarColor) ? profile : null;
   } catch { return null; }
 }
+export function readLocalProfile() { return parse(snapshot()); }
+export function removeLocalProfile(expectedId: string) {
+  if (readLocalProfile()?.id !== expectedId) throw new Error("The active offline profile changed. Reopen Settings before deleting it.");
+  localStorage.removeItem(key);
+  window.dispatchEvent(new Event(changed));
+}
 export function useLocalProfile() {
   const raw = useSyncExternalStore(subscribe, snapshot, () => null);
   const profile = parse(raw);
@@ -24,6 +31,7 @@ export function useLocalProfile() {
     if (!name || name.length > 60) return "Enter a display name between 1 and 60 characters.";
     try {
       const existing = parse(snapshot());
+      if (existing) assertWorkspaceWritable(existing.id);
       const next: LocalProfile = { id: existing?.id ?? crypto.randomUUID(), displayName: name, avatarColor: avatarColor ?? existing?.avatarColor ?? "#8970ed" };
       localStorage.setItem(key, JSON.stringify(next)); window.dispatchEvent(new Event(changed)); return null;
     } catch { return "Could not save your profile on this device. Check available storage and try again."; }
