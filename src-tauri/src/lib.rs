@@ -78,6 +78,8 @@ pub fn run() {
             quick_capture::set_capture_enabled,
             quick_capture::pause_capture_shortcut,
             quick_capture::set_capture_account,
+            quick_capture::prepare_workspace_data_reset,
+            quick_capture::restart_after_data_reset,
             quick_capture::get_capture_account,
             quick_capture::capture_saved,
             quick_capture::finish_capture,

@@ -29,10 +29,11 @@ export async function inspectWorkspaceData(id: string) {
     preferences: keys.filter(key => key.startsWith(`scribe-preferences:v1:${id}:`) || legacyPreferences.includes(key)).length,
     pendingImports: imports.reduce((total, job) => total + job.notes.length, 0),
     pendingChanges: data.outbox.length + Object.keys(reminders.pending).length,
+    contentBytes: stored.bytes + byteSize(reminders) + byteSize(notifications) + keys.filter(key => key === `scribe-folder-order:${id}` || key === `scribe-unfiled-position:${id}` || key === `scribe-quick-capture-draft:${id}`).reduce((total,key) => total + byteSize([key,localStorage.getItem(key)]),0),
     bytes: stored.bytes + byteSize(reminders) + byteSize(notifications) + keys.reduce((total, key) => total + byteSize([key, localStorage.getItem(key)]), 0),
   };
 }
-export async function deleteWorkspaceData(id: string) {
+export async function deleteWorkspaceData(id: string, preservePreferences = false) {
   markWorkspaceDeletion(id, "pending");
   if (isTauri()) {
     await waitForCaptureAccount();
@@ -46,7 +47,8 @@ export async function deleteWorkspaceData(id: string) {
   const results = await Promise.allSettled([offlineStore.deleteWorkspace(id), reminderStore.deleteWorkspace(id)]);
   const failure = results.find(result => result.status === "rejected");
   if (failure?.status === "rejected") throw failure.reason;
-  for (const key of ownStorageKeys(id)) localStorage.removeItem(key);
+  const contentKeys = new Set([`scribe-folder-order:${id}`, `scribe-unfiled-position:${id}`, `scribe-quick-capture-draft:${id}`]);
+  for (const key of ownStorageKeys(id)) if (!preservePreferences || contentKeys.has(key)) localStorage.removeItem(key);
   const legacySort = localStorage.getItem("scribe-note-sort");
   if (legacySort) {
     let parsed: unknown;

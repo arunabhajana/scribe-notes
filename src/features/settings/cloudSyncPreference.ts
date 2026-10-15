@@ -4,6 +4,11 @@ import { WORKSPACE_DELETION_CHANGED, workspaceDeletionStatus } from "../auth/wor
 const changed = "scribe-cloud-sync-preference-changed";
 const keyFor = (userId: string) => `scribe-cloud-sync:v1:${userId}`;
 const requests = new Map<string, AbortController>();
+export function disableCloudSync(userId: string) {
+  localStorage.setItem(keyFor(userId), "disabled");
+  requests.get(userId)?.abort(); requests.delete(userId);
+  window.dispatchEvent(new Event(changed));
+}
 
 export function isCloudSyncEnabled(userId: string) {
   try { return !workspaceDeletionStatus(userId) && localStorage.getItem(keyFor(userId)) === "enabled"; }
@@ -35,8 +40,8 @@ export function useCloudSyncPreference(userId: string | undefined) {
   const enabled = useSyncExternalStore(subscribe, () => Boolean(userId && isCloudSyncEnabled(userId)), () => false);
   const setEnabled = useCallback((value: boolean) => {
     if (!userId) throw new Error("Sign in before changing cloud sync.");
-    localStorage.setItem(keyFor(userId), value ? "enabled" : "disabled");
-    if (!value) { requests.get(userId)?.abort(); requests.delete(userId); }
+    if (!value) { disableCloudSync(userId); return; }
+    localStorage.setItem(keyFor(userId), "enabled");
     window.dispatchEvent(new Event(changed));
   }, [userId]);
   return { enabled, setEnabled };

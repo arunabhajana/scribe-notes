@@ -1,5 +1,5 @@
 import type { NoteReminder, ReminderCache, ReminderReply } from "./reminderTypes";
-import { assertWorkspaceWritable } from "../auth/workspaceDeletionState";
+import { assertWorkspaceWritable, observeWorkspaceGeneration } from "../auth/workspaceDeletionState";
 
 export const REMINDERS_CHANGED_EVENT = "scribe:reminders-changed";
 let database: Promise<IDBDatabase> | undefined;
@@ -23,6 +23,7 @@ function openDatabase() {
 const empty = (userId: string): ReminderCache => ({ userId, reminders: {}, pending: {}, cursor: null });
 
 async function transaction(userId: string, update?: (cache: ReminderCache) => ReminderCache) {
+  observeWorkspaceGeneration(userId);
   const db = await openDatabase();
   if (update) assertWorkspaceWritable(userId);
   return new Promise<ReminderCache>((resolve, reject) => {
@@ -51,6 +52,18 @@ async function transaction(userId: string, update?: (cache: ReminderCache) => Re
 }
 
 export const reminderStore = {
+  async reopenEmptyWorkspace(userId: string) {
+    const db = await openDatabase();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("accounts", "readwrite", { durability: "strict" });
+      tx.objectStore("accounts").put(empty(userId));
+      tx.oncomplete = () => resolve();
+      tx.onabort = tx.onerror = () => reject(tx.error ?? new Error("Could not finish clearing reminders."));
+    });
+  },
+  async rebaseAfterCloudReset(userId: string) {
+    await transaction(userId, cache => ({ ...cache, cursor: null, pending: Object.fromEntries(Object.values(cache.reminders).map(reminder => [reminder.noteId, { ...reminder, mutationId: crypto.randomUUID() }])) }));
+  },
   async importBatch(userId: string, reminders: NoteReminder[]) {
     if (!reminders.length) return;
     await transaction(userId, cache => {

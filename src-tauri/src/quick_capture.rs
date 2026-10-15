@@ -442,3 +442,17 @@ pub fn open_capture_main(app: AppHandle) {
         let _ = window.hide();
     }
 }
+
+// Main-window data reset closes the old capture WebView before content removal.
+#[tauri::command]
+pub fn prepare_workspace_data_reset(app: AppHandle, window: tauri::WebviewWindow, user_id: String) -> Result<(), String> {
+    crate::security::require_main(&window)?;
+    if uuid::Uuid::parse_str(&user_id).is_err() || active_account(&app).is_some_and(|id| id != user_id) { return Err("Switch back to this workspace first.".into()); }
+    if let Some(capture) = app.get_webview_window("quick-capture") { capture.destroy().map_err(|error| error.to_string())?; }
+    Ok(())
+}
+#[tauri::command]
+pub fn restart_after_data_reset(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    crate::security::require_main(&window)?;
+    app.restart()
+}

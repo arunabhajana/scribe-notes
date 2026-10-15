@@ -1,3 +1,4 @@
+import { cloudGeneration, handleCloudReset } from "../settings/cloudGeneration";
 import type { User } from "@supabase/supabase-js";
 import type {
   FolderColor,
@@ -143,8 +144,8 @@ export const notesRepository = {
     const signal = cloudSyncSignal(user.id);
     const operations = batch.payload ?? encodeSyncOperations(batch.operations);
     const raw = await query(client.rpc("sync_notes_batch", {
-      p_batch_id: batch.id, p_operations: operations, p_cursor: cursor,
-    }).setHeader("Authorization", `Bearer ${session.access_token}`).abortSignal(signal)) as {
+      p_batch_id: batch.id, p_operations: operations, p_cursor: cursor, p_generation: cloudGeneration(user.id),
+    }).setHeader("Authorization", `Bearer ${session.access_token}`).abortSignal(signal)).catch(cause => { handleCloudReset(user.id, cause); throw cause; }) as {
       cursor: string; full: boolean; hasMore: boolean;
       changes: { entity: "note" | "folder"; id: string; snapshot: NoteRow | FolderRow | null }[];
       results: { revisionId: string; status: "applied" | "conflict"; entity: "note" | "folder"; snapshot: NoteRow | FolderRow | null }[];

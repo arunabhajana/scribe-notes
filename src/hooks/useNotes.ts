@@ -1,3 +1,4 @@
+import { CLOUD_RESET_EVENT, CLOUD_RESET_MESSAGE } from "../features/settings/cloudGeneration";
 import { WORKSPACE_DELETION_CHANGED, workspaceDeletionStatus } from "../features/auth/workspaceDeletionState";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
@@ -188,6 +189,11 @@ export function useNotes(
             : hasPendingSync
               ? "on-device"
               : "synced";
+  useEffect(() => {
+    const reset = (event: Event) => { if ((event as CustomEvent<string>).detail === user?.id) setError(CLOUD_RESET_MESSAGE); };
+    window.addEventListener(CLOUD_RESET_EVENT, reset);
+    return () => window.removeEventListener(CLOUD_RESET_EVENT, reset);
+  }, [user?.id]);
   const clearError = useCallback(() => setError(null), []);
   const showError = useCallback((message: string) => setError(message), []);
   const persistLocally = useCallback((ownerId: string, key: string, run: () => Promise<void>) => {

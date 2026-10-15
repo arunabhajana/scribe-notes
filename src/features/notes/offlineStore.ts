@@ -1,5 +1,5 @@
 import type { Note, NoteFolder } from "../../types/note";
-import { assertWorkspaceWritable } from "../auth/workspaceDeletionState";
+import { assertWorkspaceWritable, observeWorkspaceGeneration } from "../auth/workspaceDeletionState";
 import type { SyncBatch, SyncReply } from "./syncProtocol";
 import { encodeSyncOperations } from "./syncProtocol";
 import type { ImportJob, ImportReceipt } from "../transfer/transferTypes";
@@ -109,6 +109,35 @@ function workspaceWrite(db: IDBDatabase, userId: string, stores: string | string
 }
 
 export const offlineStore = {
+  async reopenEmptyWorkspace(userId: string) {
+    const db = await openDatabase();
+    const tx = db.transaction("syncState", "readwrite", { durability: "strict" });
+    tx.objectStore("syncState").put({ userId, cursor: null } satisfies SyncState);
+    await transactionDone(tx);
+  },
+  async rebaseAfterCloudReset(userId: string) {
+    const db = await openDatabase();
+    const tx = workspaceWrite(db, userId, ["notes", "folders", "outbox"]);
+    const done = transactionDone(tx);
+    const outbox = tx.objectStore("outbox");
+    const previous = outbox.index("userId").getAllKeys(userId);
+    previous.onsuccess = () => { for (const key of previous.result) outbox.delete(key); };
+    let sequence = Date.now();
+    for (const [storeName, entity] of [["folders", "folder"], ["notes", "note"]] as const) {
+      const request = tx.objectStore(storeName).index("userId").getAll(userId) as IDBRequest<(CacheNote | CacheFolder)[]>;
+      request.onsuccess = () => {
+        for (const row of request.result) {
+          const { key: _key, userId: _owner, version: _version, ...snapshot } = row;
+          void _key; void _owner; void _version;
+          tx.objectStore(storeName).put({ ...snapshot, userId, key: rowKey(userId, row.id) });
+          outbox.put({ key: [userId, entity, row.id], userId, entity, entityId: row.id, kind: "upsert", snapshot,
+            baseUpdatedAt: null, queuedUpdatedAt: row.updatedAt, revisionId: crypto.randomUUID(), sequence: sequence++ } satisfies OutboxOperation);
+        }
+      };
+    }
+    tx.objectStore("syncState").put({ userId, cursor: null } satisfies SyncState);
+    await done;
+  },
   async pendingImports(userId: string): Promise<ImportJob[]> {
     const db = await openDatabase();
     const request = db.transaction("importJobs", "readonly").objectStore("importJobs").index("userId").getAll(userId) as IDBRequest<ImportJob[]>;
@@ -365,6 +394,7 @@ export const offlineStore = {
     folders: NoteFolder[];
     outbox: OutboxOperation[];
   }> {
+    observeWorkspaceGeneration(userId);
     const db = await openDatabase();
     const tx = db.transaction(["notes", "folders", "outbox"], "readonly");
     const done = transactionDone(tx);

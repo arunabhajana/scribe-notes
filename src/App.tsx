@@ -1,3 +1,5 @@
+import { usePendingDataDeletion, type DataDeletionTarget } from "./features/auth/dataDeletionState";
+import { prepareCloudReconnect } from "./features/settings/cloudGeneration";
 import type { TransferTarget } from "./features/transfer/transferTypes";
 import { DeleteAccountDialog } from "./components/settings/DeleteAccountDialog";
 import { usePendingAccountDeletion, type AccountDeletionTarget } from "./features/auth/onlineAccountDeletion";
@@ -52,6 +54,7 @@ import {
   type ShortcutBindings,
 } from "./features/shortcuts/keyboardShortcuts";
 
+const DeleteDataDialog = lazy(() => import("./components/settings/DeleteDataDialog").then(module => ({ default: module.DeleteDataDialog })));
 const DataTransferDialog = lazy(() => import("./components/settings/transfer/DataTransferDialog").then(module => ({ default: module.DataTransferDialog })));
 
 type AppPage = "notes" | "preferences";
@@ -62,40 +65,48 @@ function App() {
   const [accountEntry, setAccountEntry] = useState(false);
   const [localSetup, setLocalSetup] = useState(false);
   const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
-  const [transfer, setTransfer] = useState<(TransferTarget & { returnTo?: "offline" | "online"; account?: AccountDeletionTarget }) | null>(null);
+  const [transfer, setTransfer] = useState<(TransferTarget & { returnTo?: "offline" | "online" | "data"; dataTarget?: DataDeletionTarget; account?: AccountDeletionTarget }) | null>(null);
+  const [dataTarget, setDataTarget] = useState<DataDeletionTarget | null>(null);
+  const dataPending = usePendingDataDeletion();
+  const activeDataTarget = dataPending?.target ?? dataTarget;
   const deletionStatus = useWorkspaceDeletionStatus(local.profile?.id ?? null);
   const onlinePending = usePendingAccountDeletion();
   const [onlineTarget, setOnlineTarget] = useState<AccountDeletionTarget | null>(null);
   const onlineStatus = useWorkspaceDeletionStatus(auth.user?.id ?? onlinePending?.userId ?? null);
-  const workspaceBlocked = Boolean((auth.user ? onlineStatus : deletionStatus) || (onlinePending && (!auth.user || auth.user.id === onlinePending.userId)));
+  const workspaceBlocked = Boolean(dataPending || (auth.user ? onlineStatus : deletionStatus) || (onlinePending && (!auth.user || auth.user.id === onlinePending.userId)));
   const deleteTarget = onlineTarget ?? (onlinePending ? { id: onlinePending.userId, email: auth.user?.id === onlinePending.userId ? auth.user.email ?? "" : "", displayName: "your account" } : null);
   const workspaceId = auth.loading ? null : auth.user?.id ?? onlinePending?.userId ?? (accountEntry ? null : local.profile?.id ?? null);
   const activeTransfer = transfer?.id === workspaceId && !workspaceBlocked ? transfer : null;
-  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} workspaceDeletionBlocked={workspaceBlocked} capturePaused={deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeTransfer)} onOpenTransfer={target => setTransfer(target)} onlineDeletionPending={Boolean(onlinePending)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} onDeleteAccount={() => {
+  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} workspaceDeletionBlocked={workspaceBlocked} capturePaused={deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeTransfer) || Boolean(activeDataTarget)} onDeleteData={target => setDataTarget(target)} onOpenTransfer={target => setTransfer(target)} onlineDeletionPending={Boolean(onlinePending)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} onDeleteAccount={() => {
     if (auth.user) { setAccountEntry(true); setOnlineTarget({ id: auth.user.id, email: auth.user.email ?? "", displayName: profileFromUser(auth.user).displayName }); }
   }} />
-    {!activeTransfer && !deleteTarget && !auth.loading && !auth.user && local.profile && (deleteProfileOpen || deletionStatus) && <DeleteOfflineProfileDialog
+    {!dataPending && !activeDataTarget && !activeTransfer && !deleteTarget && !auth.loading && !auth.user && local.profile && (deleteProfileOpen || deletionStatus) && <DeleteOfflineProfileDialog
       key={local.profile.id} profile={local.profile} interrupted={Boolean(deletionStatus)} onExport={() => {
         if (deletionStatus || !local.profile) return;
         setDeleteProfileOpen(false); setTransfer({ id: local.profile.id, displayName: local.profile.displayName, localOnly: true, cloudSync: false, mode: "export", returnTo: "offline" });
       }} onClose={() => setDeleteProfileOpen(false)}
       onDeleted={() => { setDeleteProfileOpen(false); setLocalSetup(false); setAccountEntry(true); }} />}
-    {!activeTransfer && !auth.loading && deleteTarget && <DeleteAccountDialog key={deleteTarget.id} account={deleteTarget} pending={onlinePending} currentUserId={auth.user?.id} onExport={() => {
+    {!dataPending && !activeDataTarget && !activeTransfer && !auth.loading && deleteTarget && <DeleteAccountDialog key={deleteTarget.id} account={deleteTarget} pending={onlinePending} currentUserId={auth.user?.id} onExport={() => {
       if (onlinePending || auth.user?.id !== deleteTarget.id) return;
       setOnlineTarget(null); setTransfer({ id: deleteTarget.id, displayName: deleteTarget.displayName, localOnly: false, cloudSync: isCloudSyncEnabled(deleteTarget.id), mode: "export", returnTo: "online", account: deleteTarget });
     }} onSignOutCurrent={auth.signOut} onClose={() => setOnlineTarget(null)}
       onDeleted={() => { setOnlineTarget(null); setAccountEntry(true); setLocalSetup(false); }} onFinish={auth.finishDeletedAccount} onPasswordReset={auth.requestPasswordReset} />}
+    {!activeTransfer && !auth.loading && activeDataTarget && <Suspense fallback={null}><DeleteDataDialog key={activeDataTarget.id} target={activeDataTarget} pending={dataPending} onClose={() => setDataTarget(null)} onPasswordReset={auth.requestPasswordReset} onExport={() => {
+      if (dataPending) return;
+      setDataTarget(null); setTransfer({ id: activeDataTarget.id, displayName: activeDataTarget.displayName, localOnly: activeDataTarget.localOnly, cloudSync: !activeDataTarget.localOnly && isCloudSyncEnabled(activeDataTarget.id), mode: "export", returnTo: "data", dataTarget: activeDataTarget });
+    }}/></Suspense>}
     {activeTransfer && <Suspense fallback={null}><DataTransferDialog key={`${activeTransfer.id}:${activeTransfer.mode}`} target={activeTransfer} returnToDeletion={Boolean(activeTransfer.returnTo)} onClose={() => {
       setTransfer(null);
+      if (activeTransfer.returnTo === "data" && activeTransfer.dataTarget) setDataTarget(activeTransfer.dataTarget);
       if (activeTransfer.returnTo === "offline" && !auth.user && local.profile?.id === activeTransfer.id) setDeleteProfileOpen(true);
       if (activeTransfer.returnTo === "online" && auth.user?.id === activeTransfer.id && activeTransfer.account) setOnlineTarget(activeTransfer.account);
     }} /></Suspense>}
   </WorkspacePreferencesProvider>;
 }
 
-function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup, workspaceDeletionBlocked, capturePaused, onlineDeletionPending, onDeleteOfflineProfile, onDeleteAccount, onOpenTransfer }: {
+function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup, workspaceDeletionBlocked, capturePaused, onlineDeletionPending, onDeleteOfflineProfile, onDeleteAccount, onOpenTransfer, onDeleteData }: {
   auth: ReturnType<typeof useAuth>; local: ReturnType<typeof useLocalProfile>;
-  workspaceDeletionBlocked: boolean; capturePaused: boolean; onlineDeletionPending: boolean; onDeleteOfflineProfile: () => void; onDeleteAccount: () => void; onOpenTransfer: (target: TransferTarget) => void;
+  workspaceDeletionBlocked: boolean; capturePaused: boolean; onlineDeletionPending: boolean; onDeleteOfflineProfile: () => void; onDeleteAccount: () => void; onOpenTransfer: (target: TransferTarget) => void; onDeleteData: (target: DataDeletionTarget) => void;
   accountEntry: boolean; setAccountEntry: (value: boolean) => void;
   localSetup: boolean; setLocalSetup: (value: boolean) => void;
 }) {
@@ -292,7 +303,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   };
   const cloudSyncDialog = syncConfirmation && syncConfirmation.userId === auth.user?.id
     ? <CloudSyncDialog key={`${syncConfirmation.userId}:${syncConfirmation.enabling}`} enabling={syncConfirmation.enabling}
-      onClose={() => setSyncConfirmation(null)} onConfirm={() => { cloudSync.setEnabled(syncConfirmation.enabling); setSyncConfirmation(null); }} /> : null;
+      onClose={() => setSyncConfirmation(null)} onConfirm={async () => { if (syncConfirmation.enabling) await prepareCloudReconnect(syncConfirmation.userId); cloudSync.setEnabled(syncConfirmation.enabling); setSyncConfirmation(null); }} /> : null;
 
   const fallbackProfile = auth.user
     ? profileFromUser(auth.user)
@@ -520,6 +531,11 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         <SettingsPage
           key={preferenceWorkspaceId}
           onSignIn={openSignIn}
+          onDeleteData={() => {
+            if (!notesUser || !notesState.cacheReady) { showNoteError("Wait for your saved workspace to load."); return; }
+            if (isComposerOpen) { showNoteError("Save or close your draft before deleting data."); setPage("notes"); window.dispatchEvent(new Event("scribe:restore-note-draft")); return; }
+            onDeleteData({ id: notesUser.id, displayName: accountProfile.displayName, email: accountProfile.email, localOnly: usingLocalProfile });
+          }}
           onOpenTransfer={mode => {
             if (!notesUser || !notesState.cacheReady) { showNoteError("Wait for your saved workspace to load before transferring notes."); return; }
             if (isComposerOpen) { showNoteError("Save or close your draft before transferring notes."); setPage("notes"); window.dispatchEvent(new Event("scribe:restore-note-draft")); return; }

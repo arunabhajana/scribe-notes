@@ -136,6 +136,7 @@ type SettingSearchEntry = {
   targetId?: string;
   availability?: "online" | "offline";
   offlineDetail?: string;
+  offlineTerms?: string;
 };
 const settingSearchIndex: SettingSearchEntry[] = [
   { label: "Launch at startup", detail: "Open Scribe when you sign in to your computer.", category: "editor", terms: "startup launch windows open boot" },
@@ -170,6 +171,7 @@ const settingSearchIndex: SettingSearchEntry[] = [
   { label: "Account data", detail: "Review account deletion controls.", category: "account", terms: "privacy delete data", availability: "online" },
   { label: "Export notes", detail: "Save a Scribe backup or Markdown ZIP.", category: "general", terms: "download backup export data transfer" },
   { label: "Import notes", detail: "Add notes from a backup, Markdown ZIP or Markdown files.", category: "general", terms: "restore import upload data transfer" },
+  { label: "Delete Data", detail: "Clear local data, cloud data, or both after password and authenticator verification. Keep your account and preferences.", offlineDetail: "Clear this offline workspace’s saved content after typing confirm. Keep your profile and preferences.", offlineTerms: "delete clear erase wipe local notes folders reminders data", category: "account", terms: "delete clear erase wipe local cloud notes folders reminders data" },
   { label: "Delete account", detail: "Review and permanently delete your account, cloud data and this device’s saved copy.", category: "account", terms: "delete remove account privacy", availability: "online" },
   { label: "Delete offline profile", detail: "Review and permanently delete this workspace’s local data.", category: "account", terms: "offline local profile delete remove erase privacy", availability: "offline" },
   { label: "About Scribe", detail: "View version and product information.", category: "about", terms: "version information app", targetId: "setting-scribe" },
@@ -414,6 +416,7 @@ function AccountSettings({
   onSignIn,
   onDeleteOfflineProfile,
   onDeleteAccount,
+  onDeleteData,
   onAvatarColorChange,
   onUpdateDisplayName,
   onLinkAccount,
@@ -425,6 +428,7 @@ function AccountSettings({
   onSignIn: () => void;
   onDeleteOfflineProfile: () => void;
   onDeleteAccount: () => void;
+  onDeleteData: () => void;
   onAvatarColorChange: (color: string) => void;
   onUpdateDisplayName: (name: string) => Promise<string | null>;
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
@@ -585,10 +589,16 @@ function AccountSettings({
           </div>
         </div>
       </SettingCard>
+      {profile.localOnly && <SettingCard title="Delete Data" description="Clear workspace content while keeping your profile and preferences." accent="pink">
+        <div className="account-setting-row" id={settingId("Delete Data")}>
+          <div><strong>{profile.localOnly ? "Clear local content" : "Choose local, cloud, or both"}</strong><span>Review notes, folders and reminders before deletion. Other workspaces are kept.</span></div>
+          <button type="button" className="offline-profile-delete-button" onClick={onDeleteData}>Delete Data</button>
+        </div>
+      </SettingCard>}
       {profile.localOnly ? <>
         <AccountRequiredNotice onSignIn={onSignIn} />
         <SettingCard title="Account features" description="These features need a signed-in account." accent="pink">
-          <fieldset disabled className="offline-account-features">{["Email address", "Password reset", "Two-step verification", "Google & GitHub linking", "Signed-in devices", "Delete Data", "Delete account"].map(label => <div className="offline-account-feature" key={label}><span>{label}</span><button type="button">Sign in required</button></div>)}</fieldset>
+          <fieldset disabled className="offline-account-features">{["Email address", "Password reset", "Two-step verification", "Google & GitHub linking", "Signed-in devices", "Delete account"].map(label => <div className="offline-account-feature" key={label}><span>{label}</span><button type="button">Sign in required</button></div>)}</fieldset>
         </SettingCard>
         <SettingCard title="Delete offline profile" description="Permanently remove this profile and its data from this device." accent="pink">
           <div className="account-setting-row">
@@ -679,6 +689,10 @@ function AccountSettings({
         accent="pink"
         id={settingId("Account data")}
       >
+        <div className="account-setting-row" id={settingId("Delete Data")}>
+          <div><strong>Delete Data</strong><span>Choose local data, cloud data, or both. Your account and preferences are kept.</span></div>
+          <button type="button" className="offline-profile-delete-button" onClick={onDeleteData}>Delete Data</button>
+        </div>
         <div className="account-setting-row" id={settingId("Delete account")}>
           <div><strong>Delete account</strong><span>Permanently remove your account, cloud data and its saved copy on this device.</span></div>
           <button type="button" className="offline-profile-delete-button" onClick={onDeleteAccount}>Delete account</button>
@@ -1055,6 +1069,7 @@ function CategoryContent({
   onSignIn,
   onDeleteOfflineProfile,
   onDeleteAccount,
+  onDeleteData,
   onOpenTransfer,
   dark,
   setDark,
@@ -1088,6 +1103,7 @@ function CategoryContent({
   onSignIn: () => void;
   onDeleteOfflineProfile: () => void;
   onDeleteAccount: () => void;
+  onDeleteData: () => void;
   onOpenTransfer: (mode: "export" | "import") => void;
   dark: boolean;
   setDark: (value: boolean) => void;
@@ -1179,7 +1195,7 @@ function CategoryContent({
         </>
       );
     case "account":
-      return <AccountSettings profile={profile} onSignIn={onSignIn} onDeleteOfflineProfile={onDeleteOfflineProfile} onDeleteAccount={onDeleteAccount} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
+      return <AccountSettings profile={profile} onSignIn={onSignIn} onDeleteOfflineProfile={onDeleteOfflineProfile} onDeleteAccount={onDeleteAccount} onDeleteData={onDeleteData} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
     case "folders":
       return (
         <FolderManagementSettings
@@ -1461,6 +1477,7 @@ export function SettingsPage({
   onSignIn,
   onDeleteOfflineProfile,
   onDeleteAccount,
+  onDeleteData,
   onOpenTransfer,
   dark,
   accent,
@@ -1494,6 +1511,7 @@ export function SettingsPage({
   onSignIn: () => void;
   onDeleteOfflineProfile: () => void;
   onDeleteAccount: () => void;
+  onDeleteData: () => void;
   onOpenTransfer: (mode: "export" | "import") => void;
   dark: boolean;
   accent: AccentColor;
@@ -1545,7 +1563,7 @@ export function SettingsPage({
     () =>
       settingSearchIndex
         .filter(item => !item.availability || item.availability === (profile.localOnly ? "offline" : "online"))
-        .map(item => profile.localOnly && item.offlineDetail ? { ...item, detail: item.offlineDetail } : item)
+        .map(item => profile.localOnly && item.offlineDetail ? { ...item, detail: item.offlineDetail, terms: item.offlineTerms ?? item.terms } : item)
         .filter((item) =>
           `${item.label} ${item.detail} ${item.terms} ${workspaceCategories.find((category) => category.id === item.category)?.label ?? ""}`
             .toLowerCase()
@@ -1705,7 +1723,7 @@ export function SettingsPage({
             <CategoryContent
               onSignIn={onSignIn}
               onDeleteOfflineProfile={onDeleteOfflineProfile}
-              onDeleteAccount={onDeleteAccount} onOpenTransfer={onOpenTransfer}
+              onDeleteAccount={onDeleteAccount} onDeleteData={onDeleteData} onOpenTransfer={onOpenTransfer}
               key={activeCategory.id}
               category={activeCategory}
               dark={dark}

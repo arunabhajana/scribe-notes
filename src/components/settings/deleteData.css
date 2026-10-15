@@ -1,0 +1,12 @@
+.data-delete-scopes { margin: 20px 0; padding: 0; border: 0; display: grid; gap: 8px; }
+.data-delete-scopes legend { margin-bottom: 10px; font-size: 12px; font-weight: 600; }
+.data-delete-scopes label { display: flex; align-items: center; gap: 12px; border: 1px solid var(--delete-border); border-radius: 10px; padding: 12px 14px; cursor: pointer; }
+.data-delete-scopes label.is-selected { border-color: #a18ae9; background: #8970ed0a; }
+.data-delete-dialog .data-delete-scopes input { appearance: none; flex: 0 0 17px; width: 17px; height: 17px; margin: 0; padding: 0; border: 1px solid var(--delete-muted); border-radius: 50%; display: grid; place-items: center; }
+.data-delete-dialog .data-delete-scopes input:checked { border-color: #a18ae9; }
+.data-delete-dialog .data-delete-scopes input:checked::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #a18ae9; }
+.data-delete-scopes label > span { display: flex; flex-direction: column; gap: 4px; }
+.data-delete-scopes strong { font-size: 12px; }
+.data-delete-scopes small { font-size: 11px; color: var(--delete-muted); line-height: 1.6; }
+.data-delete-dialog .data-delete-kept { color: var(--delete-muted); opacity: .65; }
+.data-delete-dialog .data-delete-success-icon { color: #38bc9b; background: #38bc9b14; }
