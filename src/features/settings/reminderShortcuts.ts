@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from "react";
+import { useMemo } from "react";
+import { readWorkspacePreference, useWorkspaceId, useWorkspacePreference, writeWorkspacePreference } from "./workspacePreferences";
 
 type PresetSchedule = { minutes: number; time?: never } | { time: string; minutes?: never };
 export type ReminderShortcut = { id: string; label: string } & PresetSchedule;
@@ -43,9 +44,8 @@ export function shortcutDuration(minutes: number) {
   if (minutes % 60 === 0) return `${minutes / 60} ${minutes === 60 ? "hr" : "hrs"}`;
   return `${minutes} ${minutes === 1 ? "min" : "mins"}`;
 }
-function read(): Preferences {
+function parsePreferences(raw: string | null): Preferences {
   try {
-    const raw = localStorage.getItem(storageKey);
     if (raw === null) return defaults;
     const parsed: unknown = JSON.parse(raw);
     const value = parsed as Partial<Preferences> | null;
@@ -69,47 +69,43 @@ function read(): Preferences {
     return { shortcuts, defaultId };
   } catch { return defaults; }
 }
-let current = read();
-const listeners = new Set<() => void>();
-const notify = () => listeners.forEach((listener) => listener());
-function subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
-window.addEventListener("storage", (event) => {
-  if (event.key === storageKey || event.key === null) { current = read(); notify(); }
-});
-function persist(next: Preferences) {
-  try { localStorage.setItem(storageKey, JSON.stringify(next)); }
+function read(workspaceId: string | null) { return parsePreferences(readWorkspacePreference(workspaceId, storageKey)); }
+function persist(workspaceId: string | null, next: Preferences) {
+  try { writeWorkspacePreference(workspaceId, storageKey, JSON.stringify(next)); }
   catch { return "Could not save presets on this device. Please try again."; }
-  current = next; notify(); return null;
+  return null;
 }
-function save(input: ReminderShortcutInput, id?: string): string | null {
+function save(workspaceId: string | null, input: ReminderShortcutInput, id?: string): string | null {
   const label = input.label.trim();
   if (!label || label.length > 24) return "Use a preset name of 1–24 characters.";
   if (input.time !== undefined) {
     if (!isPresetTime(input.time)) return "Choose a valid time.";
   } else if (!Number.isInteger(input.minutes) || input.minutes < 1 || input.minutes > 525600) return "Choose a duration between 1 minute and 365 days.";
-  const preferences = read();
+  const preferences = read(workspaceId);
   const saved = preferences.shortcuts;
   if (id && !saved.some((item) => item.id === id)) return "This preset was removed. Add it again to save it.";
   if ([...standardReminderPresets, ...saved].some((item) => item.id !== id && item.label.toLowerCase() === label.toLowerCase())) return "A preset with that name already exists.";
   const replacement: ReminderShortcut = input.time !== undefined
     ? { id: id ?? crypto.randomUUID(), label, time: input.time }
     : { id: id ?? crypto.randomUUID(), label, minutes: input.minutes };
-  return persist({ ...preferences, shortcuts: id ? saved.map((item) => item.id === id ? replacement : item) : [...saved, replacement] });
+  return persist(workspaceId, { ...preferences, shortcuts: id ? saved.map((item) => item.id === id ? replacement : item) : [...saved, replacement] });
 }
 export function useReminderShortcuts() {
-  const preferences = useSyncExternalStore(subscribe, () => current);
+  const workspaceId = useWorkspaceId();
+  const [raw] = useWorkspacePreference(storageKey);
+  const preferences = useMemo(() => parsePreferences(raw), [raw]);
   const presets: ReminderPreset[] = [...standardReminderPresets, ...preferences.shortcuts];
   return { shortcuts: preferences.shortcuts, presets, defaultId: preferences.defaultId,
     defaultPreset: presets.find((preset) => preset.id === preferences.defaultId) ?? standardReminderPresets[0],
     setDefault: (id: string) => {
-      const saved = read();
+      const saved = read(workspaceId);
       if (![...standardReminderPresets, ...saved.shortcuts].some((preset) => preset.id === id)) return "Choose an available preset.";
-      return persist({ ...saved, defaultId: id });
+      return persist(workspaceId, { ...saved, defaultId: id });
     },
-    add: (input: ReminderShortcutInput) => save(input),
-    update: (id: string, input: ReminderShortcutInput) => save(input, id),
+    add: (input: ReminderShortcutInput) => save(workspaceId, input),
+    update: (id: string, input: ReminderShortcutInput) => save(workspaceId, input, id),
     remove: (id: string) => {
-      const saved = read();
-      return persist({ shortcuts: saved.shortcuts.filter((item) => item.id !== id), defaultId: saved.defaultId === id ? defaults.defaultId : saved.defaultId });
+      const saved = read(workspaceId);
+      return persist(workspaceId, { shortcuts: saved.shortcuts.filter((item) => item.id !== id), defaultId: saved.defaultId === id ? defaults.defaultId : saved.defaultId });
     } };
 }

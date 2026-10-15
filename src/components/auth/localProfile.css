@@ -1,0 +1,18 @@
+.local-profile-panel { padding-block: 24px; }
+.local-profile-panel > .app-logo { width: 42px; height: 42px; }
+.local-profile-notice { margin: 20px 0 24px; padding: 14px 16px; border: 1px solid var(--auth-border); border-radius: 10px; background: var(--auth-raised); color: var(--auth-text); }
+.local-profile-notice strong { font-size: 12px; }
+.local-profile-notice p { margin: 6px 0 0; font-size: 11px; line-height: 1.7; color: var(--auth-muted); }
+.local-profile-panel .auth-form { gap: 18px; }
+.local-profile-back-button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 40px; padding: 10px 16px; border: 1px solid var(--auth-border); border-radius: 9px; background: var(--auth-raised); color: var(--auth-text); font-size: 11px; font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s; }
+.local-profile-back-button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.local-profile-back-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.local-profile-legal { margin-top: 22px; text-align: center; font-size: 11px; color: var(--auth-muted); }
+.local-profile-legal a { color: var(--auth-muted); text-decoration: underline; text-underline-offset: 3px; }
+.local-profile-legal a:hover { color: var(--accent); }
+.local-profile-footnote { margin: 14px 0 0; color: var(--auth-subtle); text-align: center; font-size: 10px; line-height: 1.7; }
+.auth-offline-entry { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--auth-border); text-align: center; }
+.auth-offline-entry button { min-height: 38px; padding: 8px 18px; border: 1px solid var(--auth-border); border-radius: 8px; background: transparent; color: var(--auth-text); font-size: 11px; font-weight: 600; cursor: pointer; }
+.auth-offline-entry button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.auth-offline-entry p { margin: 8px 0 0; color: var(--auth-muted); font-size: 10px; }
+.auth-offline-entry button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

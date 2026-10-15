@@ -50,9 +50,8 @@ export const defaultShortcutBindings: ShortcutBindings = {
   openSettings: { key: ",", shift: false },
 };
 
-export function getShortcutBindings(): ShortcutBindings {
+export function parseShortcutBindings(saved: string | null): ShortcutBindings {
   try {
-    const saved = localStorage.getItem("scribe-keyboard-shortcuts");
     if (!saved) return defaultShortcutBindings;
     const parsed = JSON.parse(saved) as Partial<ShortcutBindings>;
     const bindings = Object.fromEntries(
@@ -76,11 +75,15 @@ export function getShortcutBindings(): ShortcutBindings {
         ];
       }),
     ) as ShortcutBindings;
-    localStorage.setItem("scribe-keyboard-shortcuts", JSON.stringify(bindings));
     return bindings;
   } catch {
     return defaultShortcutBindings;
   }
+}
+
+export function getShortcutBindings(workspaceId: string | null = null): ShortcutBindings {
+  try { return parseShortcutBindings(localStorage.getItem(`scribe-preferences:v1:${workspaceId ?? "entry"}:scribe-keyboard-shortcuts`)); }
+  catch { return defaultShortcutBindings; }
 }
 
 export function isMacOS() {

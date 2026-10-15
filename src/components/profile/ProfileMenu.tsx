@@ -60,7 +60,7 @@ export function ProfileMenu({
                         <div className="avatar" style={{ background: profile.avatarColor, color: "#fff" }}>{initials}</div>
                         <div>
                             <strong>{profile.displayName}</strong>
-                            <span>{profile.email}</span>
+                            {!profile.localOnly && <span>{profile.email}</span>}
                         </div>
                     </div>
                     <div className="profile-popover-divider" />
@@ -75,14 +75,14 @@ export function ProfileMenu({
                     </button>
                     <div className="profile-popover-divider menu-divider-bottom" />
                     <button
-                        className="logout-menu-item"
+                        className={profile.localOnly ? "" : "logout-menu-item"}
                         role="menuitem"
                         onClick={() => {
                             setOpen(false);
                             onLogout();
                         }}
                     >
-                        <Icon name="logout" size={15} /> Log out
+                        <Icon name="logout" size={15} /> {profile.localOnly ? "Sign in to an account" : "Log out"}
                     </button>
                 </div>
             )}
@@ -107,7 +107,7 @@ export function ProfileBar({
             <div className="avatar profile-avatar" style={{ background: profile.avatarColor, color: "#fff" }}>{initials}</div>
             <div className="profile-copy">
                 <span className="profile-name">{profile.displayName}</span>
-                <span className="profile-plan">{profile.email}</span>
+                {!profile.localOnly && <span className="profile-plan">{profile.email}</span>}
             </div>
             <ProfileMenu
                 collapsed={collapsed}

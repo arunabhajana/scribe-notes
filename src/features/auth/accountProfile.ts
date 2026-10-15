@@ -3,6 +3,7 @@ import type { DeviceInventory } from "../../hooks/useDeviceSessions";
 
 export type AccountProfile = {
   displayName: string;
+  localOnly?: boolean;
   email: string;
   avatarColor?: string;
   deviceInventory?: DeviceInventory;

@@ -1,26 +1,21 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useMemo } from "react";
+import { readWorkspacePreference, useWorkspaceId, useWorkspacePreference, writeWorkspacePreference } from "./workspacePreferences";
 
 const defaults = { launch: false, minimizeToTray: false, quickCapture: true, spellcheck: true, reminders: true, desktop: true, sounds: false, size: "Medium", reminderLead: "10 minutes" };
 const key = "scribe-writing-preferences";
-function read() {
-  try { return { ...defaults, ...JSON.parse(localStorage.getItem(key) ?? "{}") }; }
-  catch { return defaults; }
-}
-let current: typeof defaults = read();
-const listeners = new Set<() => void>();
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => { listeners.delete(listener); };
-}
-window.addEventListener("storage", (event) => {
-  if (event.key === key) { current = read(); listeners.forEach((listener) => listener()); }
-});
-function update(value: Partial<typeof defaults>) {
-  const next = { ...current, ...value };
-  localStorage.setItem(key, JSON.stringify(next));
-  current = next;
-  listeners.forEach((listener) => listener());
+function parse(raw: string | null): typeof defaults {
+  try {
+    const saved = JSON.parse(raw ?? "{}");
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return defaults;
+    return { ...defaults, ...Object.fromEntries(Object.entries(defaults).filter(([name, value]) => typeof saved[name] === typeof value).map(([name]) => [name, saved[name]])) };
+  } catch { return defaults; }
 }
 export function useWritingPreferences() {
-  return [useSyncExternalStore(subscribe, () => current), update] as const;
+  const id = useWorkspaceId();
+  const [raw] = useWorkspacePreference(key);
+  const current = useMemo(() => parse(raw), [raw]);
+  const update = useCallback((value: Partial<typeof defaults>) => {
+    writeWorkspacePreference(id, key, JSON.stringify({ ...parse(readWorkspacePreference(id, key)), ...value }));
+  }, [id]);
+  return [current, update] as const;
 }

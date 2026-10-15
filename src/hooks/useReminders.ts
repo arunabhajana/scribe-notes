@@ -131,7 +131,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
   }, [userId, offlineMode]);
 
   const save = useCallback(async (noteId: string, dueAt: string | null, leadMinutes = 0): Promise<string | null> => {
-    if (!userId) return "Sign in before setting a reminder.";
+    if (!userId) return "Open your local profile or sign in before setting a reminder.";
     if (dueAt !== null && (!Number.isFinite(Date.parse(dueAt)) || Date.parse(dueAt) <= Date.now())) return "Choose a date and time in the future.";
     if (!Number.isInteger(leadMinutes) || leadMinutes < 0 || leadMinutes > 60) return "Choose a valid reminder lead time.";
     try {

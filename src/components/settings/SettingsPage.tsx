@@ -1,4 +1,5 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
+import { AccountRequiredNotice } from "./AccountRequiredNotice";
 import { pauseCaptureShortcut } from "../../features/capture/captureBridge";
 import { AppLogo } from "../AppLogo";
 import { MfaSettings } from "./MfaSettings";
@@ -342,11 +343,12 @@ function AccountSettingRow({
   );
 }
 
-function StorageSettings({ metrics, cloudSyncEnabled }: { metrics: StorageMetrics; cloudSyncEnabled: boolean }) {
+function StorageSettings({ metrics, cloudSyncEnabled, localOnly, onSignIn }: { metrics: StorageMetrics; cloudSyncEnabled: boolean; localOnly?: boolean; onSignIn: () => void }) {
   const [usage, setUsage] = useState<CloudStorageUsage | null>(null);
   const [cloudError, setCloudError] = useState("");
   const [cloudLoading, setCloudLoading] = useState(true);
   useEffect(() => {
+    if (localOnly) return;
     let active = true;
     let request = 0;
     const refresh = () => {
@@ -372,7 +374,7 @@ function StorageSettings({ metrics, cloudSyncEnabled }: { metrics: StorageMetric
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", refresh);
     };
-  }, []);
+  }, [localOnly]);
   const local = metrics.noteBytes + metrics.folderBytes + metrics.settingsBytes;
   const cloud = usage?.usedBytes ?? 0;
   const limit = usage?.limitBytes ?? CLOUD_STORAGE_LIMIT_BYTES;
@@ -380,6 +382,7 @@ function StorageSettings({ metrics, cloudSyncEnabled }: { metrics: StorageMetric
   const noteShare = local ? metrics.noteBytes / local * 100 : 0;
   const folderShare = local ? metrics.folderBytes / local * 100 : 0;
   return <>
+    {localOnly ? <SettingCard title="Cloud storage" description="Offline profiles do not upload data or use cloud storage." accent="purple"><AccountRequiredNotice onSignIn={onSignIn} /></SettingCard> : <>
     <div className={cloudSyncEnabled ? "" : "cloud-storage-disabled"}>
     <SettingCard title="Cloud storage" description="2 MB per account for synced Notes, folders, and reminders." accent="purple" id={settingId("Cloud storage")}>
       {!cloudSyncEnabled && <div className="cloud-sync-disabled-banner"><strong>Cloud sync is disabled</strong>Usage shows data already stored in your account. New changes stay on this device. Enable sync in General settings.</div>}
@@ -395,6 +398,7 @@ function StorageSettings({ metrics, cloudSyncEnabled }: { metrics: StorageMetric
     </SettingCard>
     </div>
     {cloudSyncEnabled && usage && cloud > limit && <div className="status-toast-stack"><StatusToast message={CLOUD_STORAGE_LIMIT_MESSAGE} /></div>}
+    </>}
     <SettingCard title="On this device" description="No app storage limit. Uses available space on your device." accent="purple" id={settingId("Local storage")}>
       <div className="storage-chart-layout">
         <div className="settings-donut" role="img" aria-label={`Local content ${formatBytes(local)}`} style={{ background: local ? `conic-gradient(var(--category) ${noteShare}%, #25bfd1 ${noteShare}% ${noteShare + folderShare}%, #f6a623 0)` : 'var(--border)' }}><div><HardDrive size={22} /><strong>{formatBytes(local)}</strong><small>local content</small></div></div>
@@ -420,6 +424,7 @@ function ProviderLogo({ provider }: { provider: "google" | "github" }) {
 
 function AccountSettings({
   profile,
+  onSignIn,
   onAvatarColorChange,
   onUpdateDisplayName,
   onLinkAccount,
@@ -428,6 +433,7 @@ function AccountSettings({
   mfa,
 }: {
   profile: AccountProfile;
+  onSignIn: () => void;
   onAvatarColorChange: (color: string) => void;
   onUpdateDisplayName: (name: string) => Promise<string | null>;
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
@@ -528,7 +534,7 @@ function AccountSettings({
     <>
       <SettingCard
         title="Your profile"
-        description="Personalize the name and initials shown in Scribe."
+        description={profile.localOnly ? "Your name and avatar color are saved only on this device." : "Personalize the name and initials shown in Scribe."}
         accent="pink"
         id={settingId("Display name")}
       >
@@ -560,7 +566,7 @@ function AccountSettings({
                 <button type="button" aria-label="Edit display name" onClick={() => { setDisplayNameDraft(profile.displayName); setEditingName(true); }}>Edit</button>
               </div>
             )}
-            <span>{profile.email}</span>
+            {!profile.localOnly && <span>{profile.email}</span>}
           </div>
         </div>
         <div className="account-avatar-color-row">
@@ -588,6 +594,13 @@ function AccountSettings({
           </div>
         </div>
       </SettingCard>
+      {profile.localOnly ? <>
+        <AccountRequiredNotice onSignIn={onSignIn} />
+        <SettingCard title="Account features" description="These features need a signed-in account." accent="pink">
+          <fieldset disabled className="offline-account-features">{["Email address", "Password reset", "Two-step verification", "Google & GitHub linking", "Signed-in devices", "Export account data", "Delete Data", "Delete account"].map(label => <div className="offline-account-feature" key={label}><span>{label}</span><button type="button">Sign in required</button></div>)}</fieldset>
+        </SettingCard>
+        {accountToast && <div className="status-toast-stack"><div className={`status-toast is-${accountToast.kind}`} role="status"><span>{accountToast.message}</span><button type="button" aria-label="Dismiss notification" onClick={() => setAccountToast(null)}><X size={15} /></button></div></div>}
+      </> : <>
       <SettingCard
         title="Password & security"
         description="Manage your password and add an authenticator for extra sign-in protection."
@@ -682,6 +695,7 @@ function AccountSettings({
           action="Coming soon"
         />
       </SettingCard>
+      </>}
     </>
   );
 }
@@ -1049,6 +1063,7 @@ function FolderManagementSettings({
 
 function CategoryContent({
   category,
+  onSignIn,
   dark,
   setDark,
   accent,
@@ -1078,6 +1093,7 @@ function CategoryContent({
   unfiledPosition,
 }: {
   category: Category;
+  onSignIn: () => void;
   dark: boolean;
   setDark: (value: boolean) => void;
   accent: AccentColor;
@@ -1144,6 +1160,8 @@ function CategoryContent({
             description="Optional. Off by default for this account on this device."
             accent="blue"
           >
+            {profile.localOnly && <AccountRequiredNotice onSignIn={onSignIn} detail="Sign in to sync notes across devices. Your offline profile and notes stay on this device." />}
+            <fieldset disabled={profile.localOnly} className={`offline-account-features${profile.localOnly ? " offline-feature-switch" : ""}`}>
             <SettingToggle
               label="Cloud sync"
               detail="Sync notes, folders and reminders with your account. Review what is uploaded before enabling."
@@ -1151,11 +1169,12 @@ function CategoryContent({
               onChange={(enabled) => onOfflineModeChange(!enabled)}
               color="blue"
             />
+            </fieldset>
           </SettingCard>
         </>
       );
     case "account":
-      return <AccountSettings profile={profile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
+      return <AccountSettings profile={profile} onSignIn={onSignIn} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
     case "folders":
       return (
         <FolderManagementSettings
@@ -1328,7 +1347,7 @@ function CategoryContent({
         />
       );
     case "storage":
-      return <StorageSettings metrics={storageMetrics} cloudSyncEnabled={!offlineMode} />;
+      return <StorageSettings metrics={storageMetrics} cloudSyncEnabled={!offlineMode} localOnly={profile.localOnly} onSignIn={onSignIn} />;
     default:
       return (
         <>
@@ -1434,6 +1453,7 @@ function SettingsSearchResults({
 }
 
 export function SettingsPage({
+  onSignIn,
   dark,
   accent,
   onAccentChange,
@@ -1463,6 +1483,7 @@ export function SettingsPage({
   onMoveSystemFolder,
   unfiledPosition,
 }: {
+  onSignIn: () => void;
   dark: boolean;
   accent: AccentColor;
   onAccentChange: (value: AccentColor) => void;
@@ -1664,6 +1685,7 @@ export function SettingsPage({
             />
           ) : (
             <CategoryContent
+              onSignIn={onSignIn}
               key={activeCategory.id}
               category={activeCategory}
               dark={dark}

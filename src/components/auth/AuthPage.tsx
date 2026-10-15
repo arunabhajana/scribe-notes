@@ -16,6 +16,7 @@ import type { SocialProvider } from "../../hooks/useAuth";
 import { PrivacyPolicyLink, TermsAgreement } from "./TermsAgreement";
 import { PasswordFeedback } from "./PasswordFeedback";
 import "./authForm.css";
+import "./localProfile.css";
 import { authFieldErrors, emailError, type AuthField } from "../../features/auth/signupValidation";
 
 type AuthMode = "signin" | "signup";
@@ -31,6 +32,8 @@ export function AuthPage({
   oauthPending,
   onCancelProviderSignIn,
   onRequestPasswordReset,
+  onUseOffline,
+  offlineProfileName,
 }: {
   configured: boolean;
   onSignIn: (email: string, password: string) => Promise<string | null>;
@@ -47,6 +50,8 @@ export function AuthPage({
   oauthPending: SocialProvider | null;
   onCancelProviderSignIn: () => void;
   onRequestPasswordReset: (email: string) => Promise<string | null>;
+  onUseOffline: () => void;
+  offlineProfileName?: string;
 }) {
   const [mode, setMode] = useState<AuthMode>("signin");
   const [displayName, setDisplayName] = useState("");
@@ -448,6 +453,7 @@ export function AuthPage({
                   </button>
                 </div>
                 <PrivacyPolicyLink />
+                <div className="auth-offline-entry"><button type="button" disabled={submitting || Boolean(oauthPending)} onClick={onUseOffline}>{offlineProfileName ? `Continue as ${offlineProfileName}` : "Continue offline"}</button><p>No account needed. Notes stay on this device.</p></div>
                 {!isSignUp && <div className="auth-demo-notice">
                   <ShieldCheck size={14} />
                   <span>

@@ -1,7 +1,7 @@
 import { useContextMenu, type ContextMenuItem } from "./components/context-menu/contextMenuState";
 import { useWritingPreferences } from "./features/settings/writingPreferences";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { CreateFolderDialog } from "./components/dialogs/CreateFolderDialog";
 import { EditorPane } from "./components/editor/EditorPane";
@@ -24,6 +24,10 @@ import { AuthPage } from "./components/auth/AuthPage";
 import { AccountTermsPage } from "./components/auth/AccountTermsPage";
 import { useCloudSyncPreference } from "./features/settings/cloudSyncPreference";
 import { CloudSyncDialog } from "./components/settings/CloudSyncDialog";
+import { useLocalProfile } from "./features/auth/localProfile";
+import { LocalProfilePage } from "./components/auth/LocalProfilePage";
+import { readWorkspacePreference, useWorkspaceId, useWorkspacePreference } from "./features/settings/workspacePreferences";
+import { WorkspacePreferencesProvider } from "./features/settings/WorkspacePreferencesProvider";
 import { PasswordRecoveryPage } from "./components/auth/PasswordRecoveryPage";
 import { MfaChallengePage } from "./components/auth/MfaChallengePage";
 import { CompleteProfile } from "./components/auth/CompleteProfile";
@@ -37,7 +41,7 @@ import { NewNoteComposer } from "./components/dialogs/NewNoteComposer";
 import { TooltipLayer } from "./components/layout/TooltipLayer";
 import {
   formatShortcut,
-  getShortcutBindings,
+  parseShortcutBindings,
   matchesShortcut,
   shortcutActions,
   type ShortcutBindings,
@@ -47,15 +51,33 @@ type AppPage = "notes" | "preferences";
 
 function App() {
   const auth = useAuth();
+  const local = useLocalProfile();
+  const [accountEntry, setAccountEntry] = useState(false);
+  const [localSetup, setLocalSetup] = useState(false);
+  const workspaceId = auth.loading ? null : auth.user?.id ?? (accountEntry ? null : local.profile?.id ?? null);
+  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} /></WorkspacePreferencesProvider>;
+}
+
+function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup }: {
+  auth: ReturnType<typeof useAuth>; local: ReturnType<typeof useLocalProfile>;
+  accountEntry: boolean; setAccountEntry: (value: boolean) => void;
+  localSetup: boolean; setLocalSetup: (value: boolean) => void;
+}) {
+  const preferenceWorkspaceId = useWorkspaceId();
+  const usingLocalProfile = !auth.user && Boolean(local.profile) && !accountEntry;
   const accountTerms = auth.accountTerms;
   const openContextMenu = useContextMenu();
-  const [writingPreferences, updateWritingPreferences] = useWritingPreferences();
+  const [writingPreferences] = useWritingPreferences();
   const { defaultPreset } = useReminderShortcuts();
   const cloudSync = useCloudSyncPreference(auth.user?.id);
   const offlineMode = !cloudSync.enabled;
   const [syncConfirmation, setSyncConfirmation] = useState<{ userId: string; enabling: boolean } | null>(null);
-  const notesUser = accountTerms.ready && !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null;
-  const notesState = useNotes(notesUser, auth.configured, offlineMode);
+  const localWorkspaceId = usingLocalProfile ? local.profile?.id : undefined;
+  const notesUser = useMemo(() => auth.loading ? null : auth.user
+    ? accountTerms.ready && !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null
+    : localWorkspaceId ? { id: localWorkspaceId } : null,
+  [auth.loading, auth.user, accountTerms.ready, auth.mfa.loading, auth.mfa.required, auth.passwordRecoveryRequired, localWorkspaceId]);
+  const notesState = useNotes(notesUser, Boolean(notesUser), offlineMode);
   const reminderState = useReminders(notesUser?.id ?? null, offlineMode);
   const syncStatus = notesState.syncStatus === "error" || reminderState.error ? "error"
     : notesState.syncStatus === "offline" ? "offline"
@@ -65,24 +87,20 @@ function App() {
   const [reminderNotice, setReminderNotice] = useState<string | null>(null);
   const dismissReminderNotice = useCallback(() => setReminderNotice(null), []);
   const reminderNote = notesState.notes.find((note) => note.id === reminderNoteId && !note.deletedAt);
-  const [isDark, setIsDark] = useState(
-    () => localStorage.getItem("scribe-theme") !== "light",
-  );
+  const [themePreference, saveTheme] = useWorkspacePreference("scribe-theme");
+  const isDark = themePreference !== "light";
   const [loadedProfile, setLoadedProfile] = useState<{ userId: string; name: string | null } | null>(null);
-  const [fontFamily, setFontFamily] = useState(
-    () => localStorage.getItem("scribe-font-family") ?? "DM Sans",
-  );
-  const [profileAvatarColor, setProfileAvatarColor] = useState(
-    () => localStorage.getItem("scribe-profile-avatar") ?? "#8970ed",
-  );
+  const [fontPreference, saveFontFamily] = useWorkspacePreference("scribe-font-family");
+  const fontFamily = fontPreference ?? "DM Sans";
+  const [avatarPreference, saveAvatarColor] = useWorkspacePreference("scribe-profile-avatar");
+  const profileAvatarColor = avatarPreference ?? "#8970ed";
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [composerInitialFolderId, setComposerInitialFolderId] = useState<string | null>(null);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isComposerModalActive, setIsComposerModalActive] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem("scribe-sidebar-collapsed") === "true",
-  );
+  const [sidebarPreference, saveSidebarCollapsed] = useWorkspacePreference("scribe-sidebar-collapsed");
+  const sidebarCollapsed = sidebarPreference === "true";
   const [page, setPage] = useState<AppPage>("notes");
   const [notificationTarget, setNotificationTarget] = useState<NotificationTarget | null>(null);
   useNotificationActivation(setNotificationTarget);
@@ -119,25 +137,21 @@ function App() {
     return () => cancelAnimationFrame(frame);
   }, [notificationTarget, notesUser, notesState.cacheReady, notesState.cloudReady, notesState.notes, offlineMode,
     showNoteError, selectNoteSection, selectNoteId, clearNoteSearch]);
-  const [shortcuts, setShortcuts] =
-    useState<ShortcutBindings>(getShortcutBindings);
-  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, writingPreferences.quickCapture, showNoteError);
-  const [accent, setAccent] = useState<AccentColor>(
-    () => (localStorage.getItem("scribe-accent") as AccentColor) || "violet",
-  );
+  const [shortcutPreference, saveShortcuts] = useWorkspacePreference("scribe-keyboard-shortcuts");
+  const shortcuts = useMemo(() => parseShortcutBindings(shortcutPreference), [shortcutPreference]);
+  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, Boolean(notesUser) && writingPreferences.quickCapture, showNoteError);
+  const [accentPreference, saveAccent] = useWorkspacePreference("scribe-accent");
+  const accent: AccentColor = accentPreference && accentPreference in accentColors ? accentPreference as AccentColor : "violet";
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isTauri() || !preferenceWorkspaceId) return;
     let active = true;
-    void invoke<boolean>("get_autostart_enabled")
-      .then((enabled) => {
-        if (active) updateWritingPreferences({ launch: enabled });
-      })
-      .catch(() => undefined);
+    void invoke("set_autostart_enabled", { enabled: writingPreferences.launch })
+      .catch(() => { if (active) showNoteError("Could not apply this workspace’s startup preference. Try changing it in Settings."); });
     return () => {
       active = false;
     };
-  }, [updateWritingPreferences]);
+  }, [preferenceWorkspaceId, writingPreferences.launch, showNoteError]);
 
   const changeLaunchAtStartup = useCallback(async (enabled: boolean) => {
     if (!isTauri()) return "Launch at startup is available in the installed Windows app.";
@@ -151,7 +165,7 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    if (!notesUser || !auth.configured)
+    if (!auth.user || !notesUser || !auth.configured)
       return () => {
         active = false;
       };
@@ -160,7 +174,7 @@ function App() {
         active = false;
       };
     void notesRepository
-      .loadProfileName(notesUser)
+      .loadProfileName(auth.user)
       .then((name) => {
         if (!active) return;
         setLoadedProfile({ userId: notesUser.id, name });
@@ -169,7 +183,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [notesUser, auth.configured, offlineMode]);
+  }, [auth.user, notesUser, auth.configured, offlineMode]);
 
   const authenticatedUserId = auth.user?.id;
   const refreshLinkedAccounts = auth.refreshLinkedAccounts;
@@ -197,7 +211,7 @@ function App() {
     ].reduce(
       (total, key) =>
         total +
-        new TextEncoder().encode(localStorage.getItem(key) ?? "").length,
+        new TextEncoder().encode(readWorkspacePreference(preferenceWorkspaceId, key) ?? "").length,
       0,
     );
     return {
@@ -210,26 +224,28 @@ function App() {
   })();
 
   const changeAccent = (value: AccentColor) => {
-    setAccent(value);
-    localStorage.setItem("scribe-accent", value);
+    saveAccent(value);
   };
 
   const changeTheme = (dark: boolean) => {
-    setIsDark(dark);
-    localStorage.setItem("scribe-theme", dark ? "dark" : "light");
+    saveTheme(dark ? "dark" : "light");
   };
 
   const changeFontFamily = (value: string) => {
-    setFontFamily(value);
-    localStorage.setItem("scribe-font-family", value);
+    saveFontFamily(value);
   };
 
   const changeProfileAvatarColor = (value: string) => {
-    setProfileAvatarColor(value);
-    localStorage.setItem("scribe-profile-avatar", value);
+    if (usingLocalProfile && local.profile) {
+      const error = local.save(local.profile.displayName, value);
+      if (error) notesState.showError(error);
+      return;
+    }
+    saveAvatarColor(value);
   };
 
   const updateDisplayName = async (value: string) => {
+    if (usingLocalProfile) return local.save(value);
     const error = await auth.completeDisplayName(value);
     if (!error && auth.user) setLoadedProfile({ userId: auth.user.id, name: value.trim() });
     return error;
@@ -247,31 +263,39 @@ function App() {
     : { displayName: "Scribe user", email: "" };
   const accountProfile = {
     ...fallbackProfile,
-    avatarColor: profileAvatarColor,
+    localOnly: usingLocalProfile,
+    avatarColor: usingLocalProfile ? local.profile?.avatarColor : profileAvatarColor,
     deviceInventory: auth.deviceInventory,
-    displayName: (loadedProfile?.userId === auth.user?.id ? loadedProfile?.name : null) ?? fallbackProfile.displayName,
+    displayName: usingLocalProfile && local.profile ? local.profile.displayName : (loadedProfile?.userId === auth.user?.id ? loadedProfile?.name : null) ?? fallbackProfile.displayName,
     linkedAccounts: auth.linkedAccounts,
     linkedIdentityCount: auth.linkedIdentityCount,
     linkedAccountsLoaded: auth.linkedAccountsLoaded,
     linkedAccountsError: auth.linkedAccountsError,
   };
+  const openSignIn = () => {
+    if (isComposerOpen) {
+      notesState.showError("Save or close your draft before switching workspaces.");
+      setPage("notes"); window.dispatchEvent(new Event("scribe:restore-note-draft")); return;
+    }
+    setIsCreateFolderOpen(false); setEditingFolderId(null); setReminderNoteId(null); setSyncConfirmation(null);
+    setLocalSetup(false); setAccountEntry(true); setPage("notes");
+    notesState.clearUserData();
+  };
 
   const changeShortcuts = async (value: ShortcutBindings) => {
     const globalChanged = value.quickCapture.key !== shortcuts.quickCapture.key || value.quickCapture.shift !== shortcuts.quickCapture.shift;
     if (globalChanged) await registerCaptureShortcut(value.quickCapture);
-    try { localStorage.setItem("scribe-keyboard-shortcuts", JSON.stringify(value)); }
+    try { saveShortcuts(JSON.stringify(value)); }
     catch {
       if (globalChanged) await registerCaptureShortcut(shortcuts.quickCapture).catch(() => undefined);
       throw "Could not save shortcuts on this device. Check local storage and try again.";
     }
-    setShortcuts(value);
   };
 
   const toggleSidebar = useCallback(() => {
     const nextCollapsed = !sidebarCollapsed;
-    setSidebarCollapsed(nextCollapsed);
-    localStorage.setItem("scribe-sidebar-collapsed", String(nextCollapsed));
-  }, [sidebarCollapsed]);
+    saveSidebarCollapsed(String(nextCollapsed));
+  }, [sidebarCollapsed, saveSidebarCollapsed]);
 
   const openNewNote = useCallback(() => {
     if (isComposerOpen) {
@@ -367,7 +391,7 @@ function App() {
       <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
         <TitleBar
           dark={isDark}
-          onToggleTheme={() => setIsDark((value) => !value)}
+          onToggleTheme={() => changeTheme(!isDark)}
         />
         <main
           className="auth-screen auth-loading"
@@ -379,7 +403,7 @@ function App() {
       </div>
     );
 
-  if (!auth.user)
+  if (!auth.user && !usingLocalProfile)
     return (
       <div
         className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}
@@ -391,18 +415,24 @@ function App() {
         }
       >
         <TitleBar dark={isDark} onToggleTheme={() => changeTheme(!isDark)} />
-        <AuthPage
+        {localSetup ? <LocalProfilePage onBack={() => setLocalSetup(false)} onCreate={(name) => {
+          const error = local.save(name);
+          if (!error) { setLocalSetup(false); setAccountEntry(false); setPage("notes"); }
+          return error;
+        }} /> : <AuthPage
           configured={auth.configured}
           onSignIn={auth.signInWithPassword}
           onSignUp={auth.signUpWithPassword}
           callbackError={auth.authCallbackError}
           notice={auth.authNotice}
-          onAuthenticated={() => setPage("notes")}
+          onAuthenticated={() => { setAccountEntry(false); setPage("notes"); }}
           onProviderSignIn={auth.signInWithProvider}
           oauthPending={auth.oauthPending}
           onCancelProviderSignIn={auth.cancelProviderSignIn}
           onRequestPasswordReset={auth.requestPasswordReset}
-        />
+          offlineProfileName={local.profile?.displayName}
+          onUseOffline={() => { if (local.profile) { setAccountEntry(false); setPage("notes"); } else setLocalSetup(true); }}
+        />}
       </div>
     );
   if (auth.mfa.required)
@@ -428,7 +458,7 @@ function App() {
   if (!accountTerms.ready)
     return <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
       <TitleBar dark={isDark} onToggleTheme={() => changeTheme(!isDark)} />
-      <AccountTermsPage key={auth.user.id} terms={accountTerms} onSignOut={auth.signOut} />
+      <AccountTermsPage key={auth.user?.id} terms={accountTerms} onSignOut={auth.signOut} />
     </div>;
   if (auth.needsDisplayName)
     return (
@@ -447,11 +477,13 @@ function App() {
       >
         <TitleBar
           dark={isDark}
-          onToggleTheme={() => setIsDark((value) => !value)}
+          onToggleTheme={() => changeTheme(!isDark)}
           syncStatus={syncStatus}
         />
         {cloudSyncDialog}
         <SettingsPage
+          key={preferenceWorkspaceId}
+          onSignIn={openSignIn}
           dark={isDark}
           accent={accent}
           onAccentChange={changeAccent}
@@ -563,7 +595,7 @@ function App() {
         settingsShortcut={formatShortcut(shortcuts.openSettings)}
         syncStatus={syncStatus}
         offlineMode={offlineMode}
-        onToggleOfflineMode={() => changeOfflineMode(!offlineMode)}
+        onToggleOfflineMode={usingLocalProfile ? undefined : () => changeOfflineMode(!offlineMode)}
       />
       <div
         className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
@@ -602,12 +634,16 @@ function App() {
           onCreateFolder={() => setIsCreateFolderOpen(true)}
           onOpenPreferences={() => setPage("preferences")}
           onLogout={async () => {
-            await auth.signOut();
+            if (isComposerOpen) { notesState.showError("Save or close your draft before switching workspaces."); window.dispatchEvent(new Event("scribe:restore-note-draft")); return; }
+            if (usingLocalProfile) { openSignIn(); return; }
+            const error = await auth.signOut();
+            if (error) { notesState.showError(error); return; }
+            setAccountEntry(true);
             notesState.clearUserData();
           }}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={toggleSidebar}
-          onExpandSidebar={() => setSidebarCollapsed(false)}
+          onExpandSidebar={() => saveSidebarCollapsed("false")}
           shortcuts={shortcuts}
           profile={accountProfile}
         />
@@ -672,6 +708,7 @@ function App() {
       )}
       {isComposerOpen && (
         <NewNoteComposer
+          key={notesUser?.id}
           folders={notesState.folders}
           initialFolderId={composerInitialFolderId}
           onSave={(draft) => {
@@ -693,8 +730,9 @@ function App() {
         key={reminderNote.id}
         reminder={reminderState.reminders[reminderNote.id]}
         defaultLead={Number.parseInt(writingPreferences.reminderLead, 10) || 0}
-        pending={Boolean(reminderState.pending[reminderNote.id])}
+        pending={!offlineMode && Boolean(reminderState.pending[reminderNote.id])}
         offline={offlineMode || !navigator.onLine}
+        saveHint={usingLocalProfile ? "Saved only on this device. Scribe must be running to deliver the reminder." : offlineMode ? "Saved on this device. Cloud sync is disabled." : undefined}
         cloudError={reminderState.error}
         onSave={async (dueAt, leadMinutes) => {
           const error = await reminderState.save(reminderNote.id, dueAt, leadMinutes);

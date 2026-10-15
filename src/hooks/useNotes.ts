@@ -38,8 +38,7 @@ function applyLocalFolderOrder(userId: string, folders: NoteFolder[]) {
     if (Array.isArray(parsed))
       savedIds = parsed.filter((id): id is string => typeof id === "string");
     const position =
-      localStorage.getItem(unfiledOrderStorageKey(userId)) ??
-      localStorage.getItem("scribe-unfiled-position");
+      localStorage.getItem(unfiledOrderStorageKey(userId));
     if (position !== null && Number.isFinite(Number(position)))
       savedUnfiledPosition = Number(position);
   } catch {
@@ -117,7 +116,7 @@ const messageFor = (error: unknown) => {
 };
 
 export function useNotes(
-  user: User | null,
+  user: Pick<User, "id"> | null,
   configured: boolean,
   offlineMode = false,
 ) {
@@ -764,11 +763,11 @@ export function useNotes(
   }, []);
 
   return {
-    notes,
-    visibleNotes,
+    notes: notesForUser === user?.id ? notes : [],
+    visibleNotes: notesForUser === user?.id ? visibleNotes : [],
     sortOrder,
     setSortOrder,
-    selectedNote,
+    selectedNote: notesForUser === user?.id ? selectedNote : null,
     selectedId,
     setSelectedId,
     section,
@@ -779,7 +778,7 @@ export function useNotes(
     showError,
     search,
     setSearch,
-    folders,
+    folders: notesForUser === user?.id ? folders : [],
     loading,
     cacheReady: Boolean(user && notesForUser === user.id),
     cloudReady: Boolean(user && pulledForUser === user.id),

@@ -20,7 +20,7 @@ export function TitleBar({
   onToggleTheme,
   inert,
   settingsShortcut,
-  syncStatus = "on-device",
+  syncStatus,
   offlineMode = false,
   onToggleOfflineMode,
 }: {
@@ -92,6 +92,7 @@ export function TitleBar({
     >
       {syncStatus === "syncing" && <span className="titlebar-loading-bar" aria-hidden="true" />}
       <div className="titlebar-leading" data-tauri-drag-region>
+        {syncStatus && <>
         <span className={`titlebar-status-dot status-${syncStatus}`} />
         <span
           key={syncStatus}
@@ -107,6 +108,7 @@ export function TitleBar({
                   ? "Sync issue"
                   : "On this device"}
         </span>
+        </>}
       </div>
       <div className="titlebar-title" data-tauri-drag-region>
         Scribe

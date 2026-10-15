@@ -95,7 +95,7 @@ function requireClient() {
   return supabase;
 }
 
-function requireUserId(user: User | null) {
+function requireUserId(user: Pick<User, "id"> | null) {
   if (!user) throw new Error("Sign in to access your notes.");
   return user.id;
 }
@@ -134,7 +134,7 @@ async function query<T>(
 }
 
 export const notesRepository = {
-  async sync(user: User, batch: SyncBatch, cursor: string | null): Promise<SyncReply> {
+  async sync(user: Pick<User, "id">, batch: SyncBatch, cursor: string | null): Promise<SyncReply> {
     requireUserId(user);
     const client = requireClient();
     const { data: { session }, error: sessionError } = await client.auth.getSession();

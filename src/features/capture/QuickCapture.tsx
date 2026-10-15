@@ -16,6 +16,8 @@ import { TooltipLayer } from "../../components/layout/TooltipLayer";
 import { reminderStore } from "../reminders/reminderStore";
 import { formatReminderTime } from "../reminders/reminderTypes";
 import { useWritingPreferences } from "../settings/writingPreferences";
+import { readWorkspacePreference } from "../settings/workspacePreferences";
+import { WorkspacePreferencesProvider } from "../settings/WorkspacePreferencesProvider";
 import "./quickCapture.css";
 import "../../App.css";
 
@@ -25,6 +27,10 @@ const draftKey = (userId: string) => `scribe-quick-capture-draft:${userId}`;
 
 export default function QuickCapture() {
   const [account, setAccount] = useState<string | null>(null);
+  return <WorkspacePreferencesProvider workspaceId={account}><QuickCaptureContent account={account} setAccount={setAccount} /></WorkspacePreferencesProvider>;
+}
+
+function QuickCaptureContent({ account, setAccount }: { account: string | null; setAccount: (value: string | null) => void }) {
   const [ready, setReady] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [folders, setFolders] = useState<NoteFolder[]>([]);
@@ -73,9 +79,9 @@ export default function QuickCapture() {
           accountRef.current = userId;
           setDraft(saved); setAccount(userId); setError(""); setFolders([]); setReminderOpen(false);
         }
-        const accent = localStorage.getItem("scribe-accent") as AccentColor;
-        setAppearance({ dark: localStorage.getItem("scribe-theme") !== "light", accent: accentColors[accent]?.color ?? accentColors.violet.color,
-          font: localStorage.getItem("scribe-font-family") ?? "DM Sans", shortcut: formatShortcut(getShortcutBindings().quickCapture) });
+        const accent = readWorkspacePreference(userId, "scribe-accent") as AccentColor;
+        setAppearance({ dark: readWorkspacePreference(userId, "scribe-theme") !== "light", accent: accentColors[accent]?.color ?? accentColors.violet.color,
+          font: readWorkspacePreference(userId, "scribe-font-family") ?? "DM Sans", shortcut: formatShortcut(getShortcutBindings(userId).quickCapture) });
         setReady(true);
         if (focusRequested.current) {
           focusRequested.current = false;
@@ -92,7 +98,7 @@ export default function QuickCapture() {
     const onFocus = () => { void refresh(); };
     window.addEventListener("focus", onFocus);
     return () => { active = false; window.removeEventListener("focus", onFocus); listeners.forEach((listener) => { void listener.then((unlisten) => unlisten()); }); };
-  }, []);
+  }, [setAccount]);
 
   const close = () => { if (!savingRef.current) void getCurrentWindow().hide(); };
   const changeDraft = (value: Draft) => {
@@ -180,7 +186,7 @@ export default function QuickCapture() {
       </div>
         <button className="capture-save" type="submit" data-tooltip="Save note · Ctrl + Enter" disabled={saving || (!draft.title.trim() && !draft.body.trim())}><Check size={16} />{saving ? "Saving…" : "Save note"}<kbd>Ctrl ↵</kbd></button>
       </footer>
-    </form> : <section className="capture-empty"><FileText size={28} /><h1>{ready ? "Sign in to capture notes" : "Opening capture…"}</h1><p>{ready ? "Open Scribe and finish signing in. Your notes will be saved to that account." : "Getting your workspace ready."}</p>{error && <p role="alert">{error}</p>}{ready && <button className="capture-save" onClick={() => { void invoke("open_capture_main"); }}>Open Scribe<ArrowUpRight size={16} /></button>}</section>}
+    </form> : <section className="capture-empty"><FileText size={28} /><h1>{ready ? "Choose your workspace" : "Opening capture…"}</h1><p>{ready ? "Open Scribe to create an offline profile or sign in. Captured notes save to your active workspace." : "Getting your workspace ready."}</p>{error && <p role="alert">{error}</p>}{ready && <button className="capture-save" onClick={() => { void invoke("open_capture_main"); }}>Open Scribe<ArrowUpRight size={16} /></button>}</section>}
     <div className="capture-hint"><span data-tooltip="Paste a URL over selected text to create a link. Ctrl + Shift + V pastes plain text.">You can paste links or selected text</span><span>Tab to navigate · Esc keeps draft</span></div>
     <TooltipLayer />
     {reminderOpen && <CaptureReminderPicker dueAt={draft.reminder?.dueAt}

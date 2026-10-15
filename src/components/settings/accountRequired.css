@@ -1,0 +1,13 @@
+.account-required-notice { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); margin-block: 12px; }
+.account-required-icon { display: grid; place-items: center; flex-shrink: 0; color: var(--accent); }
+.account-required-notice > div { flex: 1; min-width: 0; }
+.account-required-notice strong { font-size: 12px; color: var(--text); }
+.account-required-notice p { margin: 5px 0 0; font-size: 11px; line-height: 1.7; color: var(--muted); }
+.account-required-notice button { flex-shrink: 0; padding: 9px 14px; min-height: 36px; border: 1px solid var(--border); border-radius: 8px; background: var(--text); color: var(--surface); font-size: 12px; font-weight: 600; cursor: pointer; }
+.account-required-notice button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.offline-account-features { padding: 0; margin: 0; border: 0; min-width: 0; }
+.offline-account-feature { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 0; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+.offline-account-feature:last-child { border-bottom: 0; }
+.offline-account-feature button { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 10px; background: var(--surface-2); opacity: .6; cursor: not-allowed; }
+.offline-feature-switch { pointer-events: none; opacity: .5; }
+@media (max-width: 620px) { .account-required-notice { flex-wrap: wrap; } }
