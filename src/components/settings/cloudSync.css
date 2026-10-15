@@ -1,0 +1,25 @@
+.cloud-sync-dialog { width: min(480px, calc(100vw - 40px)); max-height: calc(100dvh - 64px); overflow-y: auto; padding: 26px; border: 1px solid var(--border, #34353e); border-radius: 16px; background: var(--surface, #191a20); color: var(--text, #f0f0f3); box-shadow: 0 24px 90px #0006; }
+.cloud-sync-dialog { position: fixed; inset: 0; margin: auto; }
+.cloud-sync-dialog::backdrop { background: #0009; backdrop-filter: blur(4px); }
+.cloud-sync-dialog header, .cloud-sync-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cloud-sync-dialog-icon { color: var(--accent, #8970ed); }
+.cloud-sync-close { display: grid; place-items: center; padding: 6px; color: var(--muted, #aaa); background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+.cloud-sync-close:hover { background: var(--surface-2, #ffffff0a); color: var(--text); }
+.cloud-sync-dialog h2 { margin: 16px 0 10px; font-size: 21px; line-height: 1.3; }
+.cloud-sync-dialog p, .cloud-sync-dialog li { font-size: 12px; line-height: 1.75; color: var(--muted, #a6a7b2); }
+.cloud-sync-dialog ul { display: grid; gap: 10px; padding-left: 18px; margin: 20px 0; }
+.cloud-sync-retention { padding: 14px; border: 1px solid var(--border, #34353e); border-radius: 9px; background: var(--surface-2, #ffffff05); }
+.cloud-sync-retention strong { font-size: 12px; }
+.cloud-sync-retention p { margin: 6px 0 0; }
+.cloud-sync-dialog .cloud-sync-account-note { font-size: 11px; margin-block: 14px; }
+.cloud-sync-dialog > a { font-size: 11px; color: var(--accent, #a796ed); text-decoration: underline; text-underline-offset: 3px; }
+.cloud-sync-dialog footer { justify-content: flex-end; margin-top: 24px; }
+.cloud-sync-dialog footer button { min-height: 38px; padding: 9px 15px; border: 1px solid var(--border, #34353e); border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.cloud-sync-cancel { background: transparent; color: var(--text, #f0f0f3); }
+.cloud-sync-confirm { background: var(--accent, #8970ed); color: #fff; }
+.cloud-sync-dialog button:focus-visible, .cloud-sync-dialog a:focus-visible { outline: 2px solid var(--accent, #8970ed); outline-offset: 3px; }
+.cloud-sync-dialog .cloud-sync-error { color: #ed747d; }
+.theme-light .cloud-sync-dialog { --surface: #fff; --surface-2: #f5f5f8; --border: #dedee6; --text: #22222b; --muted: #666674; }
+.cloud-storage-disabled .storage-chart-layout, .cloud-storage-disabled .storage-detail-row { filter: grayscale(1); opacity: .65; }
+.cloud-sync-disabled-banner { margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; line-height: 1.7; color: var(--muted); background: var(--surface-2); }
+.cloud-sync-disabled-banner strong { display: block; color: var(--text); font-weight: 600; }

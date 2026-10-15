@@ -7,13 +7,16 @@ import {
   LockKeyhole,
   Mail,
   ShieldCheck,
-  UserRound,
 } from "lucide-react";
 import { Icon } from "../Icon";
 import { AppLogo } from "../AppLogo";
 import { SocialSignInButtons } from "./SocialSignInButtons";
 import { LoadingSpinner } from "../feedback/LoadingFeedback";
 import type { SocialProvider } from "../../hooks/useAuth";
+import { PrivacyPolicyLink, TermsAgreement } from "./TermsAgreement";
+import { PasswordFeedback } from "./PasswordFeedback";
+import "./authForm.css";
+import { authFieldErrors, emailError, type AuthField } from "../../features/auth/signupValidation";
 
 type AuthMode = "signin" | "signup";
 
@@ -35,6 +38,7 @@ export function AuthPage({
     displayName: string,
     email: string,
     password: string,
+    termsAccepted: boolean,
   ) => Promise<{ error: string | null; confirmationRequired: boolean }>;
   callbackError: string;
   notice: string;
@@ -54,7 +58,14 @@ export function AuthPage({
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const isSignUp = mode === "signup";
+  const [touched, setTouched] = useState<Partial<Record<AuthField, boolean>>>({});
+  const fieldErrors = authFieldErrors(displayName, email, password, confirmPassword, isSignUp);
+  const visibleError = (field: AuthField) => touched[field] ? fieldErrors[field] : "";
+  const touch = (field: AuthField) => setTouched(current => ({ ...current, [field]: true }));
+  const fieldError = (field: AuthField) => visibleError(field) ? <span id={`auth-${field}-error`} className="auth-field-error">{visibleError(field)}</span> : null;
+  const canSubmit = !Object.values(fieldErrors).some(Boolean) && (!isSignUp || termsAccepted);
   const signInWithProvider = async (provider: SocialProvider) => {
     setError("");
     setSubmitting(true);
@@ -69,6 +80,8 @@ export function AuthPage({
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
+    setTouched({});
+    setTermsAccepted(false);
     setError("");
     setConfirmationSent(false);
     setResetEmailSent(false);
@@ -78,8 +91,9 @@ export function AuthPage({
     if (submitting || oauthPending) return;
     setError("");
     setResetEmailSent(false);
-    if (!email.trim()) {
-      setError("Enter your email address first.");
+    if (emailError(email)) {
+      touch("email");
+      setError(emailError(email));
       return;
     }
     setSubmitting(true);
@@ -98,8 +112,14 @@ export function AuthPage({
     event.preventDefault();
     if (submitting || oauthPending) return;
     setError("");
-    if (isSignUp && password !== confirmPassword) {
-      setError("Your passwords do not match.");
+    if (Object.values(fieldErrors).some(Boolean)) {
+      setTouched({ displayName: true, email: true, password: true, confirmPassword: true });
+      const firstInvalid = (Object.keys(fieldErrors) as AuthField[]).find(field => fieldErrors[field]);
+      if (firstInvalid) event.currentTarget.querySelector<HTMLInputElement>(`[name="${firstInvalid}"]`)?.focus();
+      return;
+    }
+    if (isSignUp && !termsAccepted) {
+      setError("Please agree to the Terms of Use to create an account.");
       return;
     }
 
@@ -110,6 +130,7 @@ export function AuthPage({
           displayName.trim(),
           email.trim(),
           password,
+          termsAccepted,
         );
         if (result.error) setError(result.error);
         else if (result.confirmationRequired) setConfirmationSent(true);
@@ -157,7 +178,7 @@ export function AuthPage({
   };
 
   return (
-    <main className="auth-screen">
+    <main className={`auth-screen auth-entry-screen${isSignUp ? " auth-signup-screen" : ""}`}>
       <div className="auth-decoration auth-decoration-one" />
       <div className="auth-decoration auth-decoration-two" />
       <section className="auth-layout" aria-label="Scribe account">
@@ -196,14 +217,6 @@ export function AuthPage({
         </aside>
 
         <div className="auth-panel-wrap">
-          <div className="auth-panel-top">
-            <span>
-              <span
-                className={`auth-online-dot ${configured ? "" : "auth-offline-dot"}`}
-              />
-              {configured ? "Secure account" : "Sign-in unavailable"}
-            </span>
-          </div>
           <section className="auth-panel">
             {confirmationSent ? (
               <div className="auth-confirmation-state" role="status">
@@ -264,7 +277,9 @@ export function AuthPage({
                     If an account exists for that email, a password reset link is on its way.
                   </div>
                 )}
+                {isSignUp && <span className="auth-method-label">Sign up with</span>}
                 <SocialSignInButtons
+                  compact={isSignUp}
                   disabled={submitting || !configured || Boolean(oauthPending)}
                   onSignIn={(provider) => void signInWithProvider(provider)}
                 />
@@ -277,17 +292,21 @@ export function AuthPage({
                 )}
                 <div className="auth-divider">
                   <span />
-                  {isSignUp ? "create with email" : "continue with email"}
+                  {isSignUp ? "or use your email" : "continue with email"}
                   <span />
                 </div>
-                <form className="auth-form" onSubmit={submit}>
+                <form className="auth-form" onSubmit={submit} noValidate>
+                  {isSignUp && <p className="auth-required-note">All fields are required.</p>}
                   {isSignUp && (
                     <label className="auth-field">
                       <span>Display name</span>
                       <div className="auth-input-wrap">
-                        <UserRound size={16} />
                         <input
                           type="text"
+                          name="displayName"
+                          onBlur={() => touch("displayName")}
+                          aria-invalid={Boolean(visibleError("displayName"))}
+                          aria-describedby={visibleError("displayName") ? "auth-displayName-error" : undefined}
                           autoComplete="name"
                           required
                           maxLength={60}
@@ -298,14 +317,19 @@ export function AuthPage({
                           placeholder="Your name"
                         />
                       </div>
+                      {fieldError("displayName")}
                     </label>
                   )}
                   <label className="auth-field">
                     <span>Email address</span>
                     <div className="auth-input-wrap">
-                      <Mail size={16} />
+                      {!isSignUp && <Mail size={16} />}
                       <input
                         type="email"
+                        name="email"
+                        onBlur={() => touch("email")}
+                        aria-invalid={Boolean(visibleError("email"))}
+                        aria-describedby={visibleError("email") ? "auth-email-error" : undefined}
                         autoComplete="email"
                         required
                         maxLength={320}
@@ -314,13 +338,18 @@ export function AuthPage({
                         placeholder="you@example.com"
                       />
                     </div>
+                    {fieldError("email")}
                   </label>
                   <label className="auth-field">
                     <span>Password</span>
                     <div className="auth-input-wrap">
-                      <LockKeyhole size={16} />
+                      {!isSignUp && <LockKeyhole size={16} />}
                       <input
                         type={showPassword ? "text" : "password"}
+                        name="password"
+                        onBlur={() => touch("password")}
+                        aria-invalid={Boolean(visibleError("password"))}
+                        aria-describedby={[isSignUp ? "signup-password-feedback" : "", visibleError("password") ? "auth-password-error" : ""].filter(Boolean).join(" ") || undefined}
                         autoComplete={
                           isSignUp ? "new-password" : "current-password"
                         }
@@ -331,7 +360,7 @@ export function AuthPage({
                         onChange={(event) => setPassword(event.target.value)}
                         placeholder={
                           isSignUp
-                            ? "At least 12 characters"
+                            ? "Create a password"
                             : "Enter your password"
                         }
                       />
@@ -350,6 +379,8 @@ export function AuthPage({
                         )}
                       </button>
                     </div>
+                    {isSignUp && <PasswordFeedback password={password} />}
+                    {fieldError("password")}
                   </label>
                   {!isSignUp && (
                     <button
@@ -363,11 +394,12 @@ export function AuthPage({
                   )}
                   {isSignUp && (
                     <label className="auth-field">
-                      <span>Confirm password</span>
+                      <span className="auth-confirm-label">Confirm password{confirmPassword && password === confirmPassword && <span className="auth-match-indicator"><Check size={12} aria-hidden="true" /> Matches</span>}</span>
                       <div className="auth-input-wrap">
-                        <LockKeyhole size={16} />
                         <input
                           type={showPassword ? "text" : "password"}
+                          name="confirmPassword"
+                          onBlur={() => touch("confirmPassword")}
                           autoComplete="new-password"
                           required
                           minLength={12}
@@ -377,10 +409,15 @@ export function AuthPage({
                             setConfirmPassword(event.target.value)
                           }
                           placeholder="Enter your password again"
+                          aria-describedby={visibleError("confirmPassword") ? "auth-confirmPassword-error" : confirmPassword ? "signup-password-match" : undefined}
+                          aria-invalid={Boolean(visibleError("confirmPassword"))}
                         />
                       </div>
+                      {fieldError("confirmPassword")}
+                      {confirmPassword && <span id="signup-password-match" className="auth-form-sr-only">{password === confirmPassword ? "Passwords match" : "Passwords do not match yet"}</span>}
                     </label>
                   )}
+                  {isSignUp && <TermsAgreement checked={termsAccepted} onChange={setTermsAccepted} disabled={submitting || Boolean(oauthPending)} showPrivacy={false} />}
                   {error && (
                     <div className="auth-feedback auth-error" role="alert">
                       {error}
@@ -389,7 +426,7 @@ export function AuthPage({
                   <button
                     type="submit"
                     className="auth-submit"
-                    disabled={submitting || !configured || Boolean(oauthPending)}
+                    disabled={submitting || !configured || Boolean(oauthPending) || !canSubmit}
                   >
                     {submitting
                       ? isSignUp
@@ -410,14 +447,13 @@ export function AuthPage({
                     {isSignUp ? "Sign in" : "Create account"}
                   </button>
                 </div>
-                <div className="auth-demo-notice">
+                <PrivacyPolicyLink />
+                {!isSignUp && <div className="auth-demo-notice">
                   <ShieldCheck size={14} />
                   <span>
-                    {isSignUp
-                      ? "We’ll email you a link to confirm your address before your first sign in."
-                      : "Your session stays saved in this app on this device. Sign out to remove it."}
+                    Your session stays saved in this app on this device. Sign out to remove it.
                   </span>
-                </div>
+                </div>}
               </>
             )}
           </section>

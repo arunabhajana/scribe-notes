@@ -117,13 +117,13 @@ export function TitleBar({
             className={`titlebar-action offline-mode-toggle ${offlineMode ? "is-offline" : ""}`}
             onClick={onToggleOfflineMode}
             aria-label={
-              offlineMode ? "Turn off Offline Mode" : "Turn on Offline Mode"
+              offlineMode ? "Enable cloud sync" : "Turn off cloud sync"
             }
-            aria-pressed={offlineMode}
+            aria-pressed={!offlineMode}
             data-tooltip={
               offlineMode
-                ? "Offline Mode is on · Changes stay on this device"
-                : "Offline Mode is off · Changes sync to your account"
+                ? "Cloud sync is off · Changes stay on this device"
+                : "Cloud sync is on · Changes sync to your account"
             }
           >
             {offlineMode ? <WifiOff size={14} /> : <Wifi size={14} />}

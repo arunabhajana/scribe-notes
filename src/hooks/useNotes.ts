@@ -8,6 +8,7 @@ import { NOTES_SYNCED_EVENT } from "../features/notes/syncProtocol";
 import { supabase } from "../features/auth/supabaseClient";
 import { notesRepository } from "../features/notes/notesRepository";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_MESSAGE, isCloudStorageLimitError } from "../features/settings/cloudStorage";
+import { isCloudSyncEnabled } from "../features/settings/cloudSyncPreference";
 import {
   offlineStore,
 } from "../features/notes/offlineStore";
@@ -149,6 +150,16 @@ export function useNotes(
   const realtimeDebounce = useRef<number | null>(null);
   const lastCloudError = useRef<string | null>(null);
   const lastLocalError = useRef<string | null>(null);
+  useEffect(() => {
+    if (offlineMode) {
+      const previousCloudError = lastCloudError.current;
+      setError(current => current === previousCloudError ? null : current);
+      setCloudSyncError(null);
+    } else {
+      retryAt.current = 0;
+      failureCount.current = 0;
+    }
+  }, [offlineMode]);
   const editGeneration = useRef(new Map<string, number>());
   const localRetries = useRef(new Map<string, { run: () => Promise<void>; running: boolean; ownerId: string }>());
   const activeUserId = useRef(user?.id);
@@ -162,9 +173,9 @@ export function useNotes(
       (!notes.length && pulledForUser !== user.id && online && !offlineMode)),
   );
   const syncStatus: "on-device" | "syncing" | "synced" | "offline" | "error" =
-    !user || !configured
+    !user || !configured || offlineMode
       ? "on-device"
-      : offlineMode || !online
+      : !online
         ? "offline"
         : loading || pendingWrites > 0
           ? "syncing"
@@ -226,7 +237,7 @@ export function useNotes(
   const editingInProgress = () => Boolean(document.querySelector('[data-sync-editing="true"], .editor-title-wrap.is-editing, .composer-window'));
 
   const flushOutbox = useCallback(async (forcePull = false) => {
-    if (!user || !configured || offlineMode || !online || !navigator.onLine ||
+    if (!user || !configured || offlineMode || !isCloudSyncEnabled(user.id) || !online || !navigator.onLine ||
       refreshingRef.current || notesForUser !== user.id || Date.now() < retryAt.current) return;
     if (editingInProgress() || syncLock.current) return;
     if (!forcePull && !hasPendingSync && Date.now() - lastPullAt.current < CLOUD_PULL_INTERVAL_MS) return;
@@ -242,7 +253,7 @@ export function useNotes(
       if (!hasLease) return;
       const prepared = await offlineStore.prepareBatch(user.id);
       lastSyncCursor.current = prepared.cursor;
-      if (activeUserId.current !== user.id || editingInProgress()) return;
+      if (activeUserId.current !== user.id || !isCloudSyncEnabled(user.id) || editingInProgress()) return;
       finishWrite = beginWrite();
       submittedBatchId = prepared.batch.id;
       const reply = await notesRepository.sync(user, prepared.batch, prepared.cursor);
@@ -302,6 +313,7 @@ export function useNotes(
         window.setTimeout(() => flushOutboxRef.current(), 500);
       }
     } catch (cause) {
+      if (!isCloudSyncEnabled(user.id)) return;
       const quotaReached = isCloudStorageLimitError(cause);
       if (quotaReached && submittedBatchId) {
         await offlineStore.rejectBatch(user.id, submittedBatchId).catch(() => undefined);

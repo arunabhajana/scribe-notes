@@ -1,8 +1,8 @@
 import { supabase } from "../auth/supabaseClient";
 
-export const CLOUD_STORAGE_LIMIT_BYTES = 10 * 1024 * 1024;
+export const CLOUD_STORAGE_LIMIT_BYTES = 2 * 1024 * 1024;
 export const CLOUD_STORAGE_CHANGED_EVENT = "scribe-cloud-storage-changed";
-export const CLOUD_STORAGE_LIMIT_MESSAGE = "Cloud storage limit reached (10 MB). Your changes are saved locally. Permanently delete unwanted notes or shorten their content to free cloud space, then sync again.";
+export const CLOUD_STORAGE_LIMIT_MESSAGE = "Cloud storage limit reached (2 MB). Your changes are saved locally. Permanently delete unwanted notes or shorten their content to free cloud space, then sync again.";
 export const isCloudStorageLimitError = (error: unknown) =>
   error instanceof Error && error.message.includes("SCRIBE_STORAGE_LIMIT_REACHED");
 

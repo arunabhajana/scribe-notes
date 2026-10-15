@@ -130,7 +130,7 @@ const settingId = (label: string) =>
 const settingSearchIndex = [
   { label: "Launch at startup", detail: "Open Scribe when you sign in to your computer.", category: "editor", terms: "startup launch windows open boot" },
   { label: "Close to system tray", detail: "Keep Scribe running in the system tray when you close its window.", category: "editor", terms: "close minimize tray notification area hide background" },
-  { label: "Offline mode", detail: "Keep changes locally and pause cloud sync.", category: "general", terms: "offline network internet sync pause local" },
+  { label: "Cloud sync", detail: "Choose whether this device uploads and downloads notes.", category: "general", terms: "offline network internet sync pause local enable disable cloud" },
   { label: "Dark appearance", detail: "Use the Midnight dark theme.", category: "appearance", terms: "theme night midnight dark", targetId: "setting-color-mood" },
   { label: "Light appearance", detail: "Use the Daylight light theme.", category: "appearance", terms: "theme day daylight light", targetId: "setting-color-mood" },
   { label: "Accent color", detail: "Choose the accent used throughout Scribe.", category: "appearance", terms: "colour color swatches accent" },
@@ -145,7 +145,7 @@ const settingSearchIndex = [
   { label: "Reminder Presets", detail: "Choose a default reminder and manage custom presets saved locally.", category: "notifications", terms: "custom shortcut preset default quick time duration minutes hours days edit delete" },
   { label: "Keyboard shortcuts", detail: "Customize app shortcuts or restore their defaults.", category: "shortcuts", terms: "keys keyboard hotkey commands bindings reset formatting" },
   { label: "Local storage", detail: "View estimated local Notes, folders, and preferences usage.", category: "storage", terms: "device disk usage chart pie donut local offline", targetId: "setting-local-storage" },
-  { label: "Cloud storage", detail: "View server storage usage against your 10 MB limit.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 10mb" },
+  { label: "Cloud storage", detail: "View server storage usage against your 2 MB limit.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 2mb" },
   { label: "Folder organization", detail: "Reorder, rename, recolor, or delete your folders.", category: "folders", terms: "organize folders reorder rename delete icon color unfiled", targetId: "setting-manage-folders" },
   { label: "Avatar color", detail: "Choose a color for your profile initials.", category: "account", terms: "avatar profile color initials", targetId: "setting-display-name" },
   { label: "Display name", detail: "Change the name shown across Scribe and saved to your account.", category: "account", terms: "username profile name", targetId: "setting-display-name" },
@@ -342,7 +342,7 @@ function AccountSettingRow({
   );
 }
 
-function StorageSettings({ metrics }: { metrics: StorageMetrics }) {
+function StorageSettings({ metrics, cloudSyncEnabled }: { metrics: StorageMetrics; cloudSyncEnabled: boolean }) {
   const [usage, setUsage] = useState<CloudStorageUsage | null>(null);
   const [cloudError, setCloudError] = useState("");
   const [cloudLoading, setCloudLoading] = useState(true);
@@ -380,22 +380,25 @@ function StorageSettings({ metrics }: { metrics: StorageMetrics }) {
   const noteShare = local ? metrics.noteBytes / local * 100 : 0;
   const folderShare = local ? metrics.folderBytes / local * 100 : 0;
   return <>
-    <SettingCard title="Cloud storage" description="10 MB per account for synced Notes, folders, and reminders." accent="purple" id={settingId("Cloud storage")}>
+    <div className={cloudSyncEnabled ? "" : "cloud-storage-disabled"}>
+    <SettingCard title="Cloud storage" description="2 MB per account for synced Notes, folders, and reminders." accent="purple" id={settingId("Cloud storage")}>
+      {!cloudSyncEnabled && <div className="cloud-sync-disabled-banner"><strong>Cloud sync is disabled</strong>Usage shows data already stored in your account. New changes stay on this device. Enable sync in General settings.</div>}
       <div className="storage-chart-layout">
-        <div className="settings-donut" role="img" aria-label={usage ? `Cloud usage ${formatBytes(cloud)} of 10 MB` : "Loading cloud usage"} style={{ background: `conic-gradient(var(--category) ${percent}%, var(--border) 0)` }}><div><Cloud size={22} /><strong>{usage ? `${percent.toFixed(1)}%` : "—"}</strong><small>used</small></div></div>
-        <div className="storage-chart-copy"><strong>{usage ? formatBytes(cloud) : "—"} <span>/ 10 MB</span></strong><p>{cloudLoading ? "Checking cloud usage…" : usage ? `${formatBytes(Math.max(0, limit - cloud))} remaining` : "Cloud usage unavailable"}</p><small>Server-reported content, including Drafts and Trash. Pending local edits and database overhead are not included.</small></div>
+        <div className="settings-donut" role="img" aria-label={usage ? `Cloud usage ${formatBytes(cloud)} of 2 MB` : "Loading cloud usage"} style={{ background: `conic-gradient(var(--category) ${percent}%, var(--border) 0)` }}><div><Cloud size={22} /><strong>{usage ? `${percent.toFixed(1)}%` : "—"}</strong><small>used</small></div></div>
+        <div className="storage-chart-copy"><strong>{usage ? formatBytes(cloud) : "—"} <span>/ 2 MB</span></strong><p>{cloudLoading ? "Checking cloud usage…" : usage ? `${formatBytes(Math.max(0, limit - cloud))} remaining` : "Cloud usage unavailable"}</p><small>Includes formatting, Drafts and Trash. Cloud sizes may be larger than local estimates.</small></div>
       </div>
       <div className="storage-detail-row"><FileText size={16} /><span>Notes</span><strong>{usage ? formatBytes(usage.noteBytes) : "—"}</strong></div>
       <div className="storage-detail-row"><Folder size={16} /><span>Folders</span><strong>{usage ? formatBytes(usage.folderBytes) : "—"}</strong></div>
       <div className="storage-detail-row"><Bell size={16} /><span>Reminders</span><strong>{usage ? formatBytes(usage.reminderBytes ?? 0) : "—"}</strong></div>
       {cloudError && <p role="alert" className="settings-inline-error">{cloudError}</p>}
-      {usage && cloud >= limit && <p className="settings-info-banner">Cloud storage limit reached. Permanently delete unwanted Notes or shorten their content to free space. Local changes remain saved.</p>}
+      {cloudSyncEnabled && usage && cloud >= limit && <p className="settings-info-banner">Cloud storage limit reached. Permanently delete unwanted Notes or shorten their content to free space. Local changes remain saved.</p>}
     </SettingCard>
-    {usage && cloud > limit && <div className="status-toast-stack"><StatusToast message={CLOUD_STORAGE_LIMIT_MESSAGE} /></div>}
-    <SettingCard title="On this device" description="Your local copy keeps Notes available offline." accent="purple" id={settingId("Local storage")}>
+    </div>
+    {cloudSyncEnabled && usage && cloud > limit && <div className="status-toast-stack"><StatusToast message={CLOUD_STORAGE_LIMIT_MESSAGE} /></div>}
+    <SettingCard title="On this device" description="No app storage limit. Uses available space on your device." accent="purple" id={settingId("Local storage")}>
       <div className="storage-chart-layout">
         <div className="settings-donut" role="img" aria-label={`Local content ${formatBytes(local)}`} style={{ background: local ? `conic-gradient(var(--category) ${noteShare}%, #25bfd1 ${noteShare}% ${noteShare + folderShare}%, #f6a623 0)` : 'var(--border)' }}><div><HardDrive size={22} /><strong>{formatBytes(local)}</strong><small>local content</small></div></div>
-        <div className="storage-chart-copy"><strong>{metrics.noteCount} Notes · {metrics.folderCount} folders</strong><p>Saved locally first, synced in batches.</p><small>Serialized content estimate. Disk usage, sync history, and database overhead are not included.</small></div>
+        <div className="storage-chart-copy"><strong>{metrics.noteCount} Notes · {metrics.folderCount} folders</strong><p>Saved on this device.</p><small>Estimated size of your notes, folders and preferences. May differ from cloud usage.</small></div>
       </div>
       <div className="storage-breakdown-list">{[['Notes', metrics.noteBytes, 'notes-dot'], ['Folders', metrics.folderBytes, 'folders-dot'], ['Preferences', metrics.settingsBytes, 'settings-dot']].map(([label, bytes, dot]) => <div key={String(label)}><span className={`storage-color-dot ${dot}`} /><span className="storage-breakdown-label"><strong>{label}</strong></span><b>{formatBytes(Number(bytes))}</b></div>)}</div>
     </SettingCard>
@@ -1137,15 +1140,15 @@ function CategoryContent({
       return (
         <>
           <SettingCard
-            title="Cloud connection"
-            description="Choose how Scribe syncs on this device."
+            title="Cloud sync"
+            description="Optional. Off by default for this account on this device."
             accent="blue"
           >
             <SettingToggle
-              label="Offline mode"
-              detail="Keep changes on this device and pause cloud sync until you turn this off."
-              checked={offlineMode}
-              onChange={onOfflineModeChange}
+              label="Cloud sync"
+              detail="Sync notes, folders and reminders with your account. Review what is uploaded before enabling."
+              checked={!offlineMode}
+              onChange={(enabled) => onOfflineModeChange(!enabled)}
               color="blue"
             />
           </SettingCard>
@@ -1325,7 +1328,7 @@ function CategoryContent({
         />
       );
     case "storage":
-      return <StorageSettings metrics={storageMetrics} />;
+      return <StorageSettings metrics={storageMetrics} cloudSyncEnabled={!offlineMode} />;
     default:
       return (
         <>

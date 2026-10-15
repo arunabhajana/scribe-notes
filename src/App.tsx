@@ -21,6 +21,9 @@ import { notesRepository } from "./features/notes/notesRepository";
 import type { Note } from "./types/note";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { AuthPage } from "./components/auth/AuthPage";
+import { AccountTermsPage } from "./components/auth/AccountTermsPage";
+import { useCloudSyncPreference } from "./features/settings/cloudSyncPreference";
+import { CloudSyncDialog } from "./components/settings/CloudSyncDialog";
 import { PasswordRecoveryPage } from "./components/auth/PasswordRecoveryPage";
 import { MfaChallengePage } from "./components/auth/MfaChallengePage";
 import { CompleteProfile } from "./components/auth/CompleteProfile";
@@ -44,13 +47,14 @@ type AppPage = "notes" | "preferences";
 
 function App() {
   const auth = useAuth();
+  const accountTerms = auth.accountTerms;
   const openContextMenu = useContextMenu();
   const [writingPreferences, updateWritingPreferences] = useWritingPreferences();
   const { defaultPreset } = useReminderShortcuts();
-  const [offlineMode, setOfflineMode] = useState(
-    () => localStorage.getItem("scribe-offline-mode") === "true",
-  );
-  const notesUser = !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null;
+  const cloudSync = useCloudSyncPreference(auth.user?.id);
+  const offlineMode = !cloudSync.enabled;
+  const [syncConfirmation, setSyncConfirmation] = useState<{ userId: string; enabling: boolean } | null>(null);
+  const notesUser = accountTerms.ready && !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null;
   const notesState = useNotes(notesUser, auth.configured, offlineMode);
   const reminderState = useReminders(notesUser?.id ?? null, offlineMode);
   const syncStatus = notesState.syncStatus === "error" || reminderState.error ? "error"
@@ -232,9 +236,11 @@ function App() {
   };
 
   const changeOfflineMode = (enabled: boolean) => {
-    setOfflineMode(enabled);
-    localStorage.setItem("scribe-offline-mode", String(enabled));
+    if (auth.user && enabled !== offlineMode) setSyncConfirmation({ userId: auth.user.id, enabling: !enabled });
   };
+  const cloudSyncDialog = syncConfirmation && syncConfirmation.userId === auth.user?.id
+    ? <CloudSyncDialog key={`${syncConfirmation.userId}:${syncConfirmation.enabling}`} enabling={syncConfirmation.enabling}
+      onClose={() => setSyncConfirmation(null)} onConfirm={() => { cloudSync.setEnabled(syncConfirmation.enabling); setSyncConfirmation(null); }} /> : null;
 
   const fallbackProfile = auth.user
     ? profileFromUser(auth.user)
@@ -419,6 +425,11 @@ function App() {
         />
       </div>
     );
+  if (!accountTerms.ready)
+    return <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
+      <TitleBar dark={isDark} onToggleTheme={() => changeTheme(!isDark)} />
+      <AccountTermsPage key={auth.user.id} terms={accountTerms} onSignOut={auth.signOut} />
+    </div>;
   if (auth.needsDisplayName)
     return (
       <div className={`desktop-frame ${isDark ? "theme-dark" : "theme-light"}`}>
@@ -439,6 +450,7 @@ function App() {
           onToggleTheme={() => setIsDark((value) => !value)}
           syncStatus={syncStatus}
         />
+        {cloudSyncDialog}
         <SettingsPage
           dark={isDark}
           accent={accent}
@@ -542,6 +554,7 @@ function App() {
       }
     >
       <TooltipLayer />
+      {cloudSyncDialog}
       <TitleBar
         dark={isDark}
         onToggleTheme={() => changeTheme(!isDark)}

@@ -5,6 +5,7 @@ import { syncReminders } from "../features/reminders/remindersRepository";
 import type { ReminderCache } from "../features/reminders/reminderTypes";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_MESSAGE } from "../features/settings/cloudStorage";
 import { NOTES_SYNCED_EVENT } from "../features/notes/syncProtocol";
+import { isCloudSyncEnabled } from "../features/settings/cloudSyncPreference";
 
 export function useReminders(userId: string | null, offlineMode: boolean) {
   const [cache, setCache] = useState<ReminderCache | null>(null);
@@ -40,7 +41,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
     let lastPull = 0;
     let timer: number | undefined;
     const flush = async (force = false) => {
-      if (!active || !navigator.onLine) return;
+      if (!active || !isCloudSyncEnabled(userId) || !navigator.onLine) return;
       if (busy) { requested = true; return; }
       if (Date.now() < retryAt) return;
       busy = true;
@@ -68,6 +69,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
         // pending until the note exists in the cloud; never drop the local choice.
         if (operations.length && !reply.acknowledged.length) retryAt = Date.now() + 15_000;
       } catch (cause) {
+        if (!active || !isCloudSyncEnabled(userId)) return;
         failures++;
         retryAt = Date.now() + Math.min(300_000, 15_000 * 2 ** Math.min(failures - 1, 5));
         const message = cause && typeof cause === "object" && "message" in cause ? String(cause.message) : "";
@@ -143,9 +145,9 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
     loading: Boolean(userId && cache?.userId !== userId),
     reminders: cache?.userId === userId ? cache.reminders : {},
     pending: cache?.userId === userId ? cache.pending : {},
-    syncing: syncingFor === userId && userId !== null,
-    error: issue?.userId === userId ? issue.message : null,
-    cloudSyncError: issue?.userId === userId && issue.kind === "cloud" ? issue.message : null,
+    syncing: !offlineMode && syncingFor === userId && userId !== null,
+    error: issue?.userId === userId && (!offlineMode || issue.kind === "local") ? issue.message : null,
+    cloudSyncError: !offlineMode && issue?.userId === userId && issue.kind === "cloud" ? issue.message : null,
     clearError: () => setIssue(null),
     save,
   };

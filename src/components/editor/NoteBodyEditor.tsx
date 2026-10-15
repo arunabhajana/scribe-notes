@@ -7,6 +7,7 @@ import { continueMarkdownList } from "./markdownFormatting";
 import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
 import { captureClickedPosition, captureReadingPosition, restoreReadingPosition, type ReadingPosition } from "./editorReadingPosition";
 import "./noteReadingView.css";
+import { keepCaretVisible } from "./keepCaretVisible";
 
 export function NoteBodyEditor({
   value,
@@ -37,6 +38,17 @@ export function NoteBodyEditor({
   const readingMinutes = readingText ? Math.max(1, Math.ceil(readingText.split(/\s+/).length / 200)) : null;
   const scrollRef = useRef<HTMLDivElement>(null);
   const readingPosition = useRef<ReadingPosition | null>(null);
+  const caretScrollFrame = useRef<number | null>(null);
+  const scheduleCaretScroll = () => {
+    if (caretScrollFrame.current !== null) cancelAnimationFrame(caretScrollFrame.current);
+    caretScrollFrame.current = requestAnimationFrame(() => {
+      caretScrollFrame.current = null;
+      if (inputRef.current && scrollRef.current) keepCaretVisible(inputRef.current, scrollRef.current);
+    });
+  };
+  useEffect(() => () => {
+    if (caretScrollFrame.current !== null) cancelAnimationFrame(caretScrollFrame.current);
+  }, []);
   const beginEdit = () => {
     setContentHovered(false);
     if (scrollRef.current) readingPosition.current = captureReadingPosition(scrollRef.current, value);
@@ -67,6 +79,7 @@ export function NoteBodyEditor({
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     onKeyDown(event);
     if (!readOnly) continueMarkdownList(event, onChange);
+    if (!readOnly) scheduleCaretScroll();
   };
   const toggleTask = (lineIndex: number, checked: boolean) => {
     if (readOnly) return;
@@ -124,7 +137,11 @@ export function NoteBodyEditor({
             aria-label="Note body (Markdown)"
             value={value}
             readOnly={readOnly}
-            onChange={(event) => onChange(event.target.value)}
+            onChange={(event) => {
+              onChange(event.target.value);
+              scheduleCaretScroll();
+            }}
+            onCompositionEnd={scheduleCaretScroll}
             onKeyDown={handleKeyDown}
             placeholder="Start writing your Note..."
             spellCheck={writingPreferences.spellcheck}

@@ -9,6 +9,7 @@ import { supabase } from "../auth/supabaseClient";
 import { displayNameFromUser } from "../auth/accountProfile";
 import { documentToMarkdown } from "./richTextDocument";
 import { encodeSyncOperations, type SyncBatch, type SyncReply } from "./syncProtocol";
+import { cloudSyncSignal } from "../settings/cloudSyncPreference";
 
 type FolderRow = {
   version?: number;
@@ -139,10 +140,11 @@ export const notesRepository = {
     const { data: { session }, error: sessionError } = await client.auth.getSession();
     if (sessionError || session?.user.id !== user.id)
       throw new Error("The signed-in account changed. Its local queue was kept for the next sign-in.");
+    const signal = cloudSyncSignal(user.id);
     const operations = batch.payload ?? encodeSyncOperations(batch.operations);
     const raw = await query(client.rpc("sync_notes_batch", {
       p_batch_id: batch.id, p_operations: operations, p_cursor: cursor,
-    }).setHeader("Authorization", `Bearer ${session.access_token}`).abortSignal(AbortSignal.timeout(20_000))) as {
+    }).setHeader("Authorization", `Bearer ${session.access_token}`).abortSignal(signal)) as {
       cursor: string; full: boolean; hasMore: boolean;
       changes: { entity: "note" | "folder"; id: string; snapshot: NoteRow | FolderRow | null }[];
       results: { revisionId: string; status: "applied" | "conflict"; entity: "note" | "folder"; snapshot: NoteRow | FolderRow | null }[];

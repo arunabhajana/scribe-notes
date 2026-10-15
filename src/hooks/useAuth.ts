@@ -7,6 +7,9 @@ import { needsDisplayName } from "../features/auth/accountProfile";
 import { useMfa } from "./useMfa";
 import { useDeviceSessions } from "./useDeviceSessions";
 import { useSessionGuard } from "./useSessionGuard";
+import { TERMS_VERSION } from "../features/auth/accountTerms";
+import { useAccountTerms } from "./useAccountTerms";
+import { authFieldErrors } from "../features/auth/signupValidation";
 import { clearEmailIntent, hasEmailIntent, rememberEmailIntent } from "../features/auth/callbackIntent";
 import {
   authStorageKey,
@@ -30,12 +33,13 @@ function linkedAccountsFromIdentities(identities: UserIdentity[]) {
 
 export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
+  const accountTerms = useAccountTerms(session?.user.id);
   const mfa = useMfa(session);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [authCallbackError, setAuthCallbackError] = useState("");
   const [authNotice, setAuthNotice] = useState("");
   const [passwordRecoveryRequired, setPasswordRecoveryRequired] = useState(false);
-  const deviceInventory = useDeviceSessions(session, !mfa.loading && !mfa.required && !passwordRecoveryRequired);
+  const deviceInventory = useDeviceSessions(session, accountTerms.ready && !mfa.loading && !mfa.required && !passwordRecoveryRequired);
   const [oauthPending, setOauthPending] = useState<SocialProvider | null>(null);
   const [linkedAccounts, setLinkedAccounts] = useState<{ provider: string; email?: string; name?: string }[]>([]);
   const [linkedIdentityCount, setLinkedIdentityCount] = useState(0);
@@ -430,7 +434,10 @@ export function useAuth() {
   }, []);
 
   const signUpWithPassword = useCallback(
-    async (displayName: string, email: string, password: string) => {
+    async (displayName: string, email: string, password: string, termsAccepted: boolean) => {
+      if (!termsAccepted) return { error: "Please agree to the Terms of Use to create an account.", confirmationRequired: false };
+      const invalid = Object.values(authFieldErrors(displayName, email, password, password, true)).find(Boolean);
+      if (invalid) return { error: invalid, confirmationRequired: false };
       if (!supabase)
         return {
           error:
@@ -444,7 +451,7 @@ export function useAuth() {
         email,
         password,
         options: {
-          data: { display_name: displayName },
+          data: { display_name: displayName, terms_version: TERMS_VERSION, terms_accepted: true },
           emailRedirectTo: isTauri()
             ? "com.scribe.notes://auth/callback"
             : window.location.origin,
@@ -496,6 +503,7 @@ export function useAuth() {
     mfa,
     deviceInventory,
     user: session?.user ?? null,
+    accountTerms,
     loading,
     configured: supabaseConfigured,
     signInWithPassword,
