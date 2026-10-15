@@ -1,368 +1,275 @@
-# Scribe for Windows
+<p align="center">
+  <img src="public/scribe-logo-v2.png" alt="Scribe Notes icon" width="112" height="112" />
+</p>
+<h1 align="center">Scribe Notes</h1>
+<p align="center"><strong>A little space. For big thoughts.</strong></p>
+<p align="center">A local-first Windows notes app with offline profiles, Markdown, reminders, and optional cloud sync.</p>
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#installation">Install</a> ·
+  <a href="#getting-started">Get started</a> ·
+  <a href="#for-developers">Developers</a> ·
+  <a href="WORKFLOW_GUIDE.md">Command guide</a> ·
+  <a href="LICENSE">MIT License</a>
+</p>
 
-**A modern, minimal, cross-platform notes app.**
+Scribe Notes is a small, independent open-source project. Use an offline profile to keep your workspace on your device, or sign in and choose whether to enable cloud sync. Signing in does not automatically upload or transfer an offline profile's notes.
 
-Scribe is a desktop note-taking application designed to help you capture ideas, organize information, and access your notes across devices. Built with Tauri and React, Scribe combines a lightweight desktop experience with cloud-backed synchronization powered by Supabase.
+**Status:** in development. The release pipeline currently builds Windows x64 installers. Other architectures, mobile apps and browser extensions are outside this repository's current release pipeline. This project is not affiliated with other products named Scribe.
 
-> **Project status:** In development
+## For users
 
-## Tests and build checks
+### Features
 
-Run `npm test` for automated tests, or `npm run check` for the full frontend CI gate (version consistency, lint, types, coverage tests, security checks, and production build). Run `npm run check:native` for the Rust/Tauri compilation check on Windows. See [CI and releases](#ci-and-releases) for GitHub setup.
+| Feature | What you can do |
+| --- | --- |
+| Notes and Markdown | Write headings, lists, checkboxes, links, quotes, code and inline formatting. Switch between editing and reading modes. |
+| Organization | Use folders, colors and icons; pin notes; search and sort; manage Drafts, Trash and Unfiled notes. |
+| Offline profile | Start with a display name, without an email or password. The profile and notes stay on this device. |
+| Optional cloud sync | Sign in with email, Google or GitHub, then explicitly enable sync when you want it. |
+| Quick Capture | Open a compact capture window from another app while Scribe is running. Add notes, folders and reminders. |
+| Reminders | Schedule note reminders and choose notification and lead-time preferences. |
+| Data portability | Export a Scribe backup or Markdown ZIP; review and import files as new copies into an offline or online workspace. |
+| Personalization | Adjust appearance, writing preferences and shortcuts. Workspace preferences are stored separately. |
+| Account controls | Manage account security/devices, clear selected data, or delete an account/profile. Online features require an account. |
 
-## CI and releases
+### Installation
+
+1. Open the [Releases page](https://github.com/arunabhajana/scribe-windows/releases).
+2. When a published release is available, download its **Windows x64 `-setup.exe`** installer. x64 is the standard Intel/AMD desktop build, not an ARM64 installer.
+3. Run setup, choose an installation location and shortcuts, then launch Scribe.
+4. Create an offline profile or sign in to an online account.
+
+If no release is published yet, there is no public release installer to download. Developers can [build from source](#run-and-build); CI installers are also available under a successful GitHub Actions run's **Artifacts**, subject to GitHub access and artifact retention.
+
+The installer checks for WebView2 and handles its prerequisite flow. Setup does not enable startup launch or cloud sync. The current installer is unsigned; Windows code signing is not configured yet.
+
+### Getting started
+
+**Start offline:** choose the offline-profile option on the entry screen and enter a display name. No server account is created. An offline profile has no password protection or cloud recovery; keep an exported copy of important notes.
+
+**Use an online account:** sign up or sign in. Email signup requires address confirmation, and new online accounts accept the Terms of Use. Google/GitHub and other account features depend on the configured service. Cloud sync starts disabled, including for signed-in users.
+
+**Enable sync:** open **Settings › General › Cloud sync**, read the explanation, and confirm. Scribe uploads that online workspace's notes, formatting, folders, pins, Drafts, Trash and reminders, and downloads the account's cloud changes. This preference applies to the account on this device.
+
+**Keep workspaces separate:** the offline profile and each online account have separate local workspaces. Signing in does not convert or merge the offline profile. To move notes, export from the original workspace, switch to the destination and import the file there.
+
+### Quick Capture and shortcuts
+
+Scribe must be running for Quick Capture to work; it may be minimized or in the system tray. Capture works in an active offline or online workspace. Cloud uploads still depend on sync being enabled.
+
+| Default Windows shortcut | Action |
+| --- | --- |
+| `Ctrl + Shift + Space` | Open Quick Capture globally |
+| `Ctrl + N` | Start a new note |
+| `Ctrl + K` | Focus note search |
+| `Ctrl + E` | Switch editing/reading mode |
+| `Ctrl + 1` / `2` / `3` / `4` | All Notes / Drafts / Pinned Notes / Trash |
+| `Ctrl + Shift + B` | Toggle the sidebar |
+| `Ctrl + Shift + P` | Toggle the selected note's pin |
+| `Ctrl + ,` | Open settings |
+| `Ctrl + Enter` in Quick Capture | Save the capture |
+| `Esc` in Quick Capture | Close and keep the unfinished capture locally |
+
+Customize bindings in **Settings › Keyboard shortcuts**. Windows settings include startup launch, close-to-tray behavior and Quick Capture availability. Another app claiming the global shortcut can prevent it from registering.
+
+### Export, import and backups
+
+Open **Settings › General** to export or import. Choose which notes to include, with optional Drafts, Trash, empty folders and reminders where the format supports them.
+
+| Format | Best for | What it preserves |
+| --- | --- | --- |
+| **Scribe backup (`.scribe`)** | Restoring or transferring content in Scribe | Notes, folders, formatting, dates, pins, Drafts, Trash and selected reminder schedules. It does not export account identity, sign-in credentials or workspace preferences. |
+| **Markdown ZIP (`.zip`)** | Readable files for other apps | Markdown notes grouped by folder. Scribe-specific status, pins, dates and reminders are not restored from this format. |
+
+Import accepts a Scribe backup, a Markdown ZIP, or selected `.md`/`.markdown` files. Imports allocate fresh IDs and preserve existing notes. Repeating an imported selection requires explicit permission to add more copies. Future reminders are restored only when selected. Transfers are limited to 50 MB per selection and the format's record limits.
+
+Exports contain your note content; store them somewhere you trust. **Scribe does not maintain project backups.** Cloud sync is not a backup service. Keep your own exports separately from app storage.
+
+### Storage, privacy and deletion
+
+- **Local storage:** Scribe imposes no local content quota. Capacity depends on your device and WebView storage. Local content is not protected by an app-level encryption/password boundary.
+- **Cloud storage:** each account has **2 MB**, shared by notes, folders and reminder metadata. Drafts and Trash count too. Formatting can make cloud content larger than the local estimate, so the displayed figures are not directly comparable.
+- **With sync off:** new workspace changes stay on this device. Uploaded cloud data remains until deleted. Signed-in session/security and cloud-usage checks can still use the internet; disabling sync does not disable all network requests.
+- **Cloud content:** notes are not end-to-end encrypted. Read the Privacy Policy linked in the app before enabling sync.
+- **Delete content:** open **Settings › Account › Delete Data**. Offline profiles clear local content; online accounts can select local data, cloud data, or both while retaining the account. Review the displayed scope. Other saved workspaces are kept.
+- **Delete a profile/account:** Account settings also provide offline-profile deletion or online-account deletion. Online-account deletion removes the account, associated cloud data and that workspace's saved data on this device. It does not remotely wipe other devices' local copies or exported files. Online destructive actions require security verification.
+
+Export anything you want to keep before permanent deletion. Turning sync off, signing out and moving notes to Trash are not account deletion or permanent content erasure. Enabling sync again after deleting cloud content can upload retained local notes.
+
+### Help and feedback
+
+Use [GitHub Issues](https://github.com/arunabhajana/scribe-windows/issues) for bugs and feature requests. Include the app version, Windows version, reproduction steps and a screenshot if useful. Remove private notes, email addresses, tokens and authenticator codes from shared screenshots/logs.
+
+If sync fails, read the message and check cloud storage. Quota errors keep changes locally; shorten content or permanently remove unwanted cloud content, including Trash, then retry. For capture problems, check that Scribe is running, Quick Capture is enabled and another app has not claimed its shortcut.
+
+## For developers
+
+### Stack
+
+| Layer | Implementation |
+| --- | --- |
+| UI | React 19, TypeScript, Tailwind CSS 4, Lucide |
+| Frontend tooling | Vite 8 and ESLint |
+| Desktop | Tauri 2, Rust, Windows integrations and a custom NSIS installer |
+| Local persistence | IndexedDB for content/queues; workspace-scoped localStorage preferences |
+| Online services | Supabase Auth, PostgreSQL RPCs, Realtime sync wakeups |
+| Testing | Vitest, Testing Library, jsdom, fake IndexedDB and security regression scripts |
+| Automation | GitHub Actions PR checks and tag-driven draft releases |
+
+### Prerequisites
+
+- Git and **Node.js 24.14.1**, as recorded in [.node-version](.node-version), with npm.
+- For Windows desktop work: Rust/MSVC, Microsoft C++ Build Tools with desktop C++ support, the Windows SDK, and WebView2. CI uses **Rust 1.95.0** and **Windows Server 2022**.
+- For online features: a correctly configured Supabase project. Unit tests use mocks and do not require a live project.
+
+See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for native setup. A browser-only session cannot exercise native windows, global shortcuts, tray behavior or native save dialogs.
+
+### Set up the repository
+
+```powershell
+git clone https://github.com/arunabhajana/scribe-windows.git
+cd scribe-windows
+npm ci
+```
+
+`npm ci` installs committed dependency versions. Use `npm install <package>` deliberately when adding/updating a dependency, and commit the resulting lockfile changes.
+
+Create a root `.env` for cloud-enabled development/builds:
+
+```dotenv
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
+# Optional during development; use the published HTTPS website for releases.
+VITE_SCRIBE_WEBSITE_URL=http://localhost:4321
+```
+
+For a legacy public anon key, use `VITE_SUPABASE_ANON_KEY` **instead of** the publishable variable. Do not leave an empty publishable variable overriding it. These are public client values embedded by Vite, not privileged credentials. Never use a service-role/secret key. `.env` is ignored by Git.
+
+The app can offer an offline profile without a configured cloud client. Production builds and the full gate intentionally require valid public Supabase configuration. For a different project, update the HTTPS/WSS origins in `src-tauri/tauri.conf.json`'s production/development CSP as well as `.env`; do not replace them with wildcard access.
+
+The separate product/legal website is not built here. Without `VITE_SCRIBE_WEBSITE_URL`, development legal links fall back to `http://localhost:4321`. Release validation requires a published HTTPS base URL with `/terms` and `/privacy` pages.
+
+### Run and build
+
+| Command | Result |
+| --- | --- |
+| `npm run dev` | Frontend server at `http://127.0.0.1:5173` |
+| `npm run tauri -- dev` | Native desktop development app; Tauri starts the frontend server |
+| `npm run build` | Typecheck and production frontend in `dist/` |
+| `npm run preview` | Preview the built frontend in a browser |
+| `npm run check:native` | Compile-check native code using `Cargo.lock` |
+| `npm run installer:build -- --ci -- --locked` | Build the branded Windows x64 NSIS installer with locked Cargo dependencies |
+| `npm run installer:artwork` | Regenerate installer bitmap artwork on Windows |
+
+Installers are produced in `src-tauri/target/release/bundle/nsis/`. The installer script merges the base config with `src-tauri/tauri.installer.conf.json`; use it to check the distributed app rather than a generic default bundle command. See the [installer guide](src-tauri/installer/README.md) for artwork, shortcuts, updates and uninstallation.
+
+**Development and installed data are separate:** development uses `com.tauri.dev`; the branded installer uses `app.scribenotes.desktop`. Export/import content to move between them. Keep the installed identifier stable across releases.
 
 ### How it works
 
-- Temporary `feat/*`, `fix/*`, and `release/*` branches merge into `main` through pull requests.
-- Every PR to `main` runs **Frontend checks** and **Windows x64 installer**. These checks also run after merges to `main` and can be started manually from Actions. There are no path filters that silently skip checks.
-- The frontend job validates committed versions, lint, application/test types, tests and coverage floors, security regressions, secret patterns, and the production frontend build.
-- The Windows job uses Windows Server 2022/MSVC and Rust 1.95.0, compile-checks native code, then builds the branded NSIS installer using locked Cargo dependencies. It does not execute the installer.
-- A pushed `v<version>` tag must match the committed project version and refer to a commit already on `main`. The release workflow reruns both jobs, then creates a **draft GitHub release** with the Windows x64 installer, SHA-256 checksum, and generated release notes. Versions such as `1.0.0-rc.1` are marked as prereleases.
-- Ordinary PRs and pushes never publish a release. Installer signing, in-app updater configuration, Supabase deployments, ARM64 and other platforms are not included yet. Installers remain unsigned until Windows code signing is configured.
+1. **Workspace selection:** the offline profile uses its UUID; online workspaces use authenticated account IDs. Display names/emails are not storage keys. Local notes/folders are keyed by workspace plus entity ID, preventing collisions across accounts. The current UI maintains one saved offline profile alongside saved online-workspace data.
+2. **Local writes:** edits persist to IndexedDB and durable queues. Local note bodies are Markdown; folder association, pins, explicit `isDraft`, soft-deletion dates and timestamps are separate fields. Preferences belong to the workspace rather than being shared globally.
+3. **Optional sync:** online repositories send bounded RPC batches only with sync enabled. The outbox records mutation/revision IDs, base versions and the exact in-flight payload before requests. Retry receipts, cursors and server revisions support retries; divergent edits can become conflict copies. Incoming cloud application is held during editing.
+4. **Cloud content:** Markdown converts to a validated structured rich-text document for JSONB storage and back on receipt. Draft status is explicit. All Notes, Drafts, Pinned, Trash and Unfiled are logical views, not custom folder rows.
+5. **Native boundary:** Rust handles capture windows, system integration, notifications, export dialogs and deep links. Main/capture windows have separate explicit capabilities; sensitive commands check their window/account context.
+6. **Transfer/deletion:** imports allocate fresh entity IDs and retain recovery/history records. Deletion markers and local generation checks prevent stale saves from recreating cleared data. Content, profile/account, local scope and cloud scope are separate concepts.
 
-### One-time GitHub setup
+### Backend integration
 
-1. Enable GitHub Actions under **Settings > Actions > General**, allowing the official `actions/*` actions used in these workflows. Keep the default token permission read-only; the draft-release job explicitly requests its required `contents: write` permission. Repository/organization policy must permit this request.
-2. Under **Settings > Secrets and variables > Actions > Variables**, add these **repository variables**:
+The shared `scribe-backend` repository holds SQL migrations, verification queries and Edge Functions. It is maintained separately; this client's CI/CD does not deploy it.
 
-   | Variable | Value |
-   | --- | --- |
-   | `VITE_SUPABASE_URL` | Your HTTPS Supabase project URL, matching the HTTPS/WSS origins in `src-tauri/tauri.conf.json`. |
-   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase's public **publishable** client key. Alternatively set `VITE_SUPABASE_ANON_KEY` for a legacy **anon** key. Publishable takes precedence. |
-   | `VITE_SCRIBE_WEBSITE_URL` | Your public HTTPS Scribe website, without a query or fragment. Optional for PR checks; required before release tags, so released legal links do not point to localhost. |
+Review/apply the **full applicable migration sequence**, not just the initial schema. Later migrations define Drafts, structured content, RPC sync, reminders, the 2 MB quota, account terms, device/session controls, MFA guards and deletion services. Coordinate migration changes with other clients sharing the project.
 
-   These values are embedded in the public desktop build. Never use a secret/service-role key. No personal GitHub token or Supabase CLI is required. Tests use mocks and do not access the live project.
+Configure Supabase email/OAuth providers and callback/redirect allowlists for the app's deep-link scheme, `com.scribe.notes`. Deploy/configure the deletion functions and their backend-only credentials using the backend's instructions. Never put those privileged values in the desktop client's `.env`.
 
-3. Commit and push the workflows, scripts, tests, `.node-version`, configuration, and lockfiles. After the first successful PR run, protect `main` and require both actual job names shown by GitHub: **Frontend checks** and **Windows x64 installer**. Require PRs, conversation resolution, and up-to-date branches; block force pushes/deletion and apply requirements to bypass roles too. Solo developers should not require another person's approval. CI cannot prevent merging until these repository rules are enabled.
-4. Protect `v*` release tags with a tag ruleset: restrict creation to release maintainers and prevent tag updates/deletion. Never move a released tag.
+Public keys do not replace authorization: maintain user-scoped RLS and RPC ownership/session checks. Internal protocol/private tables intentionally prohibit direct client access. Private implementation schemas must remain outside exposed API schemas. Verify hosted settings separately from local tests.
 
-If existing protection blocks the initial workflow PR because the checks do not exist yet, finish that bootstrap PR before selecting the newly available check names.
-
-### Versioning and releasing
-
-On your temporary version branch:
-
-```powershell
-npm version 1.0.0 --no-git-tag-version
-```
-
-Commit `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock` together. For manual package edits, run `npm run sync:version` first. CI detects version drift before build hooks can repair it.
-
-After the version PR merges, start from a clean working tree:
-
-```powershell
-git switch main
-git pull --ff-only origin main
-git tag -a v1.0.0 -m "Scribe 1.0.0"
-git push origin v1.0.0
-```
-
-Watch **Actions > Release**, then inspect the draft release, review its notes, test the installer on Windows, and publish when ready. `SHA256SUMS.txt` verifies file integrity; it is not a Windows signing identity. The workflow stops if a release already exists or the tag moved during the build, rather than replacing assets. Review incomplete drafts manually before retrying failed uploads.
-
-### Test reports and security
-
-CI retains installer artifacts, JUnit reports and coverage reports for 14 days. Report upload runs even if a later test/build check fails. Add feature tests under `tests/**/*.test.ts` or `.test.tsx`; use `npm run test:watch` while developing and preserve coverage floors in `vitest.config.ts`. Test workers are capped at two to bound memory use on small runners. Generated reports stay ignored by Git.
-
-Actions are pinned to verified release commits; Dependabot checks action updates monthly. PR jobs use read-only repository tokens, never `pull_request_target`, and do not persist Git checkout credentials. The job with release write permission downloads only this run's installer and does not check out or execute app code. Rust artifacts are not shared through PR-controlled caches.
-
-The CI suite does not replace hosted authorization/OAuth/MFA tests, multi-device integration tests, native UI checks, or installer smoke testing.
-
-```powershell
-npm run version:check
-npm run check
-npm run check:native
-npm run installer:build -- --ci -- --locked
-```
-
-## App version
-
-`package.json` is the source of the app version. Tauri reads it directly, and the About page displays the same version.
-
-To change the version without creating a Git commit or tag:
-
-```powershell
-npm version 0.1.0 --no-git-tag-version
-```
-
-The version lifecycle script updates `src-tauri/Cargo.toml` and the app entry in `src-tauri/Cargo.lock`. If you edit `package.json` manually, run `npm run sync:version`. Synchronization also runs before `npm run dev`, `npm run build`, and `npm run tauri`.
-
-## Features
-
-### Notes
-- Create and edit notes.
-- Organize notes into folders.
-- Pin important notes for quick access.
-- Move notes to Trash and restore them when needed.
-- Permanently delete notes.
-- View note previews and metadata.
-- Markdown-supported note content.
-- Automatic persistence and a responsive editing experience.
-
-### Organization
-- All Notes — View your active notes.
-- Drafts — Find notes classified as drafts.
-- Pinned Notes — Access pinned notes quickly.
-- Trash — Manage deleted notes.
-- Unfiled — Find notes that do not belong to a folder.
-- Custom folders with names, icons, colors, and ordering.
-
-### Desktop experience
-- Dark-themed interface with a teal accent.
-- Three-pane layout with navigation, note list, and editor.
-- Search notes.
-- Keyboard shortcuts for common actions.
-- Windows-native desktop integration through Tauri.
-
-### Quick capture
-
-Press **Ctrl + Shift + Space** from any app to open the capture window. Scribe must be running; it can be minimized or in the system tray. Customize this global shortcut in **Settings → Keyboard shortcuts**; the binding is saved on this device.
-
-Add an optional title and your note, choose a folder or reminder if needed, then press **Ctrl + Enter** or **Save note**. The note and its reminder are saved on this device before entering the existing cloud sync queues. **Esc** or the close button keeps your unfinished capture, folder and reminder locally for the next time you open it. Drafts are kept separately for each account. Quick capture requires a signed-in account and does not bypass two-step verification.
-
-Use **Tab / Shift + Tab** to navigate, and arrow keys to choose a folder. Smart paste preserves copied links; paste a URL over selected text to make a Markdown link. **Ctrl + Shift + V** pastes plain text. Capture uses your notification and sound preferences: in-app feedback when returning to a focused Scribe window, or a desktop notification when capturing from another app.
-
-Capture reminders use a compact date/time picker and the default reminder lead time from settings. Links appear in place as local preview cards in reading mode and compact note-card previews; capture also shows pasted links. No background requests are made for website metadata or images.
-
-**Settings → Windows** groups launch at startup, close to system tray, and Quick Capture. Quick Capture is on by default; disabling it releases the global shortcut and keeps unfinished captures locally. This preference is saved on this device.
-
-### Cloud and account support
-- Supabase authentication.
-- Cloud-backed notes and folder storage.
-- User-specific data access enforced through Row Level Security (RLS).
-- Optimistic UI updates with error handling and rollback.
-
-Feature availability may vary as development progresses. Check the current application for the latest supported functionality.
-
-## Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| React | User interface |
-| Vite | Development server and build tooling |
-| Tauri | Native desktop application |
-| TypeScript | Application logic, depending on the module |
-| Supabase Auth | Authentication |
-| Supabase PostgreSQL | Cloud data storage |
-| SQL | Schema, constraints, policies, and database functions |
-| ESLint | Code quality and linting |
-
-## Prerequisites
-
-Install the following before developing Scribe on Windows:
-
-- [Node.js](https://nodejs.org/) — use a version compatible with the project's dependencies.
-- npm — included with Node.js.
-- [Rust](https://www.rust-lang.org/tools/install) — required for Tauri's Rust backend.
-- Microsoft C++ Build Tools and the Windows SDK.
-- [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) — generally already present on modern Windows installations.
-- A Supabase project for cloud-backed functionality.
-
-See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for platform-specific setup instructions.
-
-## Getting Started
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/arunabhajana/scribe-windows
-cd scribe-windows
-```
-
-Replace the placeholders with the actual repository URL and directory.
-
-### 2. Install dependencies
-
-```bash
-npm install
-```
-
-### 3. Configure environment variables
-
-Create a `.env` file in the project root using the variable names expected by the existing Supabase client.
-
-For example:
-
-```env
-VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
-```
-
-Use the exact variable names expected by your implementation. If your project uses a newer Supabase publishable key, configure that key rather than exposing any privileged credentials.
-
-**Security rules:**
-- Never commit `.env` files containing credentials.
-- Never include a Supabase service-role key in the desktop client.
-- Keep database access protected by RLS policies.
-- Provide an appropriate `.env.example` file without real secrets.
-
-### 4. Configure the Supabase database
-
-Scribe uses a hosted Supabase project. A local PostgreSQL instance or local Supabase server is not required.
-
-The initial database migration is maintained in the shared backend repository:
+### Repository map
 
 ```text
-scribe-backend/
-└── supabase/
-    └── migrations/
-        └── 20261009000000_initial_schema.sql
+.github/                  CI/releases and action dependency updates
+assets/branding/          Branding images
+public/                   Static assets, fonts and font licenses
+scripts/                  Version/build guards, security checks, artwork
+src/
+  App.tsx                 Main app composition
+  Surface.tsx             Main/capture surface selection
+  components/             Auth, layout, editor, settings and dialogs
+  features/
+    auth/                 Accounts, offline profiles, terms and deletion
+    capture/              Quick Capture surface and bridge
+    notes/                Local store, sync and rich-text conversion
+    reminders/            Reminder persistence/sync
+    settings/             Workspace preferences, cloud consent/storage
+    transfer/             Backup/Markdown export and import
+  hooks/                  Auth, notes, reminders and session orchestration
+  types/note.ts           Shared note/folder contracts
+src-tauri/
+  src/                    Rust commands and integrations
+  capabilities/           Main/capture capability sets
+  permissions/            Explicit app command permissions
+  installer/              NSIS template, artwork and upstream notice
+  tauri.conf.json         Base configuration and CSP
+  tauri.installer.conf.json  Distribution branding/configuration
+tests/                    Unit, component and persistence regressions
+WORKFLOW_GUIDE.md         Git, testing, versioning and release commands
 ```
 
-To configure a new environment:
+### Tests and quality gates
 
-1. Open the Supabase Dashboard.
-2. Select the project's SQL Editor.
-3. Review and apply the initial migration if it has not already been applied.
-4. Verify the `profiles`, `folders`, `notes`, and `user_settings` tables.
-5. Verify RLS policies, foreign keys, indexes, and triggers.
-6. Test database access using an authenticated user.
+| Command | Checks |
+| --- | --- |
+| `npm test` | Run the Vitest suite once |
+| `npm run test:watch` | Rerun tests during development |
+| `npm run test:coverage` | Tests and enforced coverage thresholds |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | App, configuration, tests and version-helper types |
+| `npm run security:check` | Security regressions and current-tree privileged-credential pattern scan |
+| `npm run security:config` | Production public-key, HTTPS and CSP checks |
+| `npm run version:check` | Check committed versions without changing files |
+| `npm run check` | Version check → lint → types → coverage tests → security checks → production build |
+| `npm run check:native` | Rust/Tauri compilation, not native UI testing or a Rust unit-test suite |
 
-Do not apply the initial migration repeatedly to an existing database without checking its current schema and migration history.
+The full frontend gate stops at the first failure. `npm run build` alone compiles the frontend; it does not replace the gate.
 
-### 5. Run the application
+Tests cover signup validation, safe Markdown, editor/list behavior, sorting, workspace isolation/preferences, cloud consent, storage feedback, sync retries/acknowledgements/conflicts, deletion guards, import/export, reminders and release validation. Storage tests exercise production persistence code against in-memory IndexedDB; no live Supabase project or real account is used.
 
-Start the frontend development server:
+**Reports:** `test-results/junit.xml`, `coverage/lcov.info` and `coverage/index.html`, all generated and ignored by Git. Coverage includes untested feature modules so gaps stay visible. Overall floors are 30% statements/lines, 20% branches and 25% functions, with higher floors for selected persistence, transfer, storage and version modules. These initial floors are not comprehensive app coverage.
 
-```bash
-npm run dev
-```
+**New tests:** add `tests/<feature>.test.ts` or `.test.tsx`; discovery/typechecking is automatic. Reuse `tests/fixtures.ts`. Include success, invalid input and recovery paths, with cross-workspace cases for storage changes. For module-cached stores, reset modules and import inside tests to bind to the fresh database. `tests/setup.ts` resets storage/IndexedDB, cleans up React, restores timers and rejects unexpected fetches. Use explicit mocks/fake timers; `.only` is forbidden and worker count is bounded.
 
-To run the desktop application through Tauri, use the project's configured Tauri script. In a standard Tauri setup, this is commonly:
+These checks do not establish real OAuth/MFA behavior, hosted RLS correctness, multi-device sync, native WebView layout, notification delivery or installer/upgrade/uninstall behavior. Check those separately before release. The credential scan covers current tracked/new non-ignored text, not Git history or every possible secret type.
 
-```bash
-npm run tauri dev
-```
+### CI and releases
 
-Check `package.json` if the project uses a different script name.
+The [CI workflow](.github/workflows/ci.yml) runs for every PR into `main`, pushes to `main`, manual dispatch and reusable release calls:
 
-### 6. Build the application
+1. **Frontend checks** on Ubuntu: install locked npm dependencies, validate versions, run the frontend gate, upload test/coverage reports.
+2. **Windows x64 installer** after frontend success: install the pinned toolchain, compile-check native code, build the branded installer with locked Cargo dependencies, verify version/lockfiles stayed unchanged, upload the installer.
 
-Build the frontend:
+Require both jobs in `main`'s branch-protection rule to block failed merges. Work flows from `feat/*`, `fix/*` or `release/*` through a PR and green checks into stable `main`. A feature-branch push alone does not start CI until it has a PR targeting `main`.
 
-```bash
-npm run build
-```
+The [release workflow](.github/workflows/release.yml) starts on a pushed `v*` tag. It verifies the project version, that the commit is already on `main`, and published HTTPS legal links. After rerunning CI it creates a **draft release** with the x64 installer, checksum and generated notes; prerelease versions are marked accordingly. It refuses to replace an existing release or release against a moved tag. Review notes and smoke-test the installer before publishing the draft manually.
 
-Build the Windows desktop application using the configured Tauri command, commonly:
+Set these under **GitHub Settings › Secrets and variables › Actions › Variables** as **repository variables**, not environment-scoped variables:
 
-```bash
-npm run tauri build
-```
+| Variable | Required for |
+| --- | --- |
+| `VITE_SUPABASE_URL` | CI/releases; must match the app CSP |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | CI/releases; alternatively use `VITE_SUPABASE_ANON_KEY` for a legacy public anon key |
+| `VITE_SCRIBE_WEBSITE_URL` | Release tags; public HTTPS site without credentials, query or fragment |
 
-Generated installers and bundles depend on the Tauri configuration.
+Use public client values only. No personal GitHub token or Supabase CLI is required; GitHub supplies the temporary release token. Allow official `actions/*` actions and the release job's explicit write permission; keep default workflow permissions read-only. Restrict `v*` tag creation to maintainers and block tag updates/deletion through tag rules.
 
-## Database Overview
+Reports/installers are retained as Actions artifacts for 14 days. PR jobs have read-only repository permissions, never use `pull_request_target`, and do not persist Git credentials. Actions are pinned to release commits and checked monthly by Dependabot. Only the draft-release job has write access; it does not check out or execute app code. PR-controlled Rust caches are not shared with publishing. Installer signing, in-app updater delivery and backend deployments remain separate work.
 
-Scribe uses Supabase as its cloud database.
+### Versioning and contributing
 
-### `notes`
+`package.json` is the version source. `npm version <version> --no-git-tag-version` runs the sync lifecycle to update `package-lock.json`, `src-tauri/Cargo.toml` and the app entry in `src-tauri/Cargo.lock`. `npm run sync:version` only copies the current version; it does not increment it. Commit all four files through a version PR, then tag the merged `main` commit. See the [command guide](WORKFLOW_GUIDE.md) for exact steps.
 
-Stores the user's notes, including:
+Keep contributions focused, add regression tests with behavior changes, and run the full gate before a PR. Include native checks and installer smoke coverage for Rust/installer changes. Backend schema changes belong in new backend migrations and need coordination with other clients; client CI does not apply them.
 
-- `id` — UUID primary key.
-- `user_id` — owner of the note.
-- `folder_id` — associated folder, nullable.
-- `title` — note title.
-- `content` — note body.
-- `is_pinned` — whether the note is pinned.
-- `created_at` — creation timestamp.
-- `updated_at` — last-update timestamp.
-- `deleted_at` — soft-deletion timestamp, nullable.
+### License
 
-The current implementation uses text-based note content. A migration to structured JSONB content may be introduced when the rich-text editor is ready.
-
-### `folders`
-
-Stores user-created folders and their presentation and ordering metadata, including ownership, name, icon, color, sort order, and timestamps.
-
-Deleting a folder should detach its notes rather than delete them.
-
-### `profiles`
-
-Stores application-level profile information associated with the authenticated Supabase user.
-
-### `user_settings`
-
-Reserved for account-level settings that should synchronize across clients, such as theme, accent color, and font family.
-
-The existence of a table does not necessarily mean every corresponding UI setting is already connected to it.
-
-### System views
-
-All Notes, Drafts, Pinned Notes, Trash, and Unfiled are logical views rather than rows in the `folders` table.
-
-- Unfiled notes have no folder assigned.
-- Trashed notes use `deleted_at`.
-- Restoring a note clears `deleted_at`.
-- Draft classification is derived from note content rather than requiring a dedicated database column.
-
-## Security
-
-Scribe uses Supabase authentication and database authorization.
-
-- RLS policies restrict access to user-owned records.
-- The authenticated user identity is used to associate records with their owner.
-- Client applications use publishable credentials.
-- Privileged database credentials must never be shipped in the desktop application.
-- Schema changes should be maintained as versioned SQL migrations.
-
-Always verify RLS policies and ownership constraints before deploying schema changes.
-
-## Development and Quality Checks
-
-Run the following checks before submitting changes:
-
-```bash
-npm run build
-npx eslint src
-```
-
-Use the repository's configured test commands if additional automated tests are available.
-
-When modifying database functionality, test note creation, editing, pinning, folder assignment, Trash, restoration, and permanent deletion.
-
-## Project Structure
-
-The exact structure may evolve, but a typical layout is:
-
-```text
-scribe-windows/
-├── src/                  # React application
-├── src-tauri/            # Tauri and Rust code
-├── public/               # Static assets
-├── package.json
-├── vite.config.*
-├── .env.example
-├── .gitignore
-└── README.md
-```
-
-Refer to the actual repository for the authoritative file layout.
-
-## Roadmap
-
-Potential improvements and planned features include:
-
-- Note reminders.
-- Attachments and image storage.
-- System tray behavior and startup integration.
-- Spellcheck and autocorrection.
-- Automated update delivery.
-- Improved cross-device synchronization with Android and the Chrome Extension.
-
-These items are planned or under consideration and should not be interpreted as already released.
-
-## Contributing
-
-Contributions and improvements are welcome.
-
-1. Create a feature branch.
-2. Make focused changes.
-3. Run the available build and lint checks.
-4. Test the affected functionality.
-5. Submit a pull request with a clear explanation of the change.
-
-For database changes, include a versioned migration and consider compatibility with other Scribe clients that may update independently.
-
-**Scribe** — Your notes, organized.
+Application code is available under the [MIT License](LICENSE). Preserve license/copyright notices when redistributing it. Bundled fonts and the upstream installer template have their own notices in `public/fonts/` and `src-tauri/installer/LICENSE-Tauri`; the app's MIT license does not replace those notices.
