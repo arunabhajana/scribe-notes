@@ -14,9 +14,11 @@ export function notifySessionRevoked(sessionId: string, message = "Your session 
 
 export async function sessionAwareFetch(input: RequestInfo | URL, init?: RequestInit) {
   const url = new URL(input instanceof Request ? input.url : String(input));
-  // A stuck user lookup otherwise holds Auth's session lock indefinitely.
+  // Bound user lookups and logout so network loss cannot hold Auth's session
+  // lock or account-deletion cleanup indefinitely.
   const userLookup = /\/auth\/v1\/user\/?$/.test(url.pathname) && (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase() === "GET";
-  const controller = userLookup ? new AbortController() : null;
+  const logout = /\/auth\/v1\/logout\/?$/.test(url.pathname);
+  const controller = userLookup || logout ? new AbortController() : null;
   const originalSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
   const signal = controller ? originalSignal ? AbortSignal.any([originalSignal, controller.signal]) : controller.signal : originalSignal;
   const timer = controller ? setTimeout(() => controller.abort(), 12_000) : undefined;
@@ -26,7 +28,7 @@ export async function sessionAwareFetch(input: RequestInfo | URL, init?: Request
     if (controller) {
       // Keep the deadline through body download, not only until headers arrive.
       const body = await response.arrayBuffer();
-      response = new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+      response = new Response([204, 205, 304].includes(response.status) ? null : body, { status: response.status, statusText: response.statusText, headers: response.headers });
     }
   }
   finally { clearTimeout(timer); }

@@ -111,7 +111,7 @@ function QuickCaptureContent({ account, setAccount }: { account: string | null; 
 
   const close = () => { if (!savingRef.current) void getCurrentWindow().hide(); };
   const changeDraft = (value: Draft) => {
-    if (account && workspaceDeletionStatus(account)) { setError("This offline profile is being deleted."); return; }
+    if (account && workspaceDeletionStatus(account)) { setError("This workspace is being deleted."); return; }
     setDraft(value);
     if (account) {
       try { saveDraft(account, value); setError(""); }

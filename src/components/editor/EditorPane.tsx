@@ -119,7 +119,7 @@ export function EditorPane({
         <EditorToolbar
           editModeShortcut={editModeShortcut}
           preview={false}
-          onTogglePreview={() => setBodyEditing(false)}
+          onTogglePreview={() => window.dispatchEvent(new Event("scribe:toggle-note-mode"))}
           onAction={applyAction}
         />
       )}

@@ -2,6 +2,7 @@ import type { Note, NoteFolder } from "../../types/note";
 import { assertWorkspaceWritable } from "../auth/workspaceDeletionState";
 import type { SyncBatch, SyncReply } from "./syncProtocol";
 import { encodeSyncOperations } from "./syncProtocol";
+import type { ImportJob, ImportReceipt } from "../transfer/transferTypes";
 
 type SyncState = { userId: string; cursor: string | null; inFlight?: SyncBatch; deleted?: boolean };
 
@@ -24,7 +25,7 @@ type CacheNote = Note & { key: string; userId: string };
 type CacheFolder = NoteFolder & { key: string; userId: string };
 
 const databaseName = "scribe-offline-v1";
-const databaseVersion = 3;
+const databaseVersion = 4;
 let databasePromise: Promise<IDBDatabase> | undefined;
 
 function ensureStore(
@@ -63,6 +64,10 @@ function openDatabase() {
       }
       ensureStore(db, transaction, "syncLeases", { keyPath: "userId" });
       ensureStore(db, transaction, "syncState", { keyPath: "userId" });
+      for (const [name, keyPath] of [["importJobs", "id"], ["importHistory", "key"]]) {
+        const store = ensureStore(db, transaction, name, { keyPath });
+        if (!store.indexNames.contains("userId")) store.createIndex("userId", "userId");
+      }
     };
     request.onsuccess = () => {
       const db = request.result;
@@ -104,11 +109,66 @@ function workspaceWrite(db: IDBDatabase, userId: string, stores: string | string
 }
 
 export const offlineStore = {
+  async pendingImports(userId: string): Promise<ImportJob[]> {
+    const db = await openDatabase();
+    const request = db.transaction("importJobs", "readonly").objectStore("importJobs").index("userId").getAll(userId) as IDBRequest<ImportJob[]>;
+    return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  },
+  async importReceipt(userId: string, fingerprint: string): Promise<ImportReceipt | undefined> {
+    const db = await openDatabase();
+    const request = db.transaction("importHistory", "readonly").objectStore("importHistory").get(rowKey(userId, fingerprint)) as IDBRequest<ImportReceipt | undefined>;
+    return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  },
+  async prepareImport(job: ImportJob, allowCopies: boolean): Promise<ImportJob> {
+    const db = await openDatabase();
+    const tx = workspaceWrite(db, job.userId, ["importJobs", "importHistory", "notes", "folders", "outbox"]);
+    const done = transactionDone(tx);
+    const history = tx.objectStore("importHistory").get(rowKey(job.userId, job.fingerprint)) as IDBRequest<ImportReceipt | undefined>;
+    const jobs = tx.objectStore("importJobs").index("userId").getAll(job.userId) as IDBRequest<ImportJob[]>;
+    const checks = [...job.notes.map(note => tx.objectStore("notes").getKey(rowKey(job.userId, note.id))), ...job.folders.map(folder => tx.objectStore("folders").getKey(rowKey(job.userId, folder.id))),
+      ...job.notes.map(note => tx.objectStore("outbox").getKey([job.userId, "note", note.id])), ...job.folders.map(folder => tx.objectStore("outbox").getKey([job.userId, "folder", folder.id]))];
+    let result = job, failure = "", remaining = 2 + checks.length;
+    const ready = () => {
+      if (--remaining) return;
+      const pending = jobs.result.find(item => item.fingerprint === job.fingerprint);
+      if (pending) { result = pending; return; }
+      if (history.result && !allowCopies) { failure = "This selection was already imported into this workspace. Enable ‘Import again as new copies’ to import it again."; tx.abort(); return; }
+      // Reserve only through a job. The final content transaction uses add()
+      // throughout, so even an unexpected UUID collision can never overwrite.
+      tx.objectStore("importJobs").add(job);
+    };
+    history.onsuccess = jobs.onsuccess = ready;
+    for (const check of checks) check.onsuccess = () => { if (check.result !== undefined) { failure = "An import ID already exists. Retry with fresh copies; existing data has been kept."; tx.abort(); } else ready(); };
+    try { await done; } catch (cause) { throw new Error(failure || "Could not stage this import. Existing data is unchanged.", { cause }); }
+    return result;
+  },
+  async commitImport(userId: string, jobId: string) {
+    const db = await openDatabase();
+    const tx = workspaceWrite(db, userId, ["importJobs", "importHistory", "notes", "folders", "outbox"]);
+    const done = transactionDone(tx);
+    const request = tx.objectStore("importJobs").get(jobId) as IDBRequest<ImportJob | undefined>;
+    request.onsuccess = () => {
+      const job = request.result;
+      if (!job) return; // Earlier completion atomically removed this same job.
+      if (job.userId !== userId) { tx.abort(); return; }
+      let sequence = Date.now();
+      for (const [entity, rows] of [["folder", job.folders], ["note", job.notes]] as const) {
+        for (const snapshot of rows) {
+          tx.objectStore(entity === "note" ? "notes" : "folders").add({ ...snapshot, userId, key: rowKey(userId, snapshot.id) });
+          tx.objectStore("outbox").add({ key: [userId, entity, snapshot.id], userId, entity, entityId: snapshot.id, kind: "upsert", snapshot,
+            baseUpdatedAt: null, queuedUpdatedAt: snapshot.updatedAt, revisionId: crypto.randomUUID(), sequence: sequence++ } satisfies OutboxOperation);
+        }
+      }
+      tx.objectStore("importHistory").put({ key: rowKey(userId, job.fingerprint), userId, fingerprint: job.fingerprint, importedAt: new Date().toISOString(), notes: job.notes.length, folders: job.folders.length } satisfies ImportReceipt);
+      tx.objectStore("importJobs").delete(jobId);
+    };
+    await done;
+  },
   async inspectWorkspace(userId: string) {
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases"], "readonly");
+    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases", "importJobs", "importHistory"], "readonly");
     const done = transactionDone(tx);
-    const requests = ["notes", "folders", "outbox"].map(name => tx.objectStore(name).index("userId").getAll(userId));
+    const requests = ["notes", "folders", "outbox", "importJobs", "importHistory"].map(name => tx.objectStore(name).index("userId").getAll(userId));
     requests.push(...["syncState", "syncLeases"].map(name => tx.objectStore(name).get(userId)));
     const rows = await Promise.all(requests.map(request => new Promise<unknown>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result ?? null);
@@ -119,9 +179,9 @@ export const offlineStore = {
   },
   async deleteWorkspace(userId: string) {
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases"], "readwrite", { durability: "strict" });
+    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases", "importJobs", "importHistory"], "readwrite", { durability: "strict" });
     const done = transactionDone(tx);
-    for (const name of ["notes", "folders", "outbox"]) {
+    for (const name of ["notes", "folders", "outbox", "importJobs", "importHistory"]) {
       const request = tx.objectStore(name).index("userId").openCursor(IDBKeyRange.only(userId));
       request.onsuccess = () => { const cursor = request.result; if (cursor) { cursor.delete(); cursor.continue(); } };
     }

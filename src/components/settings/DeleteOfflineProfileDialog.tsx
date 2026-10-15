@@ -10,8 +10,8 @@ function sizeLabel(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
-export function DeleteOfflineProfileDialog({ profile, interrupted, onClose, onDeleted }: {
-  profile: LocalProfile; interrupted: boolean; onClose: () => void; onDeleted: () => void;
+export function DeleteOfflineProfileDialog({ profile, interrupted, onClose, onDeleted, onExport }: {
+  profile: LocalProfile; interrupted: boolean; onClose: () => void; onDeleted: () => void; onExport: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
@@ -55,12 +55,14 @@ export function DeleteOfflineProfileDialog({ profile, interrupted, onClose, onDe
         <div><dt>Reminders</dt><dd>{summary.reminders}</dd></div><div><dt>Quick Capture drafts</dt><dd>{summary.captureDrafts}</dd></div>
         <div><dt>Saved preferences</dt><dd>{summary.preferences}</dd></div><div><dt>Notification history</dt><dd>{summary.notifications}</dd></div>
       </dl>
+      {summary.pendingImports > 0 && <small>{summary.pendingImports} notes in unfinished imports will also be removed.</small>}
       <small>Includes the profile and local save queue. Estimated data size, not disk space recovered.</small>
     </section> : !interrupted && !error ? <p className="offline-delete-loading" role="status"><LoaderCircle size={16} className="offline-delete-spinner" /> Reading saved data…</p> : null}
     {interrupted && !summary && <p>Removes this profile, notes (including Drafts and Trash), folders, reminders, preferences, Quick Capture draft and saved notification history.</p>}
     <div className="offline-delete-scope"><strong>Other workspaces stay untouched.</strong><p>Saved data for other offline profiles and signed-in accounts, including their cloud data, will not be deleted.</p></div>
     {!interrupted && <>
-      <p className="offline-delete-warning"><AlertTriangle size={16} /><span>This cannot be undone. Copy important notes somewhere safe before continuing.</span></p>
+      <p className="offline-delete-warning"><AlertTriangle size={16} /><span>Deletion cannot be undone. An export saved beforehand can be imported into an offline or online workspace later.</span></p>
+      <div className="delete-export-first"><div><strong>Keep a copy of your notes</strong><small>A Scribe backup preserves note details. Profile settings and sign-in details are not included.</small></div><button type="button" disabled={deleting} onClick={onExport}>Export first</button></div>
       <label className="offline-delete-label" htmlFor="offline-delete-confirm">Type <strong>confirm</strong> to delete this profile</label>
       <input id="offline-delete-confirm" value={confirmation} onChange={event => setConfirmation(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void submit(); } }} autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} disabled={deleting} aria-describedby="offline-delete-description" />
     </>}

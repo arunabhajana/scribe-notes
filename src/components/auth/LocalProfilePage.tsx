@@ -11,7 +11,7 @@ export function LocalProfilePage({ onCreate, onBack }: { onCreate: (name: string
   return <main className="auth-screen auth-profile-screen"><section className="auth-panel local-profile-panel">
     <AppLogo variant="transparent" />
     <div className="auth-panel-heading"><span className="auth-eyebrow">ON THIS DEVICE</span><h2>Make yourself at home.</h2><p>Choose a display name for your offline profile. No email or password needed.</p></div>
-    <div className="local-profile-notice"><strong>Stored locally. Never uploaded.</strong><p>Your profile name and notes stay on this device. Signing in later opens a separate workspace—your offline notes will not transfer or upload to that account.</p></div>
+    <div className="local-profile-notice"><strong>Stored locally. Never uploaded.</strong><p>Your profile name and notes stay on this device. Signing in later opens a separate workspace—your offline notes will not transfer or upload automatically. You can move them yourself using Export and Import in Settings → General.</p></div>
     <form className="auth-form" onSubmit={submit}>
       <label className="auth-field"><span>Display name</span><div className="auth-input-wrap"><input autoFocus required maxLength={60} autoComplete="nickname" value={name} onChange={event => setName(event.target.value)} placeholder="What should we call you?" /></div></label>
       {error && <div className="auth-feedback auth-error" role="alert">{error}</div>}

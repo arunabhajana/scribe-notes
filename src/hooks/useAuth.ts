@@ -499,6 +499,22 @@ export function useAuth() {
     return storageError ?? remoteError;
   }, []);
 
+  const finishDeletedAccount = useCallback(async (userId: string) => {
+    if (supabase) {
+      const current = await supabase.auth.getSession();
+      if (current.data.session && current.data.session.user.id !== userId) throw new Error("Another account is signed in. Sign out of it before finishing this deletion.");
+      if (current.data.session) await supabase.auth.signOut({ scope: "local" });
+    }
+    // Recheck storage after asynchronous sign-out before removing credentials.
+    let stored: { user?: { id?: string } } | null = null;
+    try { stored = JSON.parse(localStorage.getItem(authStorageKey) ?? "null"); } catch { /* Invalid credentials cannot restore a session. */ }
+    if (stored?.user?.id && stored.user.id !== userId) throw new Error("Another account signed in while deletion finished. Its session has been kept.");
+    localStorage.removeItem(authStorageKey);
+    setSession(current => current?.user.id === userId ? null : current);
+    setPasswordRecoveryRequired(false);
+    setAuthNotice("Your Scribe account, cloud data and this device’s saved copy have been deleted.");
+  }, []);
+
   return {
     mfa,
     deviceInventory,
@@ -527,5 +543,6 @@ export function useAuth() {
     authCallbackError,
     authNotice,
     signOut,
+    finishDeletedAccount,
   };
 }

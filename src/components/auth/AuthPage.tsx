@@ -284,7 +284,7 @@ export function AuthPage({
                   </div>
                 )}
                 {oauthPending ? <ProviderSignInPending provider={oauthPending} onCancel={onCancelProviderSignIn} /> : <>
-                {offlineProfileName && <div className="auth-offline-transfer-notice"><strong>Your offline notes stay on this device.</strong><p>Signing in or creating an account opens a separate workspace. It does not transfer or upload notes from your offline profile. You can return using “Continue as {offlineProfileName}” below.</p></div>}
+                {offlineProfileName && <div className="auth-offline-transfer-notice"><strong>Your offline notes stay on this device.</strong><p>Signing in or creating an account opens a separate workspace. It does not automatically transfer or upload your offline notes. To move notes yourself, use Export and Import in Settings → General. You can return using “Continue as {offlineProfileName}” below.</p></div>}
                 {isSignUp && <span className="auth-method-label">Sign up with</span>}
                 <SocialSignInButtons
                   compact={isSignUp}

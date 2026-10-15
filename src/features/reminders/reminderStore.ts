@@ -30,13 +30,14 @@ async function transaction(userId: string, update?: (cache: ReminderCache) => Re
     const store = tx.objectStore("accounts");
     const request = store.get(userId) as IDBRequest<(ReminderCache & { deleted?: boolean }) | undefined>;
     let result: ReminderCache;
+    let failure: unknown;
     request.onsuccess = () => {
       if (request.result?.deleted) {
         if (update) { tx.abort(); return; }
         result = empty(userId); return;
       }
       result = request.result ?? empty(userId);
-      if (update) { result = update(result); store.put(result); }
+      if (update) { try { result = update(result); store.put(result); } catch (cause) { failure = cause; tx.abort(); } }
     };
     tx.oncomplete = () => {
       if (update) {
@@ -45,11 +46,27 @@ async function transaction(userId: string, update?: (cache: ReminderCache) => Re
       }
       resolve(result);
     };
-    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error("Could not save reminders on this device."));
+    tx.onerror = tx.onabort = () => reject(failure ?? tx.error ?? new Error("Could not save reminders on this device."));
   });
 }
 
 export const reminderStore = {
+  async importBatch(userId: string, reminders: NoteReminder[]) {
+    if (!reminders.length) return;
+    await transaction(userId, cache => {
+      const next = { ...cache, reminders: { ...cache.reminders }, pending: { ...cache.pending } };
+      for (const imported of reminders) {
+        // A resumed import must never activate reminders that expired meanwhile.
+        const reminder = { ...imported, dueAt: imported.dueAt && Date.parse(imported.dueAt) > Date.now() ? imported.dueAt : null };
+        const existing = next.reminders[reminder.noteId];
+        if (existing && existing.updatedAt !== reminder.updatedAt) throw new Error("An imported reminder conflicts with an existing record.");
+        if (existing && existing.dueAt === reminder.dueAt && existing.leadMinutes === reminder.leadMinutes) continue;
+        next.reminders[reminder.noteId] = reminder;
+        next.pending[reminder.noteId] = { ...reminder, mutationId: crypto.randomUUID() };
+      }
+      return next;
+    });
+  },
   async deleteWorkspace(userId: string) {
     const db = await openDatabase();
     await new Promise<void>((resolve, reject) => {

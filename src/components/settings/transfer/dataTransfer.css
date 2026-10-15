@@ -1,0 +1,69 @@
+.transfer-dialog { --transfer-accent: #b5a3ff; width: min(720px, calc(100vw - 32px)); padding: 26px; }
+.transfer-dialog.is-light { --transfer-accent: #6549c7; }
+.transfer-dialog-icon { color: var(--transfer-accent); background: #8970ed16; border-radius: 11px; padding: 9px; display: grid; place-items: center; }
+.transfer-dialog h3 { margin: 0; font-size: 13px; line-height: 1.5; }
+.transfer-dialog .transfer-destination { display: block; margin-top: 5px; font-size: 11px; }
+.transfer-dialog fieldset { margin: 22px 0; padding: 0; border: 0; min-width: 0; }
+.transfer-format-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.transfer-format-options legend { margin-bottom: 10px; font-size: 12px; font-weight: 600; }
+.transfer-format { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 16px; border: 1px solid var(--delete-border); border-radius: 12px; cursor: pointer; background: var(--delete-surface); }
+.transfer-format.is-selected { border-color: var(--transfer-accent); background: #8970ed0b; }
+.transfer-format > input { position: absolute; top: 17px; right: 16px; }
+.transfer-format > svg { margin-bottom: 6px; color: var(--transfer-accent); }
+.transfer-format > strong { font-size: 13px; }
+.transfer-format > strong small { color: var(--delete-muted); font-size: 10px; font-weight: 400; margin-left: 4px; }
+.transfer-format > span { font-size: 11px; color: var(--transfer-accent); }
+.transfer-dialog .transfer-format p { margin: 0; font-size: 11px; }
+.transfer-dialog input[type="checkbox"], .transfer-dialog input[type="radio"] { appearance: none; flex: 0 0 17px; width: 17px; height: 17px; min-height: 0; padding: 0; margin: 0; background: transparent; border: 1px solid var(--delete-muted); border-radius: 5px; cursor: pointer; display: grid; place-items: center; }
+.transfer-dialog input[type="radio"] { border-radius: 50%; }
+.transfer-dialog input[type="checkbox"]:checked, .transfer-dialog input[type="radio"]:checked { background: var(--transfer-accent); border-color: var(--transfer-accent); }
+.transfer-dialog input[type="checkbox"]:checked::after { content: ""; width: 8px; height: 4px; border-left: 2px solid var(--delete-bg); border-bottom: 2px solid var(--delete-bg); transform: rotate(-45deg) translateY(-1px); }
+.transfer-dialog input[type="radio"]:checked::after { content: ""; width: 7px; height: 7px; background: var(--delete-bg); border-radius: 50%; }
+.transfer-dialog button:focus-visible, .transfer-dialog input:focus-visible, .transfer-dialog select:focus-visible { outline: 2px solid var(--transfer-accent); outline-offset: 3px; }
+.transfer-dialog button, .transfer-dialog select { font-family: inherit; }
+.transfer-upload { display: flex; flex-direction: column; align-items: center; gap: 10px; border: 1px dashed var(--delete-border); border-radius: 12px; padding: 25px 16px; margin: 22px 0; text-align: center; background: var(--delete-surface); }
+.transfer-upload > svg { color: var(--transfer-accent); }
+.transfer-upload strong { font-size: 13px; max-width: 100%; overflow-wrap: anywhere; }
+.transfer-upload > span { color: var(--delete-muted); font-size: 11px; }
+.transfer-upload button { color: var(--delete-text); background: var(--delete-surface); border: 1px solid var(--delete-border); border-radius: 7px; padding: 8px 14px; font-size: 12px; cursor: pointer; }
+.transfer-content-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 12px; }
+.transfer-content-heading label { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--delete-muted); min-width: 0; }
+.transfer-content-heading select { max-width: 180px; background: var(--delete-bg); color: var(--delete-text); border: 1px solid var(--delete-border); border-radius: 7px; padding: 7px; font-size: 11px; }
+.transfer-options { display: flex; gap: 12px 18px; flex-wrap: wrap; margin-bottom: 15px; }
+.transfer-options label { display: flex; align-items: center; gap: 7px; color: var(--delete-muted); font-size: 11px; cursor: pointer; }
+.transfer-selection { border: 1px solid var(--delete-border); border-radius: 11px; overflow: hidden; }
+.transfer-selection-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; font-size: 11px; }
+.transfer-selection-heading > div { display: flex; gap: 12px; }
+.transfer-selection-heading button, .transfer-link { border: 0; padding: 0; background: transparent; color: var(--transfer-accent); font-size: 11px; cursor: pointer; text-underline-offset: 3px; }
+.transfer-selection-heading button:hover, .transfer-link:hover { text-decoration: underline; }
+.transfer-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-block: 1px solid var(--delete-border); color: var(--delete-muted); }
+.transfer-dialog .transfer-search input { border: 0; background: transparent; height: 37px; padding: 8px 0; font-size: 12px; border-radius: 0; }
+.transfer-note-list { max-height: 235px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--delete-border) transparent; }
+.transfer-note { display: flex; align-items: center; gap: 11px; padding: 11px 13px; cursor: pointer; border-bottom: 1px solid var(--delete-border); }
+.transfer-note:last-child { border-bottom: 0; }
+.transfer-note:hover, .transfer-note.is-selected { background: var(--delete-surface); }
+.transfer-note-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.transfer-note-copy > strong { font-size: 12px; font-weight: 500; }
+.transfer-note-copy > small { font-size: 10px; color: var(--delete-muted); }
+.transfer-note-copy > strong, .transfer-note-copy > small { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.transfer-note-tag { flex-shrink: 0; border: 1px solid var(--delete-border); border-radius: 5px; padding: 3px 6px; color: var(--delete-muted); font-size: 9px; }
+.transfer-dialog .transfer-empty { padding: 16px; text-align: center; margin: 0; }
+.transfer-show-more { display: block; border: 0; background: transparent; color: var(--transfer-accent); padding: 12px; margin: auto; font-size: 11px; cursor: pointer; }
+.transfer-selection-help { display: block; padding: 9px 12px; color: var(--delete-muted); font-size: 10px; border-top: 1px solid var(--delete-border); }
+.transfer-reminders { display: flex; align-items: flex-start; gap: 10px; padding: 14px 0; cursor: pointer; }
+.transfer-reminders > span { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.transfer-reminders small { color: var(--delete-muted); font-size: 11px; line-height: 1.6; }
+.transfer-info { border: 1px solid var(--delete-border); padding: 13px 15px; border-radius: 10px; margin: 16px 0; background: var(--delete-surface); }
+.transfer-info > strong { font-size: 12px; }
+.transfer-dialog .transfer-info p { margin: 5px 0 0; font-size: 11px; }
+.transfer-info .transfer-link { margin-top: 10px; }
+.transfer-dialog .transfer-helper { font-size: 10px; margin: 12px 0 0; }
+.transfer-repeat { border-top: 1px solid var(--delete-border); }
+.transfer-dialog footer { border-top: 1px solid var(--delete-border); padding-top: 18px; }
+.transfer-dialog footer .transfer-primary { background: #8970ed; border-color: #8970ed; color: #fff; }
+.transfer-primary:hover:not(:disabled) { background: #7960dd; }
+.transfer-success { padding: 28px 12px 20px; text-align: center; }
+.transfer-success > svg { display: block; color: #38bc9b; background: #38bc9b14; padding: 11px; width: 48px; height: 48px; border-radius: 50%; margin: 0 auto 12px; }
+.transfer-success h3 { font-size: 18px; }
+.transfer-dialog .transfer-success p { max-width: 500px; margin: 12px auto; }
+@media (max-width: 580px) { .transfer-dialog { padding: 20px; } .transfer-format-options { grid-template-columns: 1fr; } .transfer-format { gap: 5px; } .transfer-content-heading { align-items: flex-start; flex-direction: column; } .transfer-selection-heading { align-items: flex-start; flex-direction: column; } .transfer-note-tag { display: none; } }

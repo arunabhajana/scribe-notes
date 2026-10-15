@@ -38,3 +38,13 @@
 @keyframes offline-delete-spin { to { transform: rotate(360deg); } }
 @media (max-width: 460px) { .offline-delete-dialog { padding: 20px; } .offline-delete-summary dl { grid-template-columns: 1fr; } .offline-delete-dialog footer { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .offline-delete-spinner { animation: none; } }
+
+.delete-export-first { display: flex; align-items: center; gap: 14px; padding: 14px; border: 1px solid var(--delete-border); border-radius: 10px; margin: 0 0 20px; background: var(--delete-surface); }
+.delete-export-first > div { flex: 1; min-width: 0; }
+.delete-export-first strong { font-size: 12px; }
+.delete-export-first small { display: block; color: var(--delete-muted); font-size: 10px; line-height: 1.6; margin-top: 5px; }
+.delete-export-first button { flex-shrink: 0; color: var(--delete-text); background: transparent; border: 1px solid var(--delete-border); border-radius: 7px; padding: 8px 10px; font-size: 11px; cursor: pointer; }
+.delete-export-first button:hover { border-color: #a695f8; background: #8970ed10; }
+
+.account-setting-row .data-transfer-button { color: var(--text-primary, #f0f0f3); border: 1px solid var(--border, #34353e); background: transparent; border-radius: 8px; padding: 9px 13px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.account-setting-row .data-transfer-button:hover { background: #8970ed10; border-color: #8970ed; }

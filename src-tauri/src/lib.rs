@@ -8,6 +8,7 @@ mod desktop_notifications;
 mod spelling_context_menu;
 mod quick_capture;
 mod security;
+mod data_export;
 
 #[derive(serde::Serialize)]
 struct DeviceInfo {
@@ -72,6 +73,7 @@ pub fn run() {
             set_autostart_enabled,
             get_autostart_enabled,
             get_device_info,
+            data_export::save_export_file,
             quick_capture::set_capture_shortcut,
             quick_capture::set_capture_enabled,
             quick_capture::pause_capture_shortcut,

@@ -1,9 +1,12 @@
+import type { TransferTarget } from "./features/transfer/transferTypes";
+import { DeleteAccountDialog } from "./components/settings/DeleteAccountDialog";
+import { usePendingAccountDeletion, type AccountDeletionTarget } from "./features/auth/onlineAccountDeletion";
 import { DeleteOfflineProfileDialog } from "./components/settings/DeleteOfflineProfileDialog";
 import { useWorkspaceDeletionStatus } from "./features/auth/workspaceDeletionState";
 import { useContextMenu, type ContextMenuItem } from "./components/context-menu/contextMenuState";
 import { useWritingPreferences } from "./features/settings/writingPreferences";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { CreateFolderDialog } from "./components/dialogs/CreateFolderDialog";
 import { EditorPane } from "./components/editor/EditorPane";
@@ -24,7 +27,7 @@ import type { Note } from "./types/note";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { AuthPage } from "./components/auth/AuthPage";
 import { AccountTermsPage } from "./components/auth/AccountTermsPage";
-import { useCloudSyncPreference } from "./features/settings/cloudSyncPreference";
+import { isCloudSyncEnabled, useCloudSyncPreference } from "./features/settings/cloudSyncPreference";
 import { CloudSyncDialog } from "./components/settings/CloudSyncDialog";
 import { useLocalProfile } from "./features/auth/localProfile";
 import { LocalProfilePage } from "./components/auth/LocalProfilePage";
@@ -49,6 +52,8 @@ import {
   type ShortcutBindings,
 } from "./features/shortcuts/keyboardShortcuts";
 
+const DataTransferDialog = lazy(() => import("./components/settings/transfer/DataTransferDialog").then(module => ({ default: module.DataTransferDialog })));
+
 type AppPage = "notes" | "preferences";
 
 function App() {
@@ -57,23 +62,45 @@ function App() {
   const [accountEntry, setAccountEntry] = useState(false);
   const [localSetup, setLocalSetup] = useState(false);
   const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
+  const [transfer, setTransfer] = useState<(TransferTarget & { returnTo?: "offline" | "online"; account?: AccountDeletionTarget }) | null>(null);
   const deletionStatus = useWorkspaceDeletionStatus(local.profile?.id ?? null);
-  const workspaceId = auth.loading ? null : auth.user?.id ?? (accountEntry ? null : local.profile?.id ?? null);
-  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} localDeletionBlocked={Boolean(deletionStatus)} localCapturePaused={deleteProfileOpen || Boolean(deletionStatus)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} />
-    {!auth.loading && !auth.user && local.profile && (deleteProfileOpen || deletionStatus) && <DeleteOfflineProfileDialog
-      key={local.profile.id} profile={local.profile} interrupted={Boolean(deletionStatus)} onClose={() => setDeleteProfileOpen(false)}
+  const onlinePending = usePendingAccountDeletion();
+  const [onlineTarget, setOnlineTarget] = useState<AccountDeletionTarget | null>(null);
+  const onlineStatus = useWorkspaceDeletionStatus(auth.user?.id ?? onlinePending?.userId ?? null);
+  const workspaceBlocked = Boolean((auth.user ? onlineStatus : deletionStatus) || (onlinePending && (!auth.user || auth.user.id === onlinePending.userId)));
+  const deleteTarget = onlineTarget ?? (onlinePending ? { id: onlinePending.userId, email: auth.user?.id === onlinePending.userId ? auth.user.email ?? "" : "", displayName: "your account" } : null);
+  const workspaceId = auth.loading ? null : auth.user?.id ?? onlinePending?.userId ?? (accountEntry ? null : local.profile?.id ?? null);
+  const activeTransfer = transfer?.id === workspaceId && !workspaceBlocked ? transfer : null;
+  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} workspaceDeletionBlocked={workspaceBlocked} capturePaused={deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeTransfer)} onOpenTransfer={target => setTransfer(target)} onlineDeletionPending={Boolean(onlinePending)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} onDeleteAccount={() => {
+    if (auth.user) { setAccountEntry(true); setOnlineTarget({ id: auth.user.id, email: auth.user.email ?? "", displayName: profileFromUser(auth.user).displayName }); }
+  }} />
+    {!activeTransfer && !deleteTarget && !auth.loading && !auth.user && local.profile && (deleteProfileOpen || deletionStatus) && <DeleteOfflineProfileDialog
+      key={local.profile.id} profile={local.profile} interrupted={Boolean(deletionStatus)} onExport={() => {
+        if (deletionStatus || !local.profile) return;
+        setDeleteProfileOpen(false); setTransfer({ id: local.profile.id, displayName: local.profile.displayName, localOnly: true, cloudSync: false, mode: "export", returnTo: "offline" });
+      }} onClose={() => setDeleteProfileOpen(false)}
       onDeleted={() => { setDeleteProfileOpen(false); setLocalSetup(false); setAccountEntry(true); }} />}
+    {!activeTransfer && !auth.loading && deleteTarget && <DeleteAccountDialog key={deleteTarget.id} account={deleteTarget} pending={onlinePending} currentUserId={auth.user?.id} onExport={() => {
+      if (onlinePending || auth.user?.id !== deleteTarget.id) return;
+      setOnlineTarget(null); setTransfer({ id: deleteTarget.id, displayName: deleteTarget.displayName, localOnly: false, cloudSync: isCloudSyncEnabled(deleteTarget.id), mode: "export", returnTo: "online", account: deleteTarget });
+    }} onSignOutCurrent={auth.signOut} onClose={() => setOnlineTarget(null)}
+      onDeleted={() => { setOnlineTarget(null); setAccountEntry(true); setLocalSetup(false); }} onFinish={auth.finishDeletedAccount} onPasswordReset={auth.requestPasswordReset} />}
+    {activeTransfer && <Suspense fallback={null}><DataTransferDialog key={`${activeTransfer.id}:${activeTransfer.mode}`} target={activeTransfer} returnToDeletion={Boolean(activeTransfer.returnTo)} onClose={() => {
+      setTransfer(null);
+      if (activeTransfer.returnTo === "offline" && !auth.user && local.profile?.id === activeTransfer.id) setDeleteProfileOpen(true);
+      if (activeTransfer.returnTo === "online" && auth.user?.id === activeTransfer.id && activeTransfer.account) setOnlineTarget(activeTransfer.account);
+    }} /></Suspense>}
   </WorkspacePreferencesProvider>;
 }
 
-function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup, localDeletionBlocked, localCapturePaused, onDeleteOfflineProfile }: {
+function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup, workspaceDeletionBlocked, capturePaused, onlineDeletionPending, onDeleteOfflineProfile, onDeleteAccount, onOpenTransfer }: {
   auth: ReturnType<typeof useAuth>; local: ReturnType<typeof useLocalProfile>;
-  localDeletionBlocked: boolean; localCapturePaused: boolean; onDeleteOfflineProfile: () => void;
+  workspaceDeletionBlocked: boolean; capturePaused: boolean; onlineDeletionPending: boolean; onDeleteOfflineProfile: () => void; onDeleteAccount: () => void; onOpenTransfer: (target: TransferTarget) => void;
   accountEntry: boolean; setAccountEntry: (value: boolean) => void;
   localSetup: boolean; setLocalSetup: (value: boolean) => void;
 }) {
   const preferenceWorkspaceId = useWorkspaceId();
-  const usingLocalProfile = !auth.user && Boolean(local.profile) && !accountEntry;
+  const usingLocalProfile = !auth.user && Boolean(local.profile) && !accountEntry && !onlineDeletionPending;
   const accountTerms = auth.accountTerms;
   const openContextMenu = useContextMenu();
   const [writingPreferences] = useWritingPreferences();
@@ -82,10 +109,10 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const offlineMode = !cloudSync.enabled;
   const [syncConfirmation, setSyncConfirmation] = useState<{ userId: string; enabling: boolean } | null>(null);
   const localWorkspaceId = usingLocalProfile ? local.profile?.id : undefined;
-  const notesUser = useMemo(() => auth.loading || (usingLocalProfile && localDeletionBlocked) ? null : auth.user
+  const notesUser = useMemo(() => auth.loading || workspaceDeletionBlocked ? null : auth.user
     ? accountTerms.ready && !auth.mfa.loading && !auth.mfa.required && !auth.passwordRecoveryRequired ? auth.user : null
     : localWorkspaceId ? { id: localWorkspaceId } : null,
-  [auth.loading, auth.user, accountTerms.ready, auth.mfa.loading, auth.mfa.required, auth.passwordRecoveryRequired, localWorkspaceId, usingLocalProfile, localDeletionBlocked]);
+  [auth.loading, auth.user, accountTerms.ready, auth.mfa.loading, auth.mfa.required, auth.passwordRecoveryRequired, localWorkspaceId, workspaceDeletionBlocked]);
   const notesState = useNotes(notesUser, Boolean(notesUser), offlineMode);
   const reminderState = useReminders(notesUser?.id ?? null, offlineMode);
   const syncStatus = notesState.syncStatus === "error" || reminderState.error ? "error"
@@ -148,19 +175,19 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     showNoteError, selectNoteSection, selectNoteId, clearNoteSearch]);
   const [shortcutPreference, saveShortcuts] = useWorkspacePreference("scribe-keyboard-shortcuts");
   const shortcuts = useMemo(() => parseShortcutBindings(shortcutPreference), [shortcutPreference]);
-  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, Boolean(notesUser) && writingPreferences.quickCapture && !(usingLocalProfile && localCapturePaused), showNoteError);
+  useQuickCapture(notesUser?.id ?? null, shortcuts.quickCapture, Boolean(notesUser) && writingPreferences.quickCapture && !capturePaused, showNoteError);
   const [accentPreference, saveAccent] = useWorkspacePreference("scribe-accent");
   const accent: AccentColor = accentPreference && accentPreference in accentColors ? accentPreference as AccentColor : "violet";
 
   useEffect(() => {
-    if (!isTauri() || !preferenceWorkspaceId || (usingLocalProfile && localDeletionBlocked)) return;
+    if (!isTauri() || !preferenceWorkspaceId || workspaceDeletionBlocked) return;
     let active = true;
     void invoke("set_autostart_enabled", { enabled: writingPreferences.launch })
       .catch(() => { if (active) showNoteError("Could not apply this workspace’s startup preference. Try changing it in Settings."); });
     return () => {
       active = false;
     };
-  }, [preferenceWorkspaceId, writingPreferences.launch, showNoteError, usingLocalProfile, localDeletionBlocked]);
+  }, [preferenceWorkspaceId, writingPreferences.launch, showNoteError, workspaceDeletionBlocked]);
 
   const changeLaunchAtStartup = useCallback(async (enabled: boolean) => {
     if (!isTauri()) return "Launch at startup is available in the installed Windows app.";
@@ -493,6 +520,16 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         <SettingsPage
           key={preferenceWorkspaceId}
           onSignIn={openSignIn}
+          onOpenTransfer={mode => {
+            if (!notesUser || !notesState.cacheReady) { showNoteError("Wait for your saved workspace to load before transferring notes."); return; }
+            if (isComposerOpen) { showNoteError("Save or close your draft before transferring notes."); setPage("notes"); window.dispatchEvent(new Event("scribe:restore-note-draft")); return; }
+            onOpenTransfer({ id: notesUser.id, displayName: accountProfile.displayName, localOnly: usingLocalProfile, cloudSync: !offlineMode, mode });
+          }}
+          onDeleteAccount={() => {
+            if (!auth.user) return;
+            if (isComposerOpen) { showNoteError("Save or close your draft before deleting this account."); setPage("notes"); window.dispatchEvent(new Event("scribe:restore-note-draft")); return; }
+            onDeleteAccount();
+          }}
           onDeleteOfflineProfile={() => {
             if (!usingLocalProfile) return;
             if (isComposerOpen) {

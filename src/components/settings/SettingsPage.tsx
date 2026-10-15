@@ -128,10 +128,19 @@ const categories: Category[] = [
 const settingId = (label: string) =>
   `setting-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
-const settingSearchIndex = [
+type SettingSearchEntry = {
+  label: string;
+  detail: string;
+  category: string;
+  terms: string;
+  targetId?: string;
+  availability?: "online" | "offline";
+  offlineDetail?: string;
+};
+const settingSearchIndex: SettingSearchEntry[] = [
   { label: "Launch at startup", detail: "Open Scribe when you sign in to your computer.", category: "editor", terms: "startup launch windows open boot" },
   { label: "Close to system tray", detail: "Keep Scribe running in the system tray when you close its window.", category: "editor", terms: "close minimize tray notification area hide background" },
-  { label: "Cloud sync", detail: "Choose whether this device uploads and downloads notes.", category: "general", terms: "offline network internet sync pause local enable disable cloud" },
+  { label: "Cloud sync", detail: "Choose whether this device uploads and downloads notes.", category: "general", terms: "offline network internet sync pause local enable disable cloud", availability: "online" },
   { label: "Dark appearance", detail: "Use the Midnight dark theme.", category: "appearance", terms: "theme night midnight dark", targetId: "setting-color-mood" },
   { label: "Light appearance", detail: "Use the Daylight light theme.", category: "appearance", terms: "theme day daylight light", targetId: "setting-color-mood" },
   { label: "Accent color", detail: "Choose the accent used throughout Scribe.", category: "appearance", terms: "colour color swatches accent" },
@@ -146,21 +155,23 @@ const settingSearchIndex = [
   { label: "Reminder Presets", detail: "Choose a default reminder and manage custom presets saved locally.", category: "notifications", terms: "custom shortcut preset default quick time duration minutes hours days edit delete" },
   { label: "Keyboard shortcuts", detail: "Customize app shortcuts or restore their defaults.", category: "shortcuts", terms: "keys keyboard hotkey commands bindings reset formatting" },
   { label: "Local storage", detail: "View estimated local Notes, folders, and preferences usage.", category: "storage", terms: "device disk usage chart pie donut local offline", targetId: "setting-local-storage" },
-  { label: "Cloud storage", detail: "View server storage usage against your 2 MB limit.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 2mb" },
+  { label: "Cloud storage", detail: "View server storage usage against your 2 MB limit.", category: "storage", terms: "cloud quota limit capacity usage chart pie donut 2mb", availability: "online" },
   { label: "Folder organization", detail: "Reorder, rename, recolor, or delete your folders.", category: "folders", terms: "organize folders reorder rename delete icon color unfiled", targetId: "setting-manage-folders" },
   { label: "Avatar color", detail: "Choose a color for your profile initials.", category: "account", terms: "avatar profile color initials", targetId: "setting-display-name" },
-  { label: "Display name", detail: "Change the name shown across Scribe and saved to your account.", category: "account", terms: "username profile name", targetId: "setting-display-name" },
-  { label: "Email address", detail: "View the email address associated with your account; it cannot be changed here.", category: "account", terms: "email login address", targetId: "setting-display-name" },
-  { label: "Password & security", detail: "Review account security controls.", category: "account", terms: "security password verification" },
-  { label: "Reset password", detail: "Password reset controls are coming soon.", category: "account", terms: "password reset recovery" },
-  { label: "Two-step verification", detail: "Protect sign-in with Authy or another authenticator app.", category: "account", terms: "2fa mfa two factor authentication security" },
-  { label: "Linked accounts", detail: "Link or unlink Google and GitHub sign-in providers.", category: "account", terms: "social provider google github link unlink connected" },
-  { label: "Signed-in devices", detail: "View the signed-in sessions associated with your account.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout" },
-  { label: "Sign out from all devices", detail: "End every sign-in session, including this device.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices" },
-  { label: "Account data", detail: "Review upcoming export and deletion controls.", category: "account", terms: "privacy export delete data" },
-  { label: "Export account data", detail: "Account export is coming soon.", category: "account", terms: "download backup export" },
-  { label: "Delete account", detail: "Account deletion is coming soon.", category: "account", terms: "delete remove account privacy" },
-  { label: "Delete offline profile", detail: "Review and permanently delete this workspace’s local data.", category: "account", terms: "offline local profile delete remove erase privacy" },
+  { label: "Display name", detail: "Change the name shown across Scribe and saved to your account.", category: "account", terms: "username profile name", targetId: "setting-display-name", offlineDetail: "Change the name shown in this offline profile, saved only on this device." },
+  { label: "Email address", detail: "View the email address associated with your account; it cannot be changed here.", category: "account", terms: "email login address", targetId: "setting-display-name", availability: "online" },
+  { label: "Password & security", detail: "Review account security controls.", category: "account", terms: "security password verification", availability: "online" },
+  { label: "Reset password", detail: "Send a password reset link to your account email.", category: "account", terms: "password reset recovery", availability: "online" },
+  { label: "Two-step verification", detail: "Protect sign-in with Authy or another authenticator app.", category: "account", terms: "2fa mfa two factor authentication security", availability: "online" },
+  { label: "Linked accounts", detail: "Link or unlink Google and GitHub sign-in providers.", category: "account", terms: "social provider google github link unlink connected", availability: "online" },
+  { label: "Signed-in devices", detail: "View the signed-in sessions associated with your account.", category: "account", terms: "sessions devices windows android mobile chrome pc sign out logout", availability: "online" },
+  { label: "Sign out other devices", detail: "End other sign-in sessions while keeping this device signed in.", category: "account", terms: "other sessions logout sign out revoke", targetId: "setting-signed-in-devices", availability: "online" },
+  { label: "Sign out from all devices", detail: "End every sign-in session, including this device.", category: "account", terms: "all sessions logout sign out revoke", targetId: "setting-signed-in-devices", availability: "online" },
+  { label: "Account data", detail: "Review account deletion controls.", category: "account", terms: "privacy delete data", availability: "online" },
+  { label: "Export notes", detail: "Save a Scribe backup or Markdown ZIP.", category: "general", terms: "download backup export data transfer" },
+  { label: "Import notes", detail: "Add notes from a backup, Markdown ZIP or Markdown files.", category: "general", terms: "restore import upload data transfer" },
+  { label: "Delete account", detail: "Review and permanently delete your account, cloud data and this device’s saved copy.", category: "account", terms: "delete remove account privacy", availability: "online" },
+  { label: "Delete offline profile", detail: "Review and permanently delete this workspace’s local data.", category: "account", terms: "offline local profile delete remove erase privacy", availability: "offline" },
   { label: "About Scribe", detail: "View version and product information.", category: "about", terms: "version information app", targetId: "setting-scribe" },
 ];
 
@@ -319,31 +330,6 @@ type StorageMetrics = {
 const formatBytes = (bytes: number) =>
   bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(2)} MB` : bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
 
-function AccountSettingRow({
-  id,
-  label,
-  detail,
-  action,
-}: {
-  id: string;
-  label: string;
-  detail: string;
-  action: string;
-}) {
-  return (
-    <div className="account-setting-row" id={settingId(id)}>
-      <div>
-        <strong>{label}</strong>
-        <span>{detail}</span>
-      </div>
-      <span className="settings-tooltip-target" tabIndex={0} data-tooltip={`${action} is not available yet`}><button type="button" disabled data-tooltip={`${action} is not available yet`}>
-        {action}
-        <ChevronRight size={15} />
-      </button></span>
-    </div>
-  );
-}
-
 function StorageSettings({ metrics, cloudSyncEnabled, localOnly, onSignIn }: { metrics: StorageMetrics; cloudSyncEnabled: boolean; localOnly?: boolean; onSignIn: () => void }) {
   const [usage, setUsage] = useState<CloudStorageUsage | null>(null);
   const [cloudError, setCloudError] = useState("");
@@ -383,9 +369,9 @@ function StorageSettings({ metrics, cloudSyncEnabled, localOnly, onSignIn }: { m
   const noteShare = local ? metrics.noteBytes / local * 100 : 0;
   const folderShare = local ? metrics.folderBytes / local * 100 : 0;
   return <>
-    {localOnly ? <SettingCard title="Cloud storage" description="Offline profiles do not upload data or use cloud storage." accent="purple"><AccountRequiredNotice onSignIn={onSignIn} /></SettingCard> : <>
+    {localOnly ? <SettingCard title="Cloud storage" description="Offline profiles do not upload data or use cloud storage." accent="violet"><AccountRequiredNotice onSignIn={onSignIn} /></SettingCard> : <>
     <div className={cloudSyncEnabled ? "" : "cloud-storage-disabled"}>
-    <SettingCard title="Cloud storage" description="2 MB per account for synced Notes, folders, and reminders." accent="purple" id={settingId("Cloud storage")}>
+    <SettingCard title="Cloud storage" description="2 MB per account for synced Notes, folders, and reminders." accent="violet" id={settingId("Cloud storage")}>
       {!cloudSyncEnabled && <div className="cloud-sync-disabled-banner"><strong>Cloud sync is disabled</strong>Usage shows data already stored in your account. New changes stay on this device. Enable sync in General settings.</div>}
       <div className="storage-chart-layout">
         <div className="settings-donut" role="img" aria-label={usage ? `Cloud usage ${formatBytes(cloud)} of 2 MB` : "Loading cloud usage"} style={{ background: `conic-gradient(var(--category) ${percent}%, var(--border) 0)` }}><div><Cloud size={22} /><strong>{usage ? `${percent.toFixed(1)}%` : "—"}</strong><small>used</small></div></div>
@@ -400,7 +386,7 @@ function StorageSettings({ metrics, cloudSyncEnabled, localOnly, onSignIn }: { m
     </div>
     {cloudSyncEnabled && usage && cloud > limit && <div className="status-toast-stack"><StatusToast message={CLOUD_STORAGE_LIMIT_MESSAGE} /></div>}
     </>}
-    <SettingCard title="On this device" description="No app storage limit. Uses available space on your device." accent="purple" id={settingId("Local storage")}>
+    <SettingCard title="On this device" description="No app storage limit. Uses available space on your device." accent="violet" id={settingId("Local storage")}>
       <div className="storage-chart-layout">
         <div className="settings-donut" role="img" aria-label={`Local content ${formatBytes(local)}`} style={{ background: local ? `conic-gradient(var(--category) ${noteShare}%, #25bfd1 ${noteShare}% ${noteShare + folderShare}%, #f6a623 0)` : 'var(--border)' }}><div><HardDrive size={22} /><strong>{formatBytes(local)}</strong><small>local content</small></div></div>
         <div className="storage-chart-copy"><strong>{metrics.noteCount} Notes · {metrics.folderCount} folders</strong><p>Saved on this device.</p><small>Estimated size of your notes, folders and preferences. May differ from cloud usage.</small></div>
@@ -427,6 +413,7 @@ function AccountSettings({
   profile,
   onSignIn,
   onDeleteOfflineProfile,
+  onDeleteAccount,
   onAvatarColorChange,
   onUpdateDisplayName,
   onLinkAccount,
@@ -437,6 +424,7 @@ function AccountSettings({
   profile: AccountProfile;
   onSignIn: () => void;
   onDeleteOfflineProfile: () => void;
+  onDeleteAccount: () => void;
   onAvatarColorChange: (color: string) => void;
   onUpdateDisplayName: (name: string) => Promise<string | null>;
   onLinkAccount: (provider: SocialProvider) => Promise<string | null>;
@@ -600,7 +588,7 @@ function AccountSettings({
       {profile.localOnly ? <>
         <AccountRequiredNotice onSignIn={onSignIn} />
         <SettingCard title="Account features" description="These features need a signed-in account." accent="pink">
-          <fieldset disabled className="offline-account-features">{["Email address", "Password reset", "Two-step verification", "Google & GitHub linking", "Signed-in devices", "Export account data", "Delete Data", "Delete account"].map(label => <div className="offline-account-feature" key={label}><span>{label}</span><button type="button">Sign in required</button></div>)}</fieldset>
+          <fieldset disabled className="offline-account-features">{["Email address", "Password reset", "Two-step verification", "Google & GitHub linking", "Signed-in devices", "Delete Data", "Delete account"].map(label => <div className="offline-account-feature" key={label}><span>{label}</span><button type="button">Sign in required</button></div>)}</fieldset>
         </SettingCard>
         <SettingCard title="Delete offline profile" description="Permanently remove this profile and its data from this device." accent="pink">
           <div className="account-setting-row">
@@ -691,18 +679,10 @@ function AccountSettings({
         accent="pink"
         id={settingId("Account data")}
       >
-        <AccountSettingRow
-          id="Export account data"
-          label="Export account data"
-          detail="Download a copy of your Notes and account details."
-          action="Coming soon"
-        />
-        <AccountSettingRow
-          id="Delete account"
-          label="Delete account"
-          detail="Permanently remove your account and synced data."
-          action="Coming soon"
-        />
+        <div className="account-setting-row" id={settingId("Delete account")}>
+          <div><strong>Delete account</strong><span>Permanently remove your account, cloud data and its saved copy on this device.</span></div>
+          <button type="button" className="offline-profile-delete-button" onClick={onDeleteAccount}>Delete account</button>
+        </div>
       </SettingCard>
       </>}
     </>
@@ -1074,6 +1054,8 @@ function CategoryContent({
   category,
   onSignIn,
   onDeleteOfflineProfile,
+  onDeleteAccount,
+  onOpenTransfer,
   dark,
   setDark,
   accent,
@@ -1105,6 +1087,8 @@ function CategoryContent({
   category: Category;
   onSignIn: () => void;
   onDeleteOfflineProfile: () => void;
+  onDeleteAccount: () => void;
+  onOpenTransfer: (mode: "export" | "import") => void;
   dark: boolean;
   setDark: (value: boolean) => void;
   accent: AccentColor;
@@ -1182,10 +1166,20 @@ function CategoryContent({
             />
             </fieldset>
           </SettingCard>
+          <SettingCard title="Move your notes" description="Save a copy or bring notes into this workspace. Works offline and with an account." accent="violet">
+            <div className="account-setting-row" id={settingId("Export notes")}>
+              <div><strong>Export notes</strong><span>Choose notes and folders. Keep Scribe details in a backup, or use Markdown in other apps.</span></div>
+              <button type="button" className="data-transfer-button" onClick={() => onOpenTransfer("export")}>Export</button>
+            </div>
+            <div className="account-setting-row" id={settingId("Import notes")}>
+              <div><strong>Import notes</strong><span>Review a backup or Markdown files. Add new copies without replacing existing notes.</span></div>
+              <button type="button" className="data-transfer-button" onClick={() => onOpenTransfer("import")}>Import</button>
+            </div>
+          </SettingCard>
         </>
       );
     case "account":
-      return <AccountSettings profile={profile} onSignIn={onSignIn} onDeleteOfflineProfile={onDeleteOfflineProfile} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
+      return <AccountSettings profile={profile} onSignIn={onSignIn} onDeleteOfflineProfile={onDeleteOfflineProfile} onDeleteAccount={onDeleteAccount} onAvatarColorChange={onAvatarColorChange} onUpdateDisplayName={onUpdateDisplayName} onLinkAccount={onLinkAccount} onUnlinkAccount={onUnlinkAccount} onRequestPasswordReset={onRequestPasswordReset} mfa={mfa} />;
     case "folders":
       return (
         <FolderManagementSettings
@@ -1466,6 +1460,8 @@ function SettingsSearchResults({
 export function SettingsPage({
   onSignIn,
   onDeleteOfflineProfile,
+  onDeleteAccount,
+  onOpenTransfer,
   dark,
   accent,
   onAccentChange,
@@ -1497,6 +1493,8 @@ export function SettingsPage({
 }: {
   onSignIn: () => void;
   onDeleteOfflineProfile: () => void;
+  onDeleteAccount: () => void;
+  onOpenTransfer: (mode: "export" | "import") => void;
   dark: boolean;
   accent: AccentColor;
   onAccentChange: (value: AccentColor) => void;
@@ -1535,29 +1533,35 @@ export function SettingsPage({
   onMoveSystemFolder: (offset: -1 | 1) => void;
   unfiledPosition: number;
 }) {
+  const workspaceCategories = useMemo(() => categories.map(category => profile.localOnly && category.id === "account"
+    ? { ...category, description: "Manage your local profile, avatar color and saved data." }
+    : profile.localOnly && category.id === "storage"
+      ? { ...category, description: "Review storage used on this device." }
+      : category), [profile.localOnly]);
   const [categoryId, setCategoryId] = useState("general");
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const matchingSettings = useMemo(
     () =>
       settingSearchIndex
-        .filter(item => item.label !== "Delete offline profile" || profile.localOnly)
+        .filter(item => !item.availability || item.availability === (profile.localOnly ? "offline" : "online"))
+        .map(item => profile.localOnly && item.offlineDetail ? { ...item, detail: item.offlineDetail } : item)
         .filter((item) =>
-          `${item.label} ${item.detail} ${item.terms} ${categories.find((category) => category.id === item.category)?.label ?? ""}`
+          `${item.label} ${item.detail} ${item.terms} ${workspaceCategories.find((category) => category.id === item.category)?.label ?? ""}`
             .toLowerCase()
             .includes(normalizedQuery),
         )
         .map((item) => ({
           ...item,
-          category: categories.find(
+          category: workspaceCategories.find(
             (category) => category.id === item.category,
           )!,
         })),
-    [normalizedQuery, profile.localOnly],
+    [normalizedQuery, profile.localOnly, workspaceCategories],
   );
   const matchingCategoryResults = useMemo(
     () =>
-      categories
+      workspaceCategories
         .filter(
           (category) =>
             normalizedQuery &&
@@ -1569,7 +1573,7 @@ export function SettingsPage({
           category,
           isCategory: true,
         })),
-    [normalizedQuery],
+    [normalizedQuery, workspaceCategories],
   );
   const searchResults: SearchResult[] = [
     ...matchingCategoryResults,
@@ -1581,20 +1585,20 @@ export function SettingsPage({
     })),
   ];
   const filteredCategories = normalizedQuery
-    ? categories.filter(
+    ? workspaceCategories.filter(
         (category) =>
           matchingCategoryResults.some(
             (result) => result.category.id === category.id,
           ) ||
           matchingSettings.some((result) => result.category.id === category.id),
       )
-    : categories;
+    : workspaceCategories;
   const category =
-    categories.find((item) => item.id === categoryId) ?? categories[0];
+    workspaceCategories.find((item) => item.id === categoryId) ?? workspaceCategories[0];
   const activeCategory =
     (filteredCategories.some((item) => item.id === categoryId)
       ? category
-      : filteredCategories[0]) ?? categories[0];
+      : filteredCategories[0]) ?? workspaceCategories[0];
   const openSearchResult = (result: SearchResult) => {
     setCategoryId(result.category.id);
     setQuery("");
@@ -1701,6 +1705,7 @@ export function SettingsPage({
             <CategoryContent
               onSignIn={onSignIn}
               onDeleteOfflineProfile={onDeleteOfflineProfile}
+              onDeleteAccount={onDeleteAccount} onOpenTransfer={onOpenTransfer}
               key={activeCategory.id}
               category={activeCategory}
               dark={dark}

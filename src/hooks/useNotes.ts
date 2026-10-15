@@ -6,6 +6,9 @@ import type { User } from "@supabase/supabase-js";
 import { sortNotes } from "../features/notes/noteSorting";
 import { useNoteSortPreferences } from "./useNoteSortPreferences";
 import { NOTES_SYNCED_EVENT } from "../features/notes/syncProtocol";
+import { LOCAL_IMPORT_EVENT } from "../features/transfer/transferTypes";
+import { resumeWorkspaceImports } from "../features/transfer/workspaceTransfer";
+import { registerLocalWriteBarrier } from "../features/transfer/localWriteBarrier";
 import { supabase } from "../features/auth/supabaseClient";
 import { notesRepository } from "../features/notes/notesRepository";
 import { CLOUD_STORAGE_CHANGED_EVENT, CLOUD_STORAGE_LIMIT_MESSAGE, isCloudStorageLimitError } from "../features/settings/cloudStorage";
@@ -217,6 +220,18 @@ export function useNotes(
     // edit must never resurrect a note that was subsequently deleted.
     execute();
   }, []);
+  const waitForLocalWrites = useCallback(async () => {
+    const owner = activeUserId.current;
+    const deadline = Date.now() + 12_000;
+    while ([...localRetries.current.values()].some(task => task.ownerId === owner)) {
+      if (Date.now() > deadline) throw new Error("Some edits have not saved locally yet. Keep Scribe open and resolve the save error before transferring data.");
+      await new Promise<void>(resolve => window.setTimeout(resolve, 50));
+    }
+    if (!owner || activeUserId.current !== owner) throw new Error("The workspace changed. Open data transfer again.");
+  }, []);
+  useEffect(() => {
+    if (user?.id) return registerLocalWriteBarrier(user.id, waitForLocalWrites);
+  }, [user?.id, waitForLocalWrites]);
   useEffect(() => {
     const timer = window.setInterval(() => {
       for (const [key, task] of [...localRetries.current]) if (!task.running) {
@@ -389,7 +404,11 @@ export function useNotes(
     pendingRealtimeSequence.current = null;
     if (!userId || !configured) return;
     refreshingRef.current = true;
-    void offlineStore.load(userId).then((local) => {
+    void (async () => {
+      try { await resumeWorkspaceImports(userId); }
+      catch { if (active) setError("An earlier import needs to finish. Open Import data to retry; your existing notes are safe."); }
+      return offlineStore.load(userId);
+    })().then((local) => {
       if (!active) return;
       const order = applyLocalFolderOrder(userId, local.folders);
       setNotes(local.notes.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
@@ -410,6 +429,24 @@ export function useNotes(
     });
     return () => { active = false; refreshingRef.current = false; };
   }, [user?.id, configured]);
+
+  useEffect(() => {
+    const owner = user?.id;
+    if (!owner) return;
+    let active = true;
+    const imported = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== owner) return;
+      void offlineStore.load(owner).then(local => {
+        if (!active || activeUserId.current !== owner) return;
+        for (const note of local.notes) if (!notesRef.current.some(current => current.id === note.id)) editGeneration.current.set(`note:${note.id}`, 1);
+        setNotes(current => { const ids = new Set(current.map(note => note.id)); return [...current, ...local.notes.filter(note => !ids.has(note.id))]; });
+        setFolders(current => { const ids = new Set(current.map(folder => folder.id)); return [...current, ...local.folders.filter(folder => !ids.has(folder.id))]; });
+        setHasPendingSync(true);
+      }).catch(() => { if (active) setError("The import is saved. Reopen Scribe to refresh the note list."); });
+    };
+    window.addEventListener(LOCAL_IMPORT_EVENT, imported);
+    return () => { active = false; window.removeEventListener(LOCAL_IMPORT_EVENT, imported); };
+  }, [user?.id]);
 
   useEffect(() => {
     if (loadedForUser !== user?.id || offlineMode || !online) return;
@@ -814,5 +851,6 @@ export function useNotes(
     selectSection,
     selectFolder,
     clearUserData,
+    waitForLocalWrites,
   };
 }

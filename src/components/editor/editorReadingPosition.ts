@@ -1,5 +1,79 @@
 export type ReadingPosition = { offset: number; viewportY: number };
 
+export function captureEditingPosition(container: HTMLElement, input: HTMLTextAreaElement): ReadingPosition {
+  const offset = input.selectionDirection === "backward" ? input.selectionStart : input.selectionEnd;
+  const style = getComputedStyle(input);
+  const mirror = document.createElement("div");
+  for (const property of ["font-family", "font-size", "font-weight", "font-style", "line-height", "letter-spacing", "word-spacing", "text-indent", "tab-size", "padding", "box-sizing", "word-break", "overflow-wrap", "text-transform"]) {
+    mirror.style.setProperty(property, style.getPropertyValue(property));
+  }
+  Object.assign(mirror.style, { position: "fixed", top: "0", left: "0", visibility: "hidden", pointerEvents: "none", width: `${input.clientWidth}px`, whiteSpace: "pre-wrap" });
+  mirror.textContent = input.value.slice(0, offset);
+  const caret = document.createElement("span");
+  caret.textContent = "\u200b";
+  mirror.append(caret, document.createTextNode(input.value.slice(offset)));
+  document.body.append(mirror);
+  const caretY = caret.getBoundingClientRect().top - mirror.getBoundingClientRect().top;
+  mirror.remove();
+  return { offset, viewportY: input.getBoundingClientRect().top - container.getBoundingClientRect().top + caretY - input.scrollTop };
+}
+
+// Resolve a source offset against rendered text, skipping link-card decorations.
+function renderedOffsetY(anchor: HTMLElement, offset: number): number {
+  let remaining = offset;
+  const visit = (node: Node): number | null => {
+    if (node instanceof HTMLElement) {
+      if (node.hasAttribute("data-preview-extra")) return null;
+      if (node.hasAttribute("data-preview-text")) {
+        const length = node.dataset.previewText?.length ?? 0;
+        if (remaining <= length) return node.getBoundingClientRect().top;
+        remaining -= length;
+        return null;
+      }
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      const length = node.textContent?.length ?? 0;
+      if (remaining > length) { remaining -= length; return null; }
+      const range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      const rect = range.getClientRects()[0];
+      return rect?.height ? rect.top : anchor.getBoundingClientRect().top;
+    }
+    for (const child of node.childNodes) {
+      const y = visit(child);
+      if (y !== null) return y;
+    }
+    return null;
+  };
+  return visit(anchor) ?? anchor.getBoundingClientRect().top;
+}
+
+export function restorePreviewPosition(container: HTMLElement, value: string, position: ReadingPosition) {
+  const offset = Math.max(0, Math.min(position.offset, value.length));
+  const sourceLines = [...value.matchAll(/[^\r\n]*(?:\r\n|\r|\n|$)/g)];
+  let line = 0;
+  for (let index = 0; index < sourceLines.length; index++) {
+    if (sourceLines[index].index > offset) break;
+    line = index;
+  }
+  const anchors = [...container.querySelectorAll<HTMLElement>("[data-source-line]")];
+  // Blank lines and code fences have no rendered node: use the closest text.
+  const anchor = anchors.reduce<HTMLElement | null>((closest, item) => !closest || Math.abs(Number(item.dataset.sourceLine) - line) < Math.abs(Number(closest.dataset.sourceLine) - line) ? item : closest, null);
+  if (!anchor) return;
+  const anchorLine = Number(anchor.dataset.sourceLine);
+  const raw = sourceLines[anchorLine]?.[0].replace(/[\r\n]+$/, "") ?? "";
+  const column = anchorLine < line ? raw.length : anchorLine > line ? 0 : offset - sourceLines[line].index;
+  const characters = visibleSourceOffsets(raw, Boolean(anchor.closest("pre")));
+  const nextCharacter = characters.findIndex(character => character.offset >= column);
+  const y = renderedOffsetY(anchor, nextCharacter < 0 ? characters.length : nextCharacter);
+  const rect = container.getBoundingClientRect();
+  const toolbar = container.querySelector<HTMLElement>(".note-reading-toolbar");
+  const topInset = (toolbar?.offsetHeight ?? 0) + 20;
+  const desiredY = Math.max(topInset, Math.min(Math.max(topInset, rect.height - 32), position.viewportY));
+  container.scrollTop += y - rect.top - desiredY;
+}
+
 // Keep source offsets while removing the syntax hidden by the preview renderer.
 function visibleSourceOffsets(source: string, code: boolean) {
   let characters = source.split("").map((text, offset) => ({ text, offset }));

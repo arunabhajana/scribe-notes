@@ -1,0 +1,24 @@
+.online-delete-dialog { width: min(540px, calc(100vw - 32px)); }
+.online-delete-data { border: 1px solid var(--delete-border); background: var(--delete-surface); border-radius: 10px; padding: 12px 16px; margin: 20px 0 14px; }
+.online-delete-data table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.online-delete-data caption { caption-side: bottom; text-align: left; font-size: 10px; color: var(--delete-muted); line-height: 1.6; padding-top: 12px; }
+.online-delete-data th, .online-delete-data td { padding: 7px 0; text-align: right; font-variant-numeric: tabular-nums; }
+.online-delete-data th:first-child { text-align: left; }
+.online-delete-data thead { border-bottom: 1px solid var(--delete-border); color: var(--delete-muted); }
+.online-delete-data tbody th { color: var(--delete-muted); font-weight: 400; }
+.online-delete-sizes { border-top: 1px solid var(--delete-border); }
+.online-delete-data > small { display: block; font-size: 10px; line-height: 1.6; color: var(--delete-muted); margin-top: 6px; }
+.online-delete-details { padding: 0 0 16px; font-size: 11px; line-height: 1.7; color: var(--delete-muted); }
+.online-delete-details summary { cursor: pointer; color: var(--delete-text); }
+.online-delete-dialog .online-delete-details p { font-size: 11px; margin: 8px 0 0; }
+.online-delete-dialog .online-delete-limits { font-size: 11px; line-height: 1.7; margin: 14px 0; }
+.online-delete-unsynced { display: flex; gap: 8px; }
+.online-delete-unsynced svg { flex-shrink: 0; color: var(--delete-danger); margin-top: 3px; }
+.online-delete-back { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--delete-muted); font-size: 11px; padding: 4px 0; margin: 16px 0 24px; cursor: pointer; }
+.online-delete-password { position: relative; }
+.online-delete-password input { padding-right: 44px; }
+.online-delete-password button { position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 40px; border: 0; background: transparent; color: var(--delete-muted); cursor: pointer; }
+.online-delete-mfa { margin-top: 20px; }
+.online-delete-mfa select { width: 100%; padding: 10px; border: 1px solid var(--delete-border); border-radius: 8px; background: var(--delete-bg); color: var(--delete-text); font-size: 12px; margin-bottom: 16px; }
+.online-delete-mfa p { font-size: 11px; margin-top: 7px; }
+.online-delete-continue { background: var(--delete-text); color: var(--delete-bg); }

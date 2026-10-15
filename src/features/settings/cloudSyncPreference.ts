@@ -1,11 +1,12 @@
 import { useCallback, useSyncExternalStore } from "react";
+import { WORKSPACE_DELETION_CHANGED, workspaceDeletionStatus } from "../auth/workspaceDeletionState";
 
 const changed = "scribe-cloud-sync-preference-changed";
 const keyFor = (userId: string) => `scribe-cloud-sync:v1:${userId}`;
 const requests = new Map<string, AbortController>();
 
 export function isCloudSyncEnabled(userId: string) {
-  try { return localStorage.getItem(keyFor(userId)) === "enabled"; }
+  try { return !workspaceDeletionStatus(userId) && localStorage.getItem(keyFor(userId)) === "enabled"; }
   catch { return false; }
 }
 
@@ -26,7 +27,8 @@ function subscribe(notify: () => void) {
   };
   window.addEventListener(changed, update);
   window.addEventListener("storage", update);
-  return () => { window.removeEventListener(changed, update); window.removeEventListener("storage", update); };
+  window.addEventListener(WORKSPACE_DELETION_CHANGED, update);
+  return () => { window.removeEventListener(changed, update); window.removeEventListener("storage", update); window.removeEventListener(WORKSPACE_DELETION_CHANGED, update); };
 }
 
 export function useCloudSyncPreference(userId: string | undefined) {

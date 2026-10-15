@@ -5,7 +5,7 @@ import { MarkdownPreview } from "./MarkdownPreview";
 import { BookOpen, Pencil } from "lucide-react";
 import { continueMarkdownList } from "./markdownFormatting";
 import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
-import { captureClickedPosition, captureReadingPosition, restoreReadingPosition, type ReadingPosition } from "./editorReadingPosition";
+import { captureClickedPosition, captureEditingPosition, captureReadingPosition, restorePreviewPosition, restoreReadingPosition, type ReadingPosition } from "./editorReadingPosition";
 import "./noteReadingView.css";
 import { keepCaretVisible } from "./keepCaretVisible";
 
@@ -38,6 +38,7 @@ export function NoteBodyEditor({
   const readingMinutes = readingText ? Math.max(1, Math.ceil(readingText.split(/\s+/).length / 200)) : null;
   const scrollRef = useRef<HTMLDivElement>(null);
   const readingPosition = useRef<ReadingPosition | null>(null);
+  const editingPosition = useRef<ReadingPosition | null>(null);
   const caretScrollFrame = useRef<number | null>(null);
   const scheduleCaretScroll = () => {
     if (caretScrollFrame.current !== null) cancelAnimationFrame(caretScrollFrame.current);
@@ -61,11 +62,20 @@ export function NoteBodyEditor({
         if (scrollRef.current) readingPosition.current = captureReadingPosition(scrollRef.current, value);
         setContentHovered(false);
         onBeginEdit();
-      } else onEndEdit();
+      } else {
+        if (scrollRef.current && inputRef.current) editingPosition.current = captureEditingPosition(scrollRef.current, inputRef.current);
+        onEndEdit();
+      }
     };
     window.addEventListener("scribe:toggle-note-mode", toggle);
     return () => window.removeEventListener("scribe:toggle-note-mode", toggle);
-  }, [preview, readOnly, value, onBeginEdit, onEndEdit]);
+  }, [preview, readOnly, value, onBeginEdit, onEndEdit, inputRef]);
+  useLayoutEffect(() => {
+    if (preview && editingPosition.current && scrollRef.current) {
+      restorePreviewPosition(scrollRef.current, value, editingPosition.current);
+      editingPosition.current = null;
+    }
+  }, [preview, value]);
   useLayoutEffect(() => {
     if (!preview && !readOnly && inputRef.current) {
       if (readingPosition.current && scrollRef.current) {
