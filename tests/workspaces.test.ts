@@ -1,0 +1,115 @@
+import { act, renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { note, folder, portable, workspaceA as a, workspaceB as b } from './fixtures'
+
+// Reopen production module singletons against a fresh IndexedDB for each test.
+beforeEach(() => vi.resetModules())
+
+describe('workspace persistence and deletion', () => {
+  it('keeps identical note and folder IDs isolated by workspace', async () => {
+    const { offlineStore: store } = await import('../src/features/notes/offlineStore')
+    await store.putFolder(a, folder(), null, true)
+    await store.putFolder(b, folder({ name: 'Other account' }), null, true)
+    await store.putNote(a, note({ title: 'Offline' }), null, true)
+    await store.putNote(b, note({ title: 'Online' }), null, true)
+    expect((await store.load(a)).notes[0].title).toBe('Offline')
+    expect((await store.load(b)).notes[0].title).toBe('Online')
+    expect((await store.load(a)).folders[0].name).toBe('Projects')
+    expect((await store.load(b)).folders[0].name).toBe('Other account')
+    expect(await store.getNote('unknown-workspace', note().id)).toBeNull()
+  })
+  it('coalesces offline edits while keeping their original server base', async () => {
+    const { offlineStore: store } = await import('../src/features/notes/offlineStore')
+    await store.putNote(a, note(), null, true)
+    await store.putNote(a, note({ body: 'Latest edit', updatedAt: '2026-01-02T00:00:00.000Z' }), note().updatedAt)
+    const data = await store.load(a)
+    expect(data.outbox).toHaveLength(1)
+    expect(data.outbox[0].baseUpdatedAt).toBeNull()
+    expect(data.notes[0].body).toBe('Latest edit')
+  })
+  it('replays an in-flight batch unchanged after further edits', async () => {
+    const { offlineStore: store } = await import('../src/features/notes/offlineStore')
+    await store.putNote(a, note(), null, true)
+    const first = await store.prepareBatch(a)
+    await store.putNote(a, note({ body: 'Edited after request' }), null)
+    expect(await store.prepareBatch(a)).toEqual(first)
+    expect((await store.load(a)).notes[0].body).toBe('Edited after request')
+  })
+  it('deletes only the chosen workspace and blocks late writes until explicitly reopened', async () => {
+    const { offlineStore: store } = await import('../src/features/notes/offlineStore')
+    for (const id of [a, b]) await store.putNote(id, note(), null, true)
+    await store.deleteWorkspace(a)
+    expect((await store.load(a)).notes).toEqual([])
+    expect((await store.load(a)).outbox).toEqual([])
+    await expect(store.putNote(a, note(), null, true)).rejects.toThrow()
+    expect((await store.load(b)).notes).toHaveLength(1)
+    await store.reopenEmptyWorkspace(a)
+    await store.putNote(a, note(), null, true)
+    expect((await store.load(a)).notes).toHaveLength(1)
+  })
+  it('blocks stale windows after the local data generation changes', async () => {
+    const state = await import('../src/features/auth/workspaceDeletionState')
+    state.observeWorkspaceGeneration(a)
+    state.advanceWorkspaceGeneration(a)
+    expect(() => state.assertWorkspaceWritable(a)).toThrow(/cleared/i)
+    expect(() => state.assertWorkspaceWritable(b)).not.toThrow()
+  })
+})
+
+describe('imports into offline and online workspaces', () => {
+  it.each([a, b])('imports into %s using fresh IDs without changing existing notes', async owner => {
+    const { offlineStore: store } = await import('../src/features/notes/offlineStore')
+    const { importWorkspaceData } = await import('../src/features/transfer/workspaceTransfer')
+    const { reminderStore } = await import('../src/features/reminders/reminderStore')
+    await store.putNote(owner, note({ title: 'Existing' }), null, true)
+    expect(await importWorkspaceData(owner, portable(), true, false)).toEqual({ notes: 1, folders: 1, reminders: 1 })
+    const data = await store.load(owner)
+    expect(data.notes).toHaveLength(2)
+    const imported = data.notes.find(item => item.id !== note().id)!
+    expect(imported.title).toBe('A note')
+    expect(imported.folderId).toBe(data.folders[0].id)
+    expect(imported.folderId).not.toBe(folder().id)
+    expect((await reminderStore.load(owner)).reminders[imported.id].dueAt).toBe(portable().reminders[0].dueAt)
+    expect((await store.load(owner === a ? b : a)).notes).toEqual([])
+  })
+  it('prevents accidental duplicate imports and allows explicit new copies', async () => {
+    const { offlineStore: store } = await import('../src/features/notes/offlineStore')
+    const { importWorkspaceData } = await import('../src/features/transfer/workspaceTransfer')
+    await importWorkspaceData(a, portable(), false, false)
+    await expect(importWorkspaceData(a, portable(), false, false)).rejects.toThrow(/already imported/i)
+    expect((await store.load(a)).notes).toHaveLength(1)
+    await importWorkspaceData(a, portable(), false, true)
+    expect(new Set((await store.load(a)).notes.map(item => item.id)).size).toBe(2)
+  })
+})
+
+describe('preferences and cloud consent', () => {
+  it('separates entry, offline and online preferences', async () => {
+    const prefs = await import('../src/features/settings/workspacePreferences')
+    prefs.writeWorkspacePreference(a, 'theme', 'dark')
+    prefs.writeWorkspacePreference(b, 'theme', 'light')
+    expect(prefs.readWorkspacePreference(a, 'theme')).toBe('dark')
+    expect(prefs.readWorkspacePreference(b, 'theme')).toBe('light')
+    expect(prefs.readWorkspacePreference(null, 'theme')).toBeNull()
+  })
+  it('migrates global legacy preferences to only one workspace', async () => {
+    const prefs = await import('../src/features/settings/workspacePreferences')
+    localStorage.setItem('scribe-theme', 'dark')
+    prefs.migrateLegacyPreferences(a); prefs.migrateLegacyPreferences(b)
+    expect(prefs.readWorkspacePreference(a, 'scribe-theme')).toBe('dark')
+    expect(prefs.readWorkspacePreference(b, 'scribe-theme')).toBeNull()
+  })
+  it('defaults sync off, scopes consent, and aborts requests when disabled', async () => {
+    const sync = await import('../src/features/settings/cloudSyncPreference')
+    const { result } = renderHook(() => sync.useCloudSyncPreference(a))
+    expect(result.current.enabled).toBe(false)
+    expect(() => sync.cloudSyncSignal(a)).toThrow(/disabled/i)
+    act(() => result.current.setEnabled(true))
+    const signal = sync.cloudSyncSignal(a)
+    expect(result.current.enabled).toBe(true)
+    expect(sync.isCloudSyncEnabled(b)).toBe(false)
+    act(() => result.current.setEnabled(false))
+    expect(signal.aborted).toBe(true)
+    expect(result.current.enabled).toBe(false)
+  })
+})

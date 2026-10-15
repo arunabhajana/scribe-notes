@@ -31,14 +31,14 @@ export type RichTextDocument = {
 function parseInline(value: string): RichTextNode[] {
   const nodes: RichTextNode[] = [];
   const pattern =
-    /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+    /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\][\n]+\]\(https?:\/\/[^\s)]+\))/g;
   let cursor = 0;
   for (const match of value.matchAll(pattern)) {
     const index = match.index ?? 0;
     if (index > cursor)
       nodes.push({ type: "text", text: value.slice(cursor, index) });
     const token = match[0];
-    const link = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    const link = token.match(/^\[([^\][\n]+)\]\((https?:\/\/[^\s)]+)\)$/);
     if (link)
       nodes.push({
         type: "text",
@@ -265,7 +265,13 @@ function validateDocument(value: unknown): void {
         for (const item of node.marks as unknown[]) {
           const mark = record(item);
           if (!["bold", "italic", "code", "link"].includes(String(mark.type))) invalid();
-          if (mark.type === "link" && typeof record(mark.attrs).href !== "string") invalid();
+          if (mark.type === "link") {
+            const href = record(mark.attrs).href;
+            if (typeof href !== "string" || href.length > 8192) invalid();
+            // Links expand the serialized Markdown too; count them in the output budget.
+            characters += (href as string).length;
+            if (characters > 10 * 1024 * 1024) invalid();
+          }
         }
       }
     } else if (node.type !== "hardBreak") {

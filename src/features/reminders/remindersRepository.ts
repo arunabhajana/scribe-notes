@@ -1,3 +1,4 @@
+import { syncId, syncCursor, syncDate } from "../notes/syncValidation";
 import { cloudGeneration, handleCloudReset } from "../settings/cloudGeneration";
 import { supabase } from "../auth/supabaseClient";
 import type { ReminderOperation, ReminderReply } from "./reminderTypes";
@@ -14,11 +15,11 @@ export async function syncReminders(userId: string, operations: ReminderOperatio
   }).setHeader("Authorization", `Bearer ${auth.session.access_token}`).abortSignal(signal);
   if (error) { handleCloudReset(userId, error); throw error; }
   if (!data || !Array.isArray(data.reminders) || !Array.isArray(data.resolved) || !Array.isArray(data.acknowledged) ||
-      typeof data.cursor !== "string" || !/^\d+$/.test(data.cursor) || typeof data.full !== "boolean" || typeof data.hasMore !== "boolean" ||
-      !data.acknowledged.every((id: unknown) => typeof id === "string") ||
-      ![...data.reminders, ...data.resolved].every((row: Record<string, unknown>) => row && typeof row.noteId === "string" &&
-        (row.dueAt === null || typeof row.dueAt === "string" && Number.isFinite(Date.parse(row.dueAt))) &&
-        typeof row.updatedAt === "string" && Number.isFinite(Date.parse(row.updatedAt)) &&
+      !syncCursor(data.cursor) || typeof data.full !== "boolean" || typeof data.hasMore !== "boolean" ||
+      data.reminders.length > 10_000 || data.resolved.length > 50 || data.acknowledged.length > 50 || !data.acknowledged.every(syncId) ||
+      ![...data.reminders, ...data.resolved].every((row: Record<string, unknown>) => row && syncId(row.noteId) &&
+        (row.dueAt === null || syncDate(row.dueAt)) &&
+        syncDate(row.updatedAt) &&
         typeof row.leadMinutes === "number" && Number.isInteger(row.leadMinutes) && row.leadMinutes >= 0 && row.leadMinutes <= 60)) {
     throw new Error("The server returned an unreadable reminder response.");
   }

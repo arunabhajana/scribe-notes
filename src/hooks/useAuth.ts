@@ -112,7 +112,7 @@ export function useAuth() {
         && providerUrl.pathname.startsWith("/o/oauth2/");
       const isGithubUrl = providerUrl.hostname === "github.com"
         && providerUrl.pathname === "/login/oauth/authorize";
-      if (providerUrl.protocol !== "https:"
+      if (providerUrl.protocol !== "https:" || providerUrl.username || providerUrl.password || providerUrl.port
         || !(provider === "google" ? isGoogleUrl : isGithubUrl)
         || providerUrl.searchParams.get("redirect_uri") !== `${projectUrl.origin}/auth/v1/callback`) {
         throw new Error(`Could not start ${provider === "google" ? "Google" : "GitHub"} linking. Check the provider settings and try again.`);
@@ -237,7 +237,7 @@ export function useAuth() {
       hash.get("error_code");
     if (callbackError) {
       setOauthPending(null);
-      setAuthCallbackError(callbackError.replaceAll("+", " "));
+      setAuthCallbackError("Sign-in could not finish. Start a new sign-in request in Scribe and try again.");
       return;
     }
 
@@ -246,7 +246,9 @@ export function useAuth() {
 
     const code = params.get("code");
     if (code) {
+      if (code.length > 2048 || params.getAll("code").length !== 1) return;
       if (handledCallbacks.current.has(code)) return;
+      if (handledCallbacks.current.size >= 32) handledCallbacks.current.delete(handledCallbacks.current.values().next().value!);
       handledCallbacks.current.add(code);
       try {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -348,7 +350,7 @@ export function useAuth() {
       if (!data.url) throw new Error("No sign-in URL was returned.");
       const url = new URL(data.url);
       const projectUrl = new URL(import.meta.env.VITE_SUPABASE_URL);
-      if (url.protocol !== "https:" || url.origin !== projectUrl.origin)
+      if (url.protocol !== "https:" || url.username || url.password || url.origin !== projectUrl.origin)
         throw new Error("The sign-in URL does not match the configured Supabase project.");
       if (isTauri()) await openUrl(url.href);
       else window.location.assign(url.href);

@@ -2,9 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "enables the default permissions",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
-    "core:default",
     "core:window:allow-minimize",
     "core:window:allow-hide",
     "core:window:allow-toggle-maximize",
@@ -14,6 +15,19 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "deep-link:default",
-    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://*" }, { "url": "http://*" }] }
-  ]
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "http://*"
+        }
+      ]
+    },
+    "main-commands",
+    "core:window:allow-is-focused"
+  ],
+  "local": true
 }

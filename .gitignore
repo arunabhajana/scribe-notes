@@ -6,8 +6,16 @@ coverage/
 .vite/
 .cache/
 .eslintcache
+.stylelintcache
+.parcel-cache/
+.turbo/
+.vitest/
 *.tsbuildinfo
 /target/
+/artifacts/
+/release/
+/releases/
+/bundle/
 
 # Temporary files and test reports
 /tmp/
@@ -15,11 +23,15 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
+/junit.xml
+/lcov.info
 *.tmp
 *.temp
 *.bak
 *.orig
 *.rej
+*.stackdump
+*.dmp
 
 # Logs and tool output
 logs/
@@ -35,13 +47,44 @@ lerna-debug.log*
 .env.*
 !.env.example
 !.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+.envrc
 *.local
+
+# Machine credentials and signing keys (public verification keys may be committed)
+/.aws/
+/.ssh/
+/.supabase/
+/.npmrc
+!/.npmrc.example
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+/private-key.pem
+/signing-key.pem
+
+# Personal note exports, backups, and local databases
+/exports/
+/backups/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
 
 # Tauri generated files are also ignored in src-tauri/.gitignore
 
 # Editor and operating system files
 .vscode/*
 !.vscode/extensions.json
+.history/
 .idea/
 .DS_Store
 Thumbs.db
@@ -56,5 +99,8 @@ Desktop.ini
 # Existing project-local tool data
 .sf/
 
-# Documents
+# Existing private project notes; public guides such as TESTING.md stay tracked
 docs/
+
+# Keep source, tests, lockfiles, installer artwork/templates, license notices,
+# public keys (*.pub), and sanitized configuration examples in the repository.

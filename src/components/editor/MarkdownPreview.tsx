@@ -17,14 +17,14 @@ function inlineMarkdown(escaped: string) {
   const tokens: string[] = [];
   const token = (html: string) => { tokens.push(html); return `\uE000${tokens.length - 1}\uE001`; };
   return escaped
-    .replace(/`([^`\n]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"[\]]+)/g, (match: string, code: string | undefined, label: string | undefined, markdownUrl: string | undefined, bareUrl: string | undefined) => {
+    .replace(/`([^`\n]+)`|\[([^\][\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"[\]]+)/g, (match: string, code: string | undefined, label: string | undefined, markdownUrl: string | undefined, bareUrl: string | undefined) => {
       if (code !== undefined) return token(`<code>${code}</code>`);
       const url = markdownUrl ?? bareUrl?.split(/&(?:lt|gt|quot|#39);/)[0].replace(/[),.;!?]+$/, "");
       if (!url) return match;
       const preview = inlineLinkPreview(url, label);
       return preview ? token(preview) + (bareUrl ? bareUrl.slice(url.length) : "") : match;
     })
-    .replace(/&lt;u&gt;(.+?)&lt;\/u&gt;/g, "<u>$1</u>")
+    .replace(/&lt;u&gt;((?:(?!&lt;u&gt;|&lt;\/u&gt;)[^\n])+)&lt;\/u&gt;/g, "<u>$1</u>")
     .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_\n]+)__/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")

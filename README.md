@@ -6,6 +6,10 @@ Scribe is a desktop note-taking application designed to help you capture ideas, 
 
 > **Project status:** In development
 
+## Tests and build checks
+
+Run `npm test` for automated tests, or `npm run check` for the full frontend CI gate (lint, types, coverage tests, security checks, and production build). Run `npm run check:native` for the Rust/Tauri compilation check on Windows. See [TESTING.md](TESTING.md) for setup, build environment requirements, coverage reports, and how to add feature tests.
+
 ## App version
 
 `package.json` is the source of the app version. Tauri reads it directly, and the About page displays the same version.

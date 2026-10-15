@@ -1,6 +1,6 @@
 const clean = (text: string) => text.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ").replace(/[\u200b\ufeff]/g, "");
 function webUrl(value: string) {
-  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? url.href : null; }
+  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : null; }
   catch { return null; }
 }
 const label = (text: string) => text.replace(/[\\[\]]/g, "\\$&");
@@ -19,10 +19,12 @@ export function smartPaste(text: string, html: string, selection: string, plain 
   template.innerHTML = html;
   template.content.querySelectorAll("script,style,iframe,object,noscript").forEach((node) => node.remove());
   if (!template.content.querySelector("a[href]")) return value;
-  const render = (node: Node): string => {
+  let visited = 0;
+  const render = (node: Node, depth = 0): string => {
+    if (++visited > 20_000 || depth > 64) throw new Error("Clipboard structure is too complex.");
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
     if (!(node instanceof Element)) return "";
-    const content = [...node.childNodes].map(render).join("");
+    const content = [...node.childNodes].map(child => render(child, depth + 1)).join("");
     if (node.tagName === "A") {
       const href = webUrl(node.getAttribute("href") ?? "");
       return href && content.trim() && content.trim() !== href ? `[${label(content.trim())}](${destination(href)})` : content;
@@ -32,5 +34,10 @@ export function smartPaste(text: string, html: string, selection: string, plain 
     if (node.tagName === "LI") return `- ${content.trim()}\n`;
     return content;
   };
-  return clean([...template.content.childNodes].map(render).join("")).replace(/\n{3,}/g, "\n\n").trim() || value;
+  try {
+    return clean([...template.content.childNodes].map(node => render(node)).join("")).replace(/\n{3,}/g, "\n\n").trim() || value;
+  } catch {
+    // Keep the plain clipboard text rather than recurse through adversarial HTML.
+    return value;
+  }
 }

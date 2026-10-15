@@ -432,7 +432,10 @@ pub fn capture_saved(
 }
 
 #[tauri::command]
-pub fn open_capture_main(app: AppHandle) {
+pub fn open_capture_main(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != "quick-capture" {
+        return Err("Invalid capture window.".into());
+    }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
@@ -441,6 +444,7 @@ pub fn open_capture_main(app: AppHandle) {
     if let Some(window) = app.get_webview_window("quick-capture") {
         let _ = window.hide();
     }
+    Ok(())
 }
 
 // Main-window data reset closes the old capture WebView before content removal.

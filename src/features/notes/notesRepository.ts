@@ -1,3 +1,4 @@
+import { validateNotesReply, type FolderRow, type NoteRow } from "./syncValidation";
 import { cloudGeneration, handleCloudReset } from "../settings/cloudGeneration";
 import type { User } from "@supabase/supabase-js";
 import type {
@@ -11,29 +12,6 @@ import { displayNameFromUser } from "../auth/accountProfile";
 import { documentToMarkdown } from "./richTextDocument";
 import { encodeSyncOperations, type SyncBatch, type SyncReply } from "./syncProtocol";
 import { cloudSyncSignal } from "../settings/cloudSyncPreference";
-
-type FolderRow = {
-  version?: number;
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  created_at: string;
-  updated_at: string;
-};
-
-type NoteRow = {
-  version?: number;
-  id: string;
-  title: string;
-  content: unknown;
-  folder_id: string | null;
-  is_pinned: boolean;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  is_draft: boolean;
-};
 
 export type SyncedPreferences = {
   theme: "dark" | "light";
@@ -145,11 +123,8 @@ export const notesRepository = {
     const operations = batch.payload ?? encodeSyncOperations(batch.operations);
     const raw = await query(client.rpc("sync_notes_batch", {
       p_batch_id: batch.id, p_operations: operations, p_cursor: cursor, p_generation: cloudGeneration(user.id),
-    }).setHeader("Authorization", `Bearer ${session.access_token}`).abortSignal(signal)).catch(cause => { handleCloudReset(user.id, cause); throw cause; }) as {
-      cursor: string; full: boolean; hasMore: boolean;
-      changes: { entity: "note" | "folder"; id: string; snapshot: NoteRow | FolderRow | null }[];
-      results: { revisionId: string; status: "applied" | "conflict"; entity: "note" | "folder"; snapshot: NoteRow | FolderRow | null }[];
-    };
+    }).setHeader("Authorization", `Bearer ${session.access_token}`).abortSignal(signal)).catch(cause => { handleCloudReset(user.id, cause); throw cause; });
+    validateNotesReply(raw);
     const decode = (entity: "note" | "folder", row: NoteRow | FolderRow | null) =>
       row ? (entity === "note" ? fromNoteRow(row as NoteRow) : fromFolderRow(row as FolderRow)) : null;
     return {

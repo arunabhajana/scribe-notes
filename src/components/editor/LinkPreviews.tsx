@@ -7,7 +7,7 @@ import "./linkPreviews.css";
 function linksIn(value: string, limit: number) {
   const text = value.slice(0, 200000).replace(/```[\s\S]*?```|`[^`]*`/g, "");
   const labels = new Map<string, string>();
-  for (const match of text.matchAll(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g)) labels.set(match[2], match[1]);
+  for (const match of text.matchAll(/\[([^\][\n]+)\]\((https?:\/\/[^\s)]+)\)/g)) labels.set(match[2], match[1]);
   const links = new Map<string, { url: string; host: string; title: string; address: string }>();
   for (const match of text.matchAll(/https?:\/\/[^\s<>"[\]]+/g)) {
     const raw = match[0].replace(/[),.;!?]+$/, "");
