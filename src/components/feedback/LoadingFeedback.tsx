@@ -22,16 +22,17 @@ export function EditorSkeleton() {
   </section>;
 }
 
-export function StatusToast({ message, busy = false, onDismiss }: {
+export function StatusToast({ message, busy = false, onDismiss, actions }: {
   message: string;
   busy?: boolean;
   onDismiss?: () => void;
+  actions?: { label: string; onClick: () => void }[];
 }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
   return <div className={`status-toast ${busy ? "is-busy" : "is-error"}`} role={busy ? "status" : "alert"}>
     <span className="status-toast-icon">{busy ? <LoadingSpinner /> : <AlertCircle size={18} />}</span>
-    <span>{message}</span>
+    <span>{message}{actions && <span className="status-toast-actions">{actions.map(action => <button type="button" key={action.label} onClick={action.onClick}>{action.label}</button>)}</span>}</span>
     <button type="button" aria-label="Dismiss notification" onClick={() => {
       setDismissed(true);
       onDismiss?.();
@@ -39,11 +40,14 @@ export function StatusToast({ message, busy = false, onDismiss }: {
   </div>;
 }
 
-export function SyncFeedback({ error, syncing, loading, onDismiss }: {
+export function SyncFeedback({ error, syncing, loading, onDismiss, onRetry, onStorage, onTrash }: {
   error: string | null;
   syncing: boolean;
   loading: boolean;
   onDismiss: () => void;
+  onRetry?: () => void;
+  onStorage?: () => void;
+  onTrash?: () => void;
 }) {
   const [showSync, setShowSync] = useState(false);
   const shownAt = useRef(0);
@@ -63,7 +67,10 @@ export function SyncFeedback({ error, syncing, loading, onDismiss }: {
     return () => window.clearTimeout(timer);
   }, [syncing, error]);
   return <div className="status-toast-stack">
-    {error && <StatusToast key={error} message={error} onDismiss={onDismiss} />}
+    {error && <StatusToast key={error} message={error} onDismiss={onDismiss} actions={error.includes("Cloud storage") ? [
+      ...(onStorage ? [{ label: "View storage", onClick: onStorage }] : []),
+      ...(onTrash ? [{ label: "Open Trash", onClick: onTrash }] : []),
+    ] : /cloud sync|reminder sync/i.test(error) && onRetry ? [{ label: "Retry sync", onClick: onRetry }] : undefined} />}
     {showSync && <StatusToast busy message={loading ? "Loading your Notes…" : "Syncing your Notes…"} />}
   </div>;
 }

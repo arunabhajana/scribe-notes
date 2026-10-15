@@ -26,7 +26,8 @@
 .offline-delete-dialog button:focus-visible, .offline-delete-dialog input:focus-visible { outline: 2px solid var(--delete-danger); outline-offset: 3px; }
 .offline-delete-dialog footer { justify-content: flex-end; margin-top: 24px; }
 .offline-delete-dialog footer button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 39px; padding: 9px 15px; font-size: 12px; font-weight: 600; border: 1px solid var(--delete-border); border-radius: 8px; cursor: pointer; }
-.offline-delete-cancel { background: transparent; color: var(--delete-text); }
+.offline-delete-dialog footer .offline-delete-cancel { background: #38bc9b14; border-color: #38bc9b70; color: #38bc9b; }
+.offline-delete-dialog footer .offline-delete-cancel:hover:not(:disabled) { background: #38bc9b26; border-color: #38bc9b; }
 .offline-delete-dialog footer .offline-delete-confirm { background: #bd3547; border-color: #bd3547; color: #fff; }
 .offline-delete-dialog button:disabled { opacity: .45; cursor: not-allowed; }
 .offline-delete-dialog .offline-delete-error { margin-top: 14px; color: var(--delete-danger); }

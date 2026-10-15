@@ -1,0 +1,34 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "identifier": "app.scribenotes.desktop",
+  "productName": "Scribe",
+  "bundle": {
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "Scribe contributors",
+    "copyright": "Copyright (c) 2026 Scribe contributors",
+    "shortDescription": "A little space for big thoughts.",
+    "longDescription": "A local-first notes app with offline profiles, optional cloud sync, reminders and Quick Capture.",
+    "homepage": "https://github.com/arunabhajana/scribe-notes",
+    "windows": {
+      "nsis": {
+        "template": "installer/scribe.nsi",
+        "headerImage": "installer/assets/header.bmp",
+        "sidebarImage": "installer/assets/sidebar.bmp",
+        "installerIcon": "icons/scribe-v2/icon.ico",
+        "uninstallerIcon": "icons/scribe-v2/icon.ico",
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      }
+    },
+    "resources": {
+      "../LICENSE": "LICENSE.txt",
+      "installer/LICENSE-Tauri": "licenses/Tauri-installer-MIT.txt"
+    }
+  }
+}

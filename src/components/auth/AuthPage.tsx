@@ -184,7 +184,7 @@ export function AuthPage({
   };
 
   return (
-    <main className={`auth-screen auth-entry-screen${isSignUp ? " auth-signup-screen" : ""}`}>
+    <main className={`auth-screen auth-entry-screen${isSignUp ? " auth-signup-screen" : ""}${confirmationSent ? " auth-inbox-screen" : ""}`}>
       <div className="auth-decoration auth-decoration-one" />
       <div className="auth-decoration auth-decoration-two" />
       <section className="auth-layout" aria-label="Scribe account">

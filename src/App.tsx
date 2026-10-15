@@ -149,6 +149,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const [sidebarPreference, saveSidebarCollapsed] = useWorkspacePreference("scribe-sidebar-collapsed");
   const sidebarCollapsed = sidebarPreference === "true";
   const [page, setPage] = useState<AppPage>("notes");
+  const [settingsInitialCategory, setSettingsInitialCategory] = useState("general");
   const [notificationTarget, setNotificationTarget] = useState<NotificationTarget | null>(null);
   useNotificationActivation(setNotificationTarget);
   const desktopNotifications = useDesktopNotifications({ userId: notesUser?.id ?? null, notes: notesState.notes, reminders: reminderState.reminders,
@@ -530,6 +531,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         {cloudSyncDialog}
         <SettingsPage
           key={preferenceWorkspaceId}
+          initialCategory={settingsInitialCategory}
           onSignIn={openSignIn}
           onDeleteData={() => {
             if (!notesUser || !notesState.cacheReady) { showNoteError("Wait for your saved workspace to load."); return; }
@@ -585,7 +587,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
             notesState.moveFolder("system:unfiled", offset)
           }
         />
-        <SyncFeedback error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
+        <SyncFeedback onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
       </div>
     );
 
@@ -811,9 +813,9 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         }}
         onClose={() => setReminderNoteId(null)}
       />}
-      <AppNotifications alerts={desktopNotifications.alerts} onDismiss={desktopNotifications.dismiss} onOpen={setNotificationTarget} />
+      <AppNotifications onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} alerts={desktopNotifications.alerts} onDismiss={desktopNotifications.dismiss} onOpen={setNotificationTarget} />
       {reminderNotice && !notesState.error && !reminderState.error && !desktopNotifications.error && <ReminderFeedback key={reminderNotice} message={reminderNotice} onDismiss={dismissReminderNotice} />}
-      <SyncFeedback error={notesState.error ?? reminderState.error ?? desktopNotifications.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); desktopNotifications.clearError(); }} />
+      <SyncFeedback onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} error={notesState.error ?? reminderState.error ?? desktopNotifications.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); desktopNotifications.clearError(); }} />
     </main>
   );
 }

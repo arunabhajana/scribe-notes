@@ -75,7 +75,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
         const message = cause && typeof cause === "object" && "message" in cause ? String(cause.message) : "";
         if (active) setIssue({ userId, kind: cloudRequestPending ? "cloud" : "local", message: !cloudRequestPending ? "Could not update local reminder storage. Please reopen Scribe and try again." : message.includes("SCRIBE_STORAGE_LIMIT_REACHED") ? CLOUD_STORAGE_LIMIT_MESSAGE : /schema cache|function .*does not exist/i.test(message)
           ? "Reminders are saved locally. Apply the reminder migration in Supabase to enable cloud sync."
-          : "Reminder sync is paused. Your reminders are safe on this device and will retry automatically." });
+          : "Reminder sync is paused. Your reminders are saved on this device. Check your connection and retry sync; Scribe also retries automatically." });
       } finally {
         busy = false;
         if (active) {
@@ -88,7 +88,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => { void flush(true); }, 750);
     };
-    wake.current = schedule;
+    wake.current = () => { retryAt = 0; void flush(true); };
     const changed = (event: Event) => {
       if ((event as CustomEvent<string>).detail === userId) {
         // A commit emits this event too. Only queued edits need another write.
@@ -142,6 +142,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
   }, [userId]);
 
   return {
+    retrySync: () => wake.current(),
     loading: Boolean(userId && cache?.userId !== userId),
     reminders: cache?.userId === userId ? cache.reminders : {},
     pending: cache?.userId === userId ? cache.pending : {},

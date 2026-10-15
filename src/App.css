@@ -6708,6 +6708,8 @@
 .status-toast > span:nth-child(2) { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .status-toast button { flex: none; padding: 2px; border: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
 .status-toast button:hover { color: var(--accent); }
+.status-toast-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.status-toast .status-toast-actions button { padding: 5px 9px; border: 1px solid var(--border); color: var(--text); background: var(--surface); font: inherit; font-weight: 600; }
 @keyframes toast-appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
   .loading-spinner, .skeleton-block, .titlebar-loading-bar::after { animation: none; }

@@ -5,7 +5,8 @@ import { formatReminderTime } from "../../features/reminders/reminderTypes";
 import "./appNotifications.css";
 import { useEffect } from "react";
 
-export function AppNotifications({ alerts, onDismiss, onOpen }: {
+export function AppNotifications({ alerts, onDismiss, onOpen, onRetry, onStorage, onTrash }: {
+  onRetry?: () => void; onStorage?: () => void; onTrash?: () => void;
   alerts: InAppNotification[]; onDismiss: (id: string) => Promise<void>; onOpen: (target: NotificationTarget) => void;
 }) {
   const syncAlert = alerts.find((alert) => alert.kind === "sync-error" || alert.kind === "sync-restored");
@@ -26,7 +27,7 @@ export function AppNotifications({ alerts, onDismiss, onOpen }: {
   return <section className="app-notification-stack" aria-label="Notifications" aria-live="polite" aria-relevant="additions">
     {syncAlert && <div className="app-sync-notice" role="status">
       {syncAlert.kind === "sync-error" ? <CloudOff size={17} /> : <CheckCircle2 size={17} />}
-      <div><strong>{syncAlert.title}</strong><p>{syncAlert.body}</p></div>
+      <div><strong>{syncAlert.title}</strong><p>{syncAlert.body}</p>{syncAlert.kind === "sync-error" && <div className="app-notification-actions">{syncAlert.body.includes("Cloud storage") ? <>{onStorage && <button type="button" onClick={onStorage}>View storage</button>}{onTrash && <button type="button" onClick={onTrash}>Open Trash</button>}</> : onRetry && <button type="button" onClick={onRetry}>Retry sync</button>}</div>}</div>
       <button type="button" className="app-notification-close" aria-label="Dismiss sync notification" onClick={() => { void onDismiss(syncAlert.id); }}><X size={15} /></button>
     </div>}
     {cards.length > 3 && <span className="app-notification-count">{cards.length} notifications · dismiss to see more</span>}

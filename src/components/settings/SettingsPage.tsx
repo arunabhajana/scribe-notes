@@ -1478,6 +1478,7 @@ export function SettingsPage({
   onDeleteOfflineProfile,
   onDeleteAccount,
   onDeleteData,
+  initialCategory = "general",
   onOpenTransfer,
   dark,
   accent,
@@ -1508,6 +1509,7 @@ export function SettingsPage({
   onMoveSystemFolder,
   unfiledPosition,
 }: {
+  initialCategory?: string;
   onSignIn: () => void;
   onDeleteOfflineProfile: () => void;
   onDeleteAccount: () => void;
@@ -1556,7 +1558,7 @@ export function SettingsPage({
     : profile.localOnly && category.id === "storage"
       ? { ...category, description: "Review storage used on this device." }
       : category), [profile.localOnly]);
-  const [categoryId, setCategoryId] = useState("general");
+  const [categoryId, setCategoryId] = useState(initialCategory);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
   const matchingSettings = useMemo(

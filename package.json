@@ -16,7 +16,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "installer:build": "tauri build --config src-tauri/tauri.installer.conf.json --bundles nsis",
+    "installer:artwork": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-installer-artwork.ps1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",

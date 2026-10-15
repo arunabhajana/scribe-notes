@@ -1,6 +1,7 @@
 /* Keep the existing page shell; give each part of signup a clear hierarchy. */
 .auth-entry-screen .auth-panel-wrap { padding-top: 20px; }
 .auth-entry-screen .auth-panel { margin-top: 0; margin-bottom: auto; }
+.auth-entry-screen.auth-inbox-screen .auth-panel { margin-block: auto; }
 .auth-entry-screen .auth-panel-heading { margin-top: 10px; }
 .auth-privacy-footer { margin-top: 10px; text-align: center; font-size: 10px; line-height: 1.6; }
 .auth-privacy-footer a { color: var(--auth-muted); text-decoration: underline; text-underline-offset: 3px; }

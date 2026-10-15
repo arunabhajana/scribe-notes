@@ -15,8 +15,12 @@
 .online-delete-unsynced { display: flex; gap: 8px; }
 .online-delete-unsynced svg { flex-shrink: 0; color: var(--delete-danger); margin-top: 3px; }
 .online-delete-back { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--delete-muted); font-size: 11px; padding: 4px 0; margin: 16px 0 24px; cursor: pointer; }
+.online-delete-back { color: #38bc9b; }
+.online-delete-back:hover:not(:disabled) { color: #62d6b8; }
 .online-delete-password { position: relative; }
 .online-delete-password input { padding-right: 44px; }
+.online-delete-password input::-ms-reveal,
+.online-delete-password input::-ms-clear { display: none; }
 .online-delete-password button { position: absolute; inset: 0 0 0 auto; display: grid; place-items: center; width: 40px; border: 0; background: transparent; color: var(--delete-muted); cursor: pointer; }
 .online-delete-mfa { margin-top: 20px; }
 .online-delete-mfa select { width: 100%; padding: 10px; border: 1px solid var(--delete-border); border-radius: 8px; background: var(--delete-bg); color: var(--delete-text); font-size: 12px; margin-bottom: 16px; }

@@ -81,9 +81,10 @@ export function DeleteAccountDialog({ account, pending, currentUserId, onClose, 
       <section className="online-delete-data" aria-label="Data to be deleted">
         <table><caption>Cloud data and this device’s copy can overlap. Counts are not added together.</caption><thead><tr><th scope="col">Saved data</th><th scope="col">Cloud</th><th scope="col">This device</th></tr></thead><tbody>
           {([['Notes', 'notes'], ['Drafts', 'drafts'], ['Trash', 'trash'], ['Folders', 'folders'], ['Reminders', 'reminders']] as const).map(([label, key]) => <tr key={key}><th scope="row">{label}</th><td>{summary.cloud[key]}</td><td>{summary.local[key]}</td></tr>)}
+          <tr><th scope="row">Saved preferences</th><td aria-label="Not included in cloud size">—</td><td>{summary.local.preferences}</td></tr>
           <tr className="online-delete-sizes"><th scope="row">Data size</th><td>{size(summary.cloud.cloudBytes)}</td><td>~{size(summary.local.bytes)}</td></tr>
         </tbody></table>
-        <small>Cloud size covers note, folder and reminder content. Local size is an estimate, not disk space recovered.</small>
+        <small>Cloud size covers notes, folders and reminders. Local size also includes saved preferences and workspace records, so it can show a small amount even with no notes. It is an estimate, not disk space recovered.</small>
       </section>
       <details className="online-delete-details"><summary>Account details and settings also removed</summary><p>Your profile, email sign-in, {summary.cloud.identities} linked sign-in method(s), {summary.cloud.sessions} session(s), authenticator setup, device records, terms acceptance and account security/sync records.</p><p>On this device: {summary.local.preferences} saved preference(s), {summary.local.captureDrafts} Quick Capture draft(s), {summary.local.notifications} notification(s), and pending local saves.</p></details>
       {summary.local.pendingImports > 0 && <p>{summary.local.pendingImports} notes in unfinished local imports will also be removed.</p>}
@@ -115,7 +116,7 @@ export function DeleteAccountDialog({ account, pending, currentUserId, onClose, 
       {otherAccountActive ? <button className="online-delete-continue" type="button" disabled={working} onClick={() => { void onSignOutCurrent().then(failure => { if (failure) setError(failure); }); }}>Sign out of current account</button>
         : pending ? <button className="offline-delete-confirm" type="button" disabled={working} onClick={() => { void submit(); }}>{working && <LoaderCircle size={15} className="offline-delete-spinner" />}{working ? "Please wait…" : pending.remoteDeleted ? "Finish local cleanup" : "Check deletion status"}</button>
         : summary && !summary.cloud.hasPassword ? <button className="online-delete-continue" type="button" disabled={working || !account.email} onClick={() => { void resetPassword(); }}>{working ? "Sending…" : "Send password setup email"}</button>
-        : step === "review" ? <button className="online-delete-continue" type="button" disabled={!summary || working || unsupportedMfa} onClick={() => { setError(""); setStep("verify"); }}>Continue to verification</button>
+        : step === "review" ? <button className="offline-delete-confirm" type="button" disabled={!summary || working || unsupportedMfa} onClick={() => { setError(""); setStep("verify"); }}>Continue to verification</button>
         : <button className="offline-delete-confirm" form="online-delete-form" type="submit" disabled={working || !password || Boolean(summary?.cloud.factors.length && (!factorId || !/^\d{6}$/.test(code)))}>{working && <LoaderCircle size={15} className="offline-delete-spinner" />}{working ? "Deleting…" : "Permanently delete account"}</button>}
     </footer>
   </dialog>;

@@ -347,7 +347,7 @@ export function useNotes(
       const delay = Math.min(120_000, 5000 * 2 ** Math.min(failureCount.current - 1, 5));
       retryAt.current = Date.now() + delay + Math.random() * 1500;
       if (activeUserId.current === user.id) {
-        lastCloudError.current = quotaReached ? CLOUD_STORAGE_LIMIT_MESSAGE : `Cloud sync paused. Local changes are kept on this device and will retry automatically: ${messageFor(cause)}`;
+        lastCloudError.current = quotaReached ? CLOUD_STORAGE_LIMIT_MESSAGE : `Cloud sync paused. Your changes are saved on this device. Check your connection and retry sync; Scribe also retries automatically. Details: ${messageFor(cause)}`;
         setError(lastCloudError.current);
         setCloudSyncError(submittedBatchId && !cloudResponseReceived ? { userId: user.id, message: lastCloudError.current } : null);
       }
@@ -832,6 +832,7 @@ export function useNotes(
     folderId,
     folder: folders.find((item) => item.id === folderId)?.name ?? "",
     clearError,
+    retrySync: () => { retryAt.current = 0; flushOutboxRef.current(); },
     syncStatus,
     showError,
     search,
