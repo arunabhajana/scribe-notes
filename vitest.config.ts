@@ -12,13 +12,15 @@ export default defineConfig({
     unstubGlobals: true,
     unstubEnvs: true,
     allowOnly: false,
+    // Keep jsdom worker memory bounded on small CI runners and developer PCs.
+    maxWorkers: 2,
     reporters: ['default', 'junit'],
     outputFile: { junit: 'test-results/junit.xml' },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       reportsDirectory: 'coverage',
-      include: ['src/features/**/*.ts', 'src/components/editor/*.{ts,tsx}'],
+      include: ['src/features/**/*.ts', 'src/components/editor/*.{ts,tsx}', 'scripts/lib/**/*.mts'],
       // Protect the initial coverage floor while retaining uncovered modules in
       // reports. Raise these as new feature suites are added.
       thresholds: {
@@ -26,6 +28,7 @@ export default defineConfig({
         'src/features/notes/offlineStore.ts': { statements: 60, branches: 45, functions: 50, lines: 65 },
         'src/features/transfer/portableData.ts': { statements: 60, branches: 50, functions: 75, lines: 65 },
         'src/features/settings/cloudStorage.ts': { statements: 90, branches: 85, functions: 100, lines: 100 },
+        'scripts/lib/version-validation.mts': { statements: 85, branches: 75, functions: 100, lines: 90 },
       },
     },
   },

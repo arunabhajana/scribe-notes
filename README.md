@@ -8,7 +8,72 @@ Scribe is a desktop note-taking application designed to help you capture ideas, 
 
 ## Tests and build checks
 
-Run `npm test` for automated tests, or `npm run check` for the full frontend CI gate (lint, types, coverage tests, security checks, and production build). Run `npm run check:native` for the Rust/Tauri compilation check on Windows. See [TESTING.md](TESTING.md) for setup, build environment requirements, coverage reports, and how to add feature tests.
+Run `npm test` for automated tests, or `npm run check` for the full frontend CI gate (version consistency, lint, types, coverage tests, security checks, and production build). Run `npm run check:native` for the Rust/Tauri compilation check on Windows. See [CI and releases](#ci-and-releases) for GitHub setup.
+
+## CI and releases
+
+### How it works
+
+- Temporary `feat/*`, `fix/*`, and `release/*` branches merge into `main` through pull requests.
+- Every PR to `main` runs **Frontend checks** and **Windows x64 installer**. These checks also run after merges to `main` and can be started manually from Actions. There are no path filters that silently skip checks.
+- The frontend job validates committed versions, lint, application/test types, tests and coverage floors, security regressions, secret patterns, and the production frontend build.
+- The Windows job uses Windows Server 2022/MSVC and Rust 1.95.0, compile-checks native code, then builds the branded NSIS installer using locked Cargo dependencies. It does not execute the installer.
+- A pushed `v<version>` tag must match the committed project version and refer to a commit already on `main`. The release workflow reruns both jobs, then creates a **draft GitHub release** with the Windows x64 installer, SHA-256 checksum, and generated release notes. Versions such as `1.0.0-rc.1` are marked as prereleases.
+- Ordinary PRs and pushes never publish a release. Installer signing, in-app updater configuration, Supabase deployments, ARM64 and other platforms are not included yet. Installers remain unsigned until Windows code signing is configured.
+
+### One-time GitHub setup
+
+1. Enable GitHub Actions under **Settings > Actions > General**, allowing the official `actions/*` actions used in these workflows. Keep the default token permission read-only; the draft-release job explicitly requests its required `contents: write` permission. Repository/organization policy must permit this request.
+2. Under **Settings > Secrets and variables > Actions > Variables**, add these **repository variables**:
+
+   | Variable | Value |
+   | --- | --- |
+   | `VITE_SUPABASE_URL` | Your HTTPS Supabase project URL, matching the HTTPS/WSS origins in `src-tauri/tauri.conf.json`. |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase's public **publishable** client key. Alternatively set `VITE_SUPABASE_ANON_KEY` for a legacy **anon** key. Publishable takes precedence. |
+   | `VITE_SCRIBE_WEBSITE_URL` | Your public HTTPS Scribe website, without a query or fragment. Optional for PR checks; required before release tags, so released legal links do not point to localhost. |
+
+   These values are embedded in the public desktop build. Never use a secret/service-role key. No personal GitHub token or Supabase CLI is required. Tests use mocks and do not access the live project.
+
+3. Commit and push the workflows, scripts, tests, `.node-version`, configuration, and lockfiles. After the first successful PR run, protect `main` and require both actual job names shown by GitHub: **Frontend checks** and **Windows x64 installer**. Require PRs, conversation resolution, and up-to-date branches; block force pushes/deletion and apply requirements to bypass roles too. Solo developers should not require another person's approval. CI cannot prevent merging until these repository rules are enabled.
+4. Protect `v*` release tags with a tag ruleset: restrict creation to release maintainers and prevent tag updates/deletion. Never move a released tag.
+
+If existing protection blocks the initial workflow PR because the checks do not exist yet, finish that bootstrap PR before selecting the newly available check names.
+
+### Versioning and releasing
+
+On your temporary version branch:
+
+```powershell
+npm version 1.0.0 --no-git-tag-version
+```
+
+Commit `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock` together. For manual package edits, run `npm run sync:version` first. CI detects version drift before build hooks can repair it.
+
+After the version PR merges, start from a clean working tree:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+git tag -a v1.0.0 -m "Scribe 1.0.0"
+git push origin v1.0.0
+```
+
+Watch **Actions > Release**, then inspect the draft release, review its notes, test the installer on Windows, and publish when ready. `SHA256SUMS.txt` verifies file integrity; it is not a Windows signing identity. The workflow stops if a release already exists or the tag moved during the build, rather than replacing assets. Review incomplete drafts manually before retrying failed uploads.
+
+### Test reports and security
+
+CI retains installer artifacts, JUnit reports and coverage reports for 14 days. Report upload runs even if a later test/build check fails. Add feature tests under `tests/**/*.test.ts` or `.test.tsx`; use `npm run test:watch` while developing and preserve coverage floors in `vitest.config.ts`. Test workers are capped at two to bound memory use on small runners. Generated reports stay ignored by Git.
+
+Actions are pinned to verified release commits; Dependabot checks action updates monthly. PR jobs use read-only repository tokens, never `pull_request_target`, and do not persist Git checkout credentials. The job with release write permission downloads only this run's installer and does not check out or execute app code. Rust artifacts are not shared through PR-controlled caches.
+
+The CI suite does not replace hosted authorization/OAuth/MFA tests, multi-device integration tests, native UI checks, or installer smoke testing.
+
+```powershell
+npm run version:check
+npm run check
+npm run check:native
+npm run installer:build -- --ci -- --locked
+```
 
 ## App version
 
