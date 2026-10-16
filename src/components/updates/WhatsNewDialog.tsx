@@ -3,6 +3,7 @@ import { Sparkles, X } from 'lucide-react';
 import type { Changelog, ChangeType } from '../../../scripts/lib/changelog.mts';
 import { appVersion, changelogs } from '../../features/updates/changelogs';
 import './updates.css';
+import { VersionDropdown } from './VersionDropdown';
 
 const labels: Record<ChangeType, string> = { feature: 'Feature', improved: 'Improved', fixed: 'Fixed', security: 'Security', changed: 'Changed' };
 
@@ -27,7 +28,7 @@ export function WhatsNewDialog({ onClose }: { onClose: () => void }) {
     <header className="update-dialog-header"><span className="update-icon"><Sparkles size={22} /></span><button className="update-close" type="button" onClick={onClose} aria-label="Close What’s New"><X size={18} /></button></header>
     <div className="update-eyebrow">MADE FOR YOUR EVERYDAY</div>
     <h2 id="whats-new-title">What’s new in Scribe</h2>
-    <div className="update-version-select"><label htmlFor="changelog-version">Version</label><select id="changelog-version" value={version} onChange={event => setVersion(event.target.value)}>{changelogs.map(entry => <option key={entry.version} value={entry.version}>{entry.version}{entry.version === appVersion ? ' · Installed' : ''}</option>)}</select></div>
+    <div className="update-version-select"><span>Version</span><VersionDropdown value={version} onChange={setVersion} options={changelogs.map(entry => ({ value: entry.version, label: `${entry.version}${entry.version === appVersion ? ' · Installed' : ''}` }))} /></div>
     {log ? <><h3 className="release-title">{log.title}</h3><p className="release-summary">{log.summary}</p><ChangeSections log={log} /></> : <p className="release-summary">Release notes are not available for this version.</p>}
     <footer><button type="button" className="update-primary" onClick={onClose}>Done</button></footer>
   </dialog>;

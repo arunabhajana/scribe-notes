@@ -1,6 +1,7 @@
 import {
   Bold,
   Code2,
+  SquareCode,
   CheckSquare,
   BookOpen,
   Pencil,
@@ -33,6 +34,7 @@ export type MarkdownAction =
   | "todo"
   | "quote"
   | "code"
+  | "codeBlock"
   | "link";
 
 export function EditorToolbar({
@@ -135,6 +137,7 @@ export function EditorToolbar({
       <div className="format-group" role="group" aria-label="Insert quote, code or link">
         {button("Quote", "quote", <Quote size={15} />)}
         {button("Inline code", "code", <Code2 size={15} />)}
+        {button("Code block", "codeBlock", <SquareCode size={15} />)}
         {button("Link", "link", <Link2 size={15} />, "K")}
       </div>
       </div>

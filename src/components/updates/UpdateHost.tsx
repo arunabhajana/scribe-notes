@@ -1,22 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { appVersion } from '../../features/updates/changelogs';
 import { useUpdates, updateActions } from '../../features/updates/updateStore';
 import { UpdateDialog } from './UpdateDialog';
 import { WhatsNewDialog } from './WhatsNewDialog';
-import { useWorkspacePreference } from '../../features/settings/workspacePreferences';
+import { useWorkspaceId, useWorkspacePreference } from '../../features/settings/workspacePreferences';
+import { updatePreferenceName } from '../../features/updates/updatePreference';
 import { accentColors, type AccentColor } from '../../features/settings/accentColors';
 import type { CSSProperties } from 'react';
 import { UpdateToast } from './UpdateToast';
 
 const seenKey = 'scribe-updates:seen-version:v1';
 
-export function UpdateHost({ blocked }: { blocked: boolean }) {
+export function UpdateHost({ blocked, localOnly }: { blocked: boolean; localOnly: boolean }) {
   const state = useUpdates();
   const [whatsNew, setWhatsNew] = useState(false);
   const [theme] = useWorkspacePreference('scribe-theme');
   const [accent] = useWorkspacePreference('scribe-accent');
   const palette = accentColors[accent as AccentColor] ?? accentColors.violet;
+  const workspaceId = useWorkspaceId();
+  const [automaticPreference] = useWorkspacePreference(updatePreferenceName);
+  useLayoutEffect(() => { updateActions.setWorkspace(workspaceId, localOnly); }, [workspaceId, localOnly, automaticPreference]);
   useEffect(() => {
     if (!isTauri()) return;
     // First installation establishes a baseline; upgrades show bundled notes once.
@@ -33,7 +37,7 @@ export function UpdateHost({ blocked }: { blocked: boolean }) {
     const online = () => void updateActions.check(false);
     window.addEventListener('online', online);
     return () => { window.clearTimeout(timer); window.clearInterval(interval); window.removeEventListener('online', online); };
-  }, []);
+  }, [workspaceId, state.automatic]);
   const closeWhatsNew = () => {
     try { localStorage.setItem(seenKey, appVersion); } catch { /* Notes remain accessible in About. */ }
     setWhatsNew(false);

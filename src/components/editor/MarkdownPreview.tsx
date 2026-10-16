@@ -3,6 +3,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState } from "react";
 import "./linkPreviews.css";
+import { openingCodeFence, closesCodeFence, compactCodeBlock, type CodeFence } from '../../features/notes/codeFences';
 
 function escapeHtml(value: string) {
   return value
@@ -34,18 +35,19 @@ function inlineMarkdown(escaped: string) {
 
 function listItem(line: string) {
   const task = line.match(/^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/);
-  if (task) return { ordered: false, task: true, checked: task[1].toLowerCase() === "x", content: task[2] };
+  if (task) return { number: undefined, ordered: false, task: true, checked: task[1].toLowerCase() === "x", content: task[2] };
   const match = line.match(/^[ \t]*(?:([-*+])[ \t]+|(\d+)[.)][ \t]+)(.*)$/);
   if (!match) return null;
-  return { ordered: Boolean(match[2]), task: false, checked: false, content: match[3] };
+  return { number: match[2] ? Number(match[2]) : undefined, ordered: Boolean(match[2]), task: false, checked: false, content: match[3] };
 }
 
 function markdownToHtml(markdown: string, tasksInteractive: boolean) {
   const lines = escapeHtml(markdown).replace(/\r\n?/g, "\n").split("\n");
   const blocks: string[] = [];
   let paragraph: Array<{ text: string; line: number }> = [];
-  let list: { type: "ul" | "ol" | "tasks"; items: Array<{ content: string; checked: boolean; line: number }> } | null = null;
+  let list: { type: "ul" | "ol" | "tasks"; items: Array<{ content: string; checked: boolean; line: number; number?: number }> } | null = null;
   let code: Array<{ text: string; line: number }> | null = null;
+  let fence: CodeFence | null = null;
   const codeHtml = () => code?.map((item) => `<span data-source-line="${item.line}">${item.text || "&#8203;"}</span>`).join("\n") ?? "";
   const flushParagraph = () => {
     if (paragraph.length)
@@ -59,23 +61,32 @@ function markdownToHtml(markdown: string, tasksInteractive: boolean) {
           ? `<ul class="task-list">${list.items.map((item) => {
               return `<li data-source-line="${item.line}" class="task-list-item${item.checked ? " is-checked" : ""}"><input class="task-checkbox" type="checkbox" data-task-line="${item.line}" aria-label="${item.checked ? "Mark incomplete" : "Mark complete"}: ${item.content}" ${tasksInteractive ? "" : "disabled"} ${item.checked ? "checked" : ""}><span class="task-content">${inlineMarkdown(item.content)}</span></li>`;
             }).join("")}</ul>`
-          : `<${list.type}>${list.items.map((item) => `<li data-source-line="${item.line}">${inlineMarkdown(item.content)}</li>`).join("")}</${list.type}>`,
+          : `<${list.type}>${list.items.map((item) => `<li data-source-line="${item.line}"${list!.type === "ol" && Number.isSafeInteger(item.number) ? ` value="${item.number}"` : ""}>${inlineMarkdown(item.content)}</li>`).join("")}</${list.type}>`,
       );
     list = null;
   };
 
-  for (const [lineIndex, line] of lines.entries()) {
-    if (line.trim().startsWith("```")) {
-      flushParagraph();
-      flushList();
-      if (code) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
+    if (code && fence) {
+      if (closesCodeFence(line, fence)) {
         blocks.push(`<pre><code>${codeHtml()}</code></pre>`);
-        code = null;
-      } else code = [];
+        code = null; fence = null;
+      } else code.push({ text: line, line: lineIndex });
       continue;
     }
-    if (code) {
-      code.push({ text: line, line: lineIndex });
+    const compact = compactCodeBlock(lines, lineIndex);
+    if (compact) {
+      flushParagraph(); flushList();
+      blocks.push(`<pre><code>${compact.lines.map((text, offset) => `<span data-source-line="${lineIndex + offset}">${text || "&#8203;"}</span>`).join("\n")}</code></pre>`);
+      lineIndex = compact.end;
+      continue;
+    }
+    const opening = openingCodeFence(line);
+    if (opening) {
+      flushParagraph();
+      flushList();
+      code = []; fence = opening;
       continue;
     }
     if (!line.trim()) {
@@ -89,7 +100,7 @@ function markdownToHtml(markdown: string, tasksInteractive: boolean) {
       const type = item.task ? "tasks" : item.ordered ? "ol" : "ul";
       if (list && list.type !== type) flushList();
       list ??= { type, items: [] };
-      list.items.push({ content: item.content, checked: item.checked, line: lineIndex });
+      list.items.push({ content: item.content, checked: item.checked, line: lineIndex, number: item.number });
       continue;
     }
     flushList();

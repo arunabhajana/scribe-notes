@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.2",
+  "title": "Clearer code. Smoother writing.",
+  "summary": "Better code blocks, clearer note-card previews, and update controls that respect your workspace preferences.",
+  "sections": [
+    {
+      "type": "feature",
+      "items": [
+        "Add multiline code with the new Code block toolbar button. Selecting multiple lines with Inline code now creates a code block too."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "Code in note-card previews has distinct styling, with better alignment after numbered lists.",
+        "What’s New uses a themed version selector, and automatic update controls have a custom checkbox and clearer spacing.",
+        "Automatic update checks are off by default for offline profiles. Enabling them explains the internet connection and information involved.",
+        "Automatic update preferences are saved separately for each workspace."
+      ]
+    },
+    {
+      "type": "fixed",
+      "items": [
+        "Numbered lists keep their written numbers when separated by paragraphs or code blocks, including after syncing.",
+        "Multiline code preserves indentation and literal Markdown when previewed or synced.",
+        "Code blocks created with backticks attached to the code are recognized without swallowing later list items.",
+        "The new-note editor scrolls to keep the line you are typing visible.",
+        "Unavailable public update information is explained clearly instead of always appearing as a connection error."
+      ]
+    }
+  ]
+}

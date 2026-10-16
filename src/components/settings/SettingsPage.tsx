@@ -1395,7 +1395,7 @@ function CategoryContent({
                 Built for thoughtful Notes, with local saves and cloud sync.
               </span>
             </div>
-            <UpdateSettings />
+            <UpdateSettings localOnly={profile.localOnly} />
           </SettingCard>
         </>
       );

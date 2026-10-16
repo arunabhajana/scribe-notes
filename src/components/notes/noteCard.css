@@ -30,6 +30,40 @@
   color: inherit;
   font: inherit;
 }
+.note-card.note-card-compact .note-card-preview .markdown-preview:has(pre) {
+  display: block;
+}
+.note-card.note-card-compact .note-card-preview .markdown-preview > :is(ol, ul) + :is(p, pre) {
+  margin-left: 18px;
+}
+.note-card.note-card-compact .note-card-preview .markdown-preview code {
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface-2));
+  color: var(--accent);
+  font: 10.5px/16px Consolas, "Cascadia Code", monospace;
+}
+.note-card.note-card-compact .note-card-preview .markdown-preview pre {
+  box-sizing: border-box;
+  margin-block: 3px;
+  padding: 3px 6px;
+  max-height: 40px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-left: 2px solid var(--accent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-2));
+}
+.note-card.note-card-compact .note-card-preview .markdown-preview pre code {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .note-card.note-card-compact .card-meta {
   min-height: 22px;
   margin-top: 2px;

@@ -6,7 +6,14 @@ const files = [...new Set(execFileSync("git", ["ls-files", "-z", "--cached", "--
 let scanned = 0;
 const findings = [];
 for (const path of files) {
-  const buffer = await readFile(path);
+  let buffer;
+  try {
+    buffer = await readFile(path);
+  } catch (error) {
+    // Git still lists tracked files deleted in the working tree until staged.
+    if (error.code === "ENOENT") continue;
+    throw error;
+  }
   if (buffer.includes(0)) continue;
   const text = buffer.toString("utf8"); scanned++;
   for (const [index, line] of text.split(/\r?\n/).entries()) {

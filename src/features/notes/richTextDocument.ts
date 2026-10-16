@@ -1,3 +1,4 @@
+import { openingCodeFence, closesCodeFence, codeFenceFor, compactCodeBlock } from './codeFences.ts';
 export type TextMark =
   | { type: "bold" }
   | { type: "italic" }
@@ -11,6 +12,7 @@ export type RichTextNode =
   | { type: "heading"; attrs: { level: 1 | 2 | 3 }; content: RichTextNode[] }
   | {
       type: "bulletList" | "orderedList";
+      attrs?: { start: number };
       content: Array<{ type: "listItem"; content: RichTextNode[] }>;
     }
   | {
@@ -79,10 +81,17 @@ export function markdownToDocument(markdown: string): RichTextDocument {
       i++;
       continue;
     }
-    if (lines[i].startsWith("```")) {
+    const compact = compactCodeBlock(lines, i);
+    if (compact) {
+      content.push({ type: "codeBlock", content: [{ type: "text", text: compact.lines.join("\n") }] });
+      i = compact.end + 1;
+      continue;
+    }
+    const fence = openingCodeFence(lines[i]);
+    if (fence) {
       const code: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].startsWith("```"))
+      while (i < lines.length && !closesCodeFence(lines[i], fence))
         code.push(lines[i++]);
       if (i < lines.length) i++;
       content.push({
@@ -121,11 +130,13 @@ export function markdownToDocument(markdown: string): RichTextDocument {
     const listItem = lines[i].match(listPattern);
     if (listItem) {
       const ordered = Boolean(listItem[2]);
+      const start = ordered ? Number(listItem[2]) : 1;
       const items: Array<{ type: "listItem"; content: RichTextNode[] }> = [];
       while (
         i < lines.length &&
         listPattern.test(lines[i]) &&
         Boolean(lines[i].match(listPattern)?.[2]) === ordered &&
+        (!ordered || Number(lines[i].match(listPattern)?.[2]) === start + items.length) &&
         !/^[ \t]*[-*+][ \t]+\[([ xX])\][ \t]+/.test(lines[i])
       ) {
         items.push({
@@ -143,6 +154,7 @@ export function markdownToDocument(markdown: string): RichTextDocument {
       }
       content.push({
         type: ordered ? "orderedList" : "bulletList",
+        ...(ordered ? { attrs: { start } } : {}),
         content: items,
       });
       continue;
@@ -163,6 +175,7 @@ export function markdownToDocument(markdown: string): RichTextDocument {
     while (
       i < lines.length &&
       lines[i].trim() &&
+      !openingCodeFence(lines[i]) &&
       !/^(#{1,3})\s|^```|^[ \t]*(?:[-*+][ \t]+|\d+[.)][ \t]+)|^> /.test(lines[i])
     )
       paragraph.push(lines[i++]);
@@ -203,8 +216,11 @@ export function documentToMarkdown(value: unknown): string {
       if (node.type === "paragraph") return inlineToMarkdown(node.content);
       if (node.type === "heading")
         return `${"#".repeat(node.attrs.level)} ${inlineToMarkdown(node.content)}`;
-      if (node.type === "codeBlock")
-        return `\`\`\`\n${node.content.map((item) => item.text).join("")}\n\`\`\``;
+      if (node.type === "codeBlock") {
+        const text = node.content.map((item) => item.text).join("");
+        const fence = codeFenceFor(text);
+        return `${fence}\n${text}\n${fence}`;
+      }
       if (node.type === "blockquote")
         return node.content
           .map((child) =>
@@ -220,7 +236,7 @@ export function documentToMarkdown(value: unknown): string {
         return node.content
           .map(
             (item, index) =>
-              `${node.type === "bulletList" ? "- " : `${index + 1}. `}${item.content.map((child) => (child.type === "paragraph" ? inlineToMarkdown(child.content) : "")).join("")}`,
+              `${node.type === "bulletList" ? "- " : `${(node.attrs?.start ?? 1) + index}. `}${item.content.map((child) => (child.type === "paragraph" ? inlineToMarkdown(child.content) : "")).join("")}`,
           )
           .join("\n");
       if (node.type === "taskList")
@@ -276,6 +292,7 @@ function validateDocument(value: unknown): void {
       }
     } else if (node.type !== "hardBreak") {
       if (!["paragraph", "heading", "codeBlock", "blockquote", "bulletList", "orderedList", "taskList", "listItem", "taskItem"].includes(String(node.type)) || !Array.isArray(node.content)) invalid();
+      if (node.type === "orderedList" && node.attrs !== undefined && (!Number.isSafeInteger(record(node.attrs).start) || Number(record(node.attrs).start) < 0)) invalid();
       if (node.type === "heading" && ![1, 2, 3].includes(record(node.attrs).level as number)) invalid();
       if (node.type === "taskItem" && typeof record(node.attrs).checked !== "boolean") invalid();
       for (const item of node.content as unknown[]) stack.push({ item, depth: entry.depth + 1, parent: String(node.type) });

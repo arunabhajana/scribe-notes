@@ -1,11 +1,13 @@
 import type { MarkdownAction } from "./EditorToolbar";
 import type { KeyboardEvent } from "react";
+import { codeFenceFor, openingCodeFence, closesCodeFence, insideCodeFence } from '../../features/notes/codeFences';
 
 export function continueMarkdownList(event: KeyboardEvent<HTMLTextAreaElement>, onChange: (value: string) => void) {
   if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented || event.nativeEvent.isComposing) return;
   const input = event.currentTarget;
   const value = input.value;
   const start = input.selectionStart;
+  if (insideCodeFence(value, start)) return;
   const end = input.selectionEnd;
   const lineStart = start === 0 ? 0 : value.lastIndexOf("\n", start - 1) + 1;
   const lineEndIndex = value.indexOf("\n", start);
@@ -94,6 +96,37 @@ export function applyMarkdownAction(
   let next: string;
   let selectionStart = start;
   let selectionEnd = end;
+  if (action === 'codeBlock' || (action === 'code' && /[\r\n]/.test(value.slice(start, end)))) {
+    const effectiveEnd = end > start && value[end - 1] === '\n' ? end - 1 : end;
+    const blockStart = start === 0 ? 0 : value.lastIndexOf('\n', start - 1) + 1;
+    const nextBreak = value.indexOf('\n', effectiveEnd);
+    const blockEnd = nextBreak < 0 ? value.length : nextBreak;
+    let content = value.slice(blockStart, blockEnd);
+    let replaceStart = blockStart;
+    let replaceEnd = blockEnd;
+    let unwrap = false;
+    const lines = content.split('\n');
+    const includedFence = openingCodeFence(lines[0]);
+    if (includedFence && lines.length > 1 && closesCodeFence(lines.at(-1)!, includedFence)) {
+      content = lines.slice(1, -1).join('\n'); unwrap = true;
+    } else if (blockStart > 0 && blockEnd < value.length) {
+      const previousStart = blockStart < 2 ? 0 : value.lastIndexOf('\n', blockStart - 2) + 1;
+      const previousFence = openingCodeFence(value.slice(previousStart, blockStart - 1));
+      const followingEnd = value.indexOf('\n', blockEnd + 1);
+      const followingLine = value.slice(blockEnd + 1, followingEnd < 0 ? value.length : followingEnd);
+      if (previousFence && closesCodeFence(followingLine, previousFence)) {
+        replaceStart = previousStart; replaceEnd = followingEnd < 0 ? value.length : followingEnd; unwrap = true;
+      }
+    }
+    const fence = codeFenceFor(content);
+    const insertion = unwrap ? content : `${fence}\n${content}\n${fence}`;
+    next = value.slice(0, replaceStart) + insertion + value.slice(replaceEnd);
+    selectionStart = replaceStart + (unwrap ? 0 : fence.length + 1);
+    selectionEnd = selectionStart + content.length;
+    onChange(next);
+    requestAnimationFrame(() => { if (input.isConnected) { input.focus({ preventScroll: true }); input.setSelectionRange(selectionStart, selectionEnd); } });
+    return;
+  }
   if (action === "todo") {
     const prefixMatch = currentLine.match(/^(\s*)(?:[-*+]\s+\[([ xX])\]\s+|[-*+]\s+)?(.*)$/);
     if (!prefixMatch) return;
