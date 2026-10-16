@@ -11,6 +11,7 @@ pub struct CaptureState {
     user_id: Mutex<Option<String>>,
     return_to_main: Mutex<bool>,
     enabled: std::sync::atomic::AtomicBool,
+    updating: Mutex<bool>,
     #[cfg(windows)]
     worker: Mutex<Option<(std::sync::mpsc::Sender<Request>, u32)>>,
 }
@@ -27,6 +28,7 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
         user_id: Mutex::new(None),
         return_to_main: Mutex::new(false),
         enabled: std::sync::atomic::AtomicBool::new(true),
+        updating: Mutex::new(false),
         #[cfg(windows)]
         worker: Mutex::new(None),
     });
@@ -218,6 +220,9 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
 
 // A capture window never restores or changes the main window's state.
 fn show(app: &AppHandle) {
+    let state = app.state::<CaptureState>();
+    let Ok(updating) = state.updating.lock() else { return; };
+    if *updating { return; }
     if !app
         .state::<CaptureState>()
         .enabled
@@ -257,6 +262,24 @@ fn show(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+// Serialize opening capture with the final update preflight. A visible capture
+// may contain unsaved input or a save in progress; let the user finish it first.
+pub fn block_for_update(app: &AppHandle) -> Result<(), String> {
+    let state = app.state::<CaptureState>();
+    let mut updating = state.updating.lock().map_err(|_| "Could not prepare Quick Capture for updating.")?;
+    if let Some(capture) = app.get_webview_window("quick-capture") {
+        if capture.is_visible().map_err(|_| "Could not check Quick Capture. Close it and try again.")? {
+            return Err("Save and close Quick Capture before installing the update.".into());
+        }
+    }
+    *updating = true;
+    Ok(())
+}
+
+pub fn unblock_after_update(app: &AppHandle) {
+    if let Ok(mut updating) = app.state::<CaptureState>().updating.lock() { *updating = false; }
 }
 
 #[tauri::command]

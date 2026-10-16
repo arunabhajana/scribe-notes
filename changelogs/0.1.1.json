@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.1",
+  "title": "Your notes. Your space.",
+  "summary": "Offline profiles, optional cloud sync, and more ways to take your notes with you.",
+  "sections": [
+    {
+      "type": "feature",
+      "items": [
+        "Create an offline profile and keep your notes on this device.",
+        "Export a Scribe backup or Markdown, and import notes into another workspace.",
+        "Find update controls and What’s New in Settings → About."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "Cloud sync is optional, with a clear explanation before you enable it.",
+        "Each workspace keeps its own notes and preferences."
+      ]
+    },
+    {
+      "type": "fixed",
+      "items": ["Reading mode keeps your place when switching from editing."]
+    },
+    {
+      "type": "security",
+      "items": ["Review the data being removed before deleting workspace data or an account."]
+    }
+  ]
+}

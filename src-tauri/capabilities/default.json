@@ -27,6 +27,7 @@
       ]
     },
     "main-commands",
+    "updater:default",
     "core:window:allow-is-focused"
   ],
   "local": true

@@ -45,6 +45,9 @@ import type { AccentColor } from "./features/settings/accentColors";
 import { accentColors } from "./features/settings/accentColors";
 import { TitleBar } from "./components/layout/TitleBar";
 import { NewNoteComposer } from "./components/dialogs/NewNoteComposer";
+import { UpdateHost } from "./components/updates/UpdateHost";
+import { registerUpdateGuard } from "./features/updates/installSafety";
+import { waitForWorkspaceWrites } from "./features/transfer/localWriteBarrier";
 import { TooltipLayer } from "./components/layout/TooltipLayer";
 import {
   formatShortcut,
@@ -77,6 +80,12 @@ function App() {
   const deleteTarget = onlineTarget ?? (onlinePending ? { id: onlinePending.userId, email: auth.user?.id === onlinePending.userId ? auth.user.email ?? "" : "", displayName: "your account" } : null);
   const workspaceId = auth.loading ? null : auth.user?.id ?? onlinePending?.userId ?? (accountEntry ? null : local.profile?.id ?? null);
   const activeTransfer = transfer?.id === workspaceId && !workspaceBlocked ? transfer : null;
+  const updateOperationBlocked = workspaceBlocked || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer) || auth.loading;
+  useEffect(() => registerUpdateGuard(() => {
+    if (updateOperationBlocked) {
+      throw new Error("Finish the current account or data operation, then retry installing from About.");
+    }
+  }), [updateOperationBlocked]);
   return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} workspaceDeletionBlocked={workspaceBlocked} capturePaused={deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeTransfer) || Boolean(activeDataTarget)} onDeleteData={target => setDataTarget(target)} onOpenTransfer={target => setTransfer(target)} onlineDeletionPending={Boolean(onlinePending)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} onDeleteAccount={() => {
     if (auth.user) { setAccountEntry(true); setOnlineTarget({ id: auth.user.id, email: auth.user.email ?? "", displayName: profileFromUser(auth.user).displayName }); }
   }} />
@@ -101,6 +110,7 @@ function App() {
       if (activeTransfer.returnTo === "offline" && !auth.user && local.profile?.id === activeTransfer.id) setDeleteProfileOpen(true);
       if (activeTransfer.returnTo === "online" && auth.user?.id === activeTransfer.id && activeTransfer.account) setOnlineTarget(activeTransfer.account);
     }} /></Suspense>}
+    <UpdateHost blocked={workspaceBlocked || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer)} />
   </WorkspacePreferencesProvider>;
 }
 
@@ -150,6 +160,11 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const sidebarCollapsed = sidebarPreference === "true";
   const [page, setPage] = useState<AppPage>("notes");
   const [settingsInitialCategory, setSettingsInitialCategory] = useState("general");
+  useEffect(() => registerUpdateGuard(async () => {
+    if (isComposerOpen) throw new Error("Save or close your new-note draft, then install the update from About.");
+    if (reminderNoteId || isCreateFolderOpen || editingFolderId) throw new Error("Finish the open reminder or folder dialog, then install the update from About.");
+    if (notesUser) await waitForWorkspaceWrites(notesUser.id);
+  }), [isComposerOpen, reminderNoteId, isCreateFolderOpen, editingFolderId, notesUser]);
   const [notificationTarget, setNotificationTarget] = useState<NotificationTarget | null>(null);
   useNotificationActivation(setNotificationTarget);
   const desktopNotifications = useDesktopNotifications({ userId: notesUser?.id ?? null, notes: notesState.notes, reminders: reminderState.reminders,

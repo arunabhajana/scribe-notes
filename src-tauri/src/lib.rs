@@ -9,6 +9,7 @@ mod spelling_context_menu;
 mod quick_capture;
 mod security;
 mod data_export;
+mod app_updates;
 
 #[derive(serde::Serialize)]
 struct DeviceInfo {
@@ -65,6 +66,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             None,
@@ -73,6 +75,9 @@ pub fn run() {
             set_autostart_enabled,
             get_autostart_enabled,
             get_device_info,
+            app_updates::updater_configured,
+            app_updates::prepare_app_update,
+            app_updates::finish_app_update,
             data_export::save_export_file,
             quick_capture::set_capture_shortcut,
             quick_capture::set_capture_enabled,

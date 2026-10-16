@@ -9,13 +9,12 @@
   <a href="#installation">Install</a> ·
   <a href="#getting-started">Get started</a> ·
   <a href="#for-developers">Developers</a> ·
-  <a href="WORKFLOW_GUIDE.md">Command guide</a> ·
   <a href="LICENSE">MIT License</a>
 </p>
 
 Scribe Notes is a small, independent open-source project. Use an offline profile to keep your workspace on your device, or sign in and choose whether to enable cloud sync. Signing in does not automatically upload or transfer an offline profile's notes.
 
-**Status:** in development. The release pipeline currently builds Windows x64 installers. Other architectures, mobile apps and browser extensions are outside this repository's current release pipeline. This project is not affiliated with other products named Scribe.
+**Status:** in development, with Windows x64 support. Other architectures, mobile apps and browser extensions are planned separately. This project is not affiliated with other products named Scribe.
 
 ## For users
 
@@ -40,7 +39,7 @@ Scribe Notes is a small, independent open-source project. Use an offline profile
 3. Run setup, choose an installation location and shortcuts, then launch Scribe.
 4. Create an offline profile or sign in to an online account.
 
-If no release is published yet, there is no public release installer to download. Developers can [build from source](#run-and-build); CI installers are also available under a successful GitHub Actions run's **Artifacts**, subject to GitHub access and artifact retention.
+If no release is published yet, developers can [build from source](#run-and-build).
 
 The installer checks for WebView2 and handles its prerequisite flow. Setup does not enable startup launch or cloud sync. The current installer is unsigned; Windows code signing is not configured yet.
 
@@ -115,12 +114,12 @@ If sync fails, read the message and check cloud storage. Quota errors keep chang
 | Local persistence | IndexedDB for content/queues; workspace-scoped localStorage preferences |
 | Online services | Supabase Auth, PostgreSQL RPCs, Realtime sync wakeups |
 | Testing | Vitest, Testing Library, jsdom, fake IndexedDB and security regression scripts |
-| Automation | GitHub Actions PR checks and tag-driven draft releases |
+| Continuous integration | GitHub Actions checks for pull requests |
 
 ### Prerequisites
 
 - Git and **Node.js 24.14.1**, as recorded in [.node-version](.node-version), with npm.
-- For Windows desktop work: Rust/MSVC, Microsoft C++ Build Tools with desktop C++ support, the Windows SDK, and WebView2. CI uses **Rust 1.95.0** and **Windows Server 2022**.
+- For Windows desktop work: Rust/MSVC, Microsoft C++ Build Tools with desktop C++ support, the Windows SDK, and WebView2. The project is checked with **Rust 1.95.0**.
 - For online features: a correctly configured Supabase project. Unit tests use mocks and do not require a live project.
 
 See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for native setup. A browser-only session cannot exercise native windows, global shortcuts, tray behavior or native save dialogs.
@@ -140,7 +139,7 @@ Create a root `.env` for cloud-enabled development/builds:
 ```dotenv
 VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLIC_PUBLISHABLE_KEY
-# Optional during development; use the published HTTPS website for releases.
+# Optional: website base URL for Terms of Use and Privacy Policy links.
 VITE_SCRIBE_WEBSITE_URL=http://localhost:4321
 ```
 
@@ -148,7 +147,7 @@ For a legacy public anon key, use `VITE_SUPABASE_ANON_KEY` **instead of** the pu
 
 The app can offer an offline profile without a configured cloud client. Production builds and the full gate intentionally require valid public Supabase configuration. For a different project, update the HTTPS/WSS origins in `src-tauri/tauri.conf.json`'s production/development CSP as well as `.env`; do not replace them with wildcard access.
 
-The separate product/legal website is not built here. Without `VITE_SCRIBE_WEBSITE_URL`, development legal links fall back to `http://localhost:4321`. Release validation requires a published HTTPS base URL with `/terms` and `/privacy` pages.
+The separate product/legal website is not built here. Without `VITE_SCRIBE_WEBSITE_URL`, development legal links fall back to `http://localhost:4321`. For your own deployment, use an HTTPS base URL with `/terms` and `/privacy` pages.
 
 ### Run and build
 
@@ -188,7 +187,8 @@ Public keys do not replace authorization: maintain user-scoped RLS and RPC owner
 ### Repository map
 
 ```text
-.github/                  CI/releases and action dependency updates
+.github/                  Automated checks and repository workflows
+changelogs/               Versioned JSON release notes
 assets/branding/          Branding images
 public/                   Static assets, fonts and font licenses
 scripts/                  Version/build guards, security checks, artwork
@@ -203,6 +203,7 @@ src/
     reminders/            Reminder persistence/sync
     settings/             Workspace preferences, cloud consent/storage
     transfer/             Backup/Markdown export and import
+    updates/              Update checks and bundled changelog history
   hooks/                  Auth, notes, reminders and session orchestration
   types/note.ts           Shared note/folder contracts
 src-tauri/
@@ -213,7 +214,6 @@ src-tauri/
   tauri.conf.json         Base configuration and CSP
   tauri.installer.conf.json  Distribution branding/configuration
 tests/                    Unit, component and persistence regressions
-WORKFLOW_GUIDE.md         Git, testing, versioning and release commands
 ```
 
 ### Tests and quality gates
@@ -228,7 +228,7 @@ WORKFLOW_GUIDE.md         Git, testing, versioning and release commands
 | `npm run security:check` | Security regressions and current-tree privileged-credential pattern scan |
 | `npm run security:config` | Production public-key, HTTPS and CSP checks |
 | `npm run version:check` | Check committed versions without changing files |
-| `npm run check` | Version check → lint → types → coverage tests → security checks → production build |
+| `npm run check` | Version/changelog checks → lint → types → coverage tests → security checks → production build |
 | `npm run check:native` | Rust/Tauri compilation, not native UI testing or a Rust unit-test suite |
 
 The full frontend gate stops at the first failure. `npm run build` alone compiles the frontend; it does not replace the gate.
@@ -241,34 +241,25 @@ Tests cover signup validation, safe Markdown, editor/list behavior, sorting, wor
 
 These checks do not establish real OAuth/MFA behavior, hosted RLS correctness, multi-device sync, native WebView layout, notification delivery or installer/upgrade/uninstall behavior. Check those separately before release. The credential scan covers current tracked/new non-ignored text, not Git history or every possible secret type.
 
-### CI and releases
+### Contributing
 
-The [CI workflow](.github/workflows/ci.yml) runs for every PR into `main`, pushes to `main`, manual dispatch and reusable release calls:
+Create a focused feature or fix branch and open a pull request into `main`. Describe the change and how you checked it. Include regression tests for behavior changes.
 
-1. **Frontend checks** on Ubuntu: install locked npm dependencies, validate versions, run the frontend gate, upload test/coverage reports.
-2. **Windows x64 installer** after frontend success: install the pinned toolchain, compile-check native code, build the branded installer with locked Cargo dependencies, verify version/lockfiles stayed unchanged, upload the installer.
+Before opening a PR, run:
 
-Require both jobs in `main`'s branch-protection rule to block failed merges. Work flows from `feat/*`, `fix/*` or `release/*` through a PR and green checks into stable `main`. A feature-branch push alone does not start CI until it has a PR targeting `main`.
+```powershell
+npm run check
+```
 
-The [release workflow](.github/workflows/release.yml) starts on a pushed `v*` tag. It verifies the project version, that the commit is already on `main`, and published HTTPS legal links. After rerunning CI it creates a **draft release** with the x64 installer, checksum and generated notes; prerelease versions are marked accordingly. It refuses to replace an existing release or release against a moved tag. Review notes and smoke-test the installer before publishing the draft manually.
+For Rust or desktop integration changes, also run:
 
-Set these under **GitHub Settings › Secrets and variables › Actions › Variables** as **repository variables**, not environment-scoped variables:
+```powershell
+npm run check:native
+```
 
-| Variable | Required for |
-| --- | --- |
-| `VITE_SUPABASE_URL` | CI/releases; must match the app CSP |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | CI/releases; alternatively use `VITE_SUPABASE_ANON_KEY` for a legacy public anon key |
-| `VITE_SCRIBE_WEBSITE_URL` | Release tags; public HTTPS site without credentials, query or fragment |
+Pull requests run automated frontend checks and a Windows installer build. Required checks must pass before merging. You can inspect the [CI workflow](.github/workflows/ci.yml) for the exact steps. Contributors do not need production signing keys or release permissions to develop and submit changes.
 
-Use public client values only. No personal GitHub token or Supabase CLI is required; GitHub supplies the temporary release token. Allow official `actions/*` actions and the release job's explicit write permission; keep default workflow permissions read-only. Restrict `v*` tag creation to maintainers and block tag updates/deletion through tag rules.
-
-Reports/installers are retained as Actions artifacts for 14 days. PR jobs have read-only repository permissions, never use `pull_request_target`, and do not persist Git credentials. Actions are pinned to release commits and checked monthly by Dependabot. Only the draft-release job has write access; it does not check out or execute app code. PR-controlled Rust caches are not shared with publishing. Installer signing, in-app updater delivery and backend deployments remain separate work.
-
-### Versioning and contributing
-
-`package.json` is the version source. `npm version <version> --no-git-tag-version` runs the sync lifecycle to update `package-lock.json`, `src-tauri/Cargo.toml` and the app entry in `src-tauri/Cargo.lock`. `npm run sync:version` only copies the current version; it does not increment it. Commit all four files through a version PR, then tag the merged `main` commit. See the [command guide](WORKFLOW_GUIDE.md) for exact steps.
-
-Keep contributions focused, add regression tests with behavior changes, and run the full gate before a PR. Include native checks and installer smoke coverage for Rust/installer changes. Backend schema changes belong in new backend migrations and need coordination with other clients; client CI does not apply them.
+Check native interactions manually when changing windows, shortcuts, notifications or installer behavior. Backend schema changes belong in the separate backend repository and need coordination with other clients. Maintainers handle version bumps, signing and publishing.
 
 ### License
 

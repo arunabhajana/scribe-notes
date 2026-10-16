@@ -34,6 +34,11 @@
         }
     },
     "plugins": {
+        "updater": {
+            "pubkey": "",
+            "endpoints": ["https://github.com/arunabhajana/scribe-windows/releases/latest/download/latest.json"],
+            "windows": { "installMode": "passive" }
+        },
         "deep-link": {
             "desktop": {
                 "schemes": ["com.scribe.notes"]
