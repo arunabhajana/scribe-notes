@@ -26,7 +26,6 @@ import { reminderPresetActionLabel, reminderPresetDate, useReminderShortcuts } f
 import { formatReminderTime } from "./features/reminders/reminderTypes";
 import { notesRepository } from "./features/notes/notesRepository";
 import type { Note } from "./types/note";
-import { SettingsPage } from "./components/settings/SettingsPage";
 import { AuthPage } from "./components/auth/AuthPage";
 import { AccountTermsPage } from "./components/auth/AccountTermsPage";
 import { isCloudSyncEnabled, useCloudSyncPreference } from "./features/settings/cloudSyncPreference";
@@ -49,6 +48,8 @@ import { UpdateHost } from "./components/updates/UpdateHost";
 import { registerUpdateGuard } from "./features/updates/installSafety";
 import { waitForWorkspaceWrites } from "./features/transfer/localWriteBarrier";
 import { TooltipLayer } from "./components/layout/TooltipLayer";
+import { useWorkspaceTour } from "./features/onboarding/useWorkspaceTour";
+import type { TourRoute } from "./features/onboarding/tourSteps";
 import {
   formatShortcut,
   parseShortcutBindings,
@@ -60,6 +61,8 @@ import {
 
 const DeleteDataDialog = lazy(() => import("./components/settings/DeleteDataDialog").then(module => ({ default: module.DeleteDataDialog })));
 const DataTransferDialog = lazy(() => import("./components/settings/transfer/DataTransferDialog").then(module => ({ default: module.DataTransferDialog })));
+const SettingsPage = lazy(() => import("./components/settings/SettingsPage").then(module => ({ default: module.SettingsPage })));
+const WorkspaceTour = lazy(() => import("./components/onboarding/WorkspaceTour"));
 
 type AppPage = "notes" | "preferences";
 
@@ -68,6 +71,7 @@ function App() {
   const local = useLocalProfile();
   const [accountEntry, setAccountEntry] = useState(false);
   const [localSetup, setLocalSetup] = useState(false);
+  const [tourActive, setTourActive] = useState(false);
   const [deleteProfileOpen, setDeleteProfileOpen] = useState(false);
   const [transfer, setTransfer] = useState<(TransferTarget & { returnTo?: "offline" | "online" | "data"; dataTarget?: DataDeletionTarget; account?: AccountDeletionTarget }) | null>(null);
   const [dataTarget, setDataTarget] = useState<DataDeletionTarget | null>(null);
@@ -81,13 +85,13 @@ function App() {
   const deleteTarget = onlineTarget ?? (onlinePending ? { id: onlinePending.userId, email: auth.user?.id === onlinePending.userId ? auth.user.email ?? "" : "", displayName: "your account" } : null);
   const workspaceId = auth.loading ? null : auth.user?.id ?? onlinePending?.userId ?? (accountEntry ? null : local.profile?.id ?? null);
   const activeTransfer = transfer?.id === workspaceId && !workspaceBlocked ? transfer : null;
-  const updateOperationBlocked = workspaceBlocked || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer) || auth.loading;
+  const updateOperationBlocked = workspaceBlocked || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer) || auth.loading || tourActive;
   useEffect(() => registerUpdateGuard(() => {
     if (updateOperationBlocked) {
       throw new Error("Finish the current account or data operation, then retry installing from About.");
     }
   }), [updateOperationBlocked]);
-  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} workspaceDeletionBlocked={workspaceBlocked} capturePaused={deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeTransfer) || Boolean(activeDataTarget)} onDeleteData={target => setDataTarget(target)} onOpenTransfer={target => setTransfer(target)} onlineDeletionPending={Boolean(onlinePending)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} onDeleteAccount={() => {
+  return <WorkspacePreferencesProvider workspaceId={workspaceId}><WorkspaceApp auth={auth} local={local} accountEntry={accountEntry} setAccountEntry={setAccountEntry} localSetup={localSetup} setLocalSetup={setLocalSetup} onTourActiveChange={setTourActive} workspaceDeletionBlocked={workspaceBlocked} capturePaused={deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeTransfer) || Boolean(activeDataTarget)} onDeleteData={target => setDataTarget(target)} onOpenTransfer={target => setTransfer(target)} onlineDeletionPending={Boolean(onlinePending)} onDeleteOfflineProfile={() => setDeleteProfileOpen(true)} onDeleteAccount={() => {
     if (auth.user) { setAccountEntry(true); setOnlineTarget({ id: auth.user.id, email: auth.user.email ?? "", displayName: profileFromUser(auth.user).displayName }); }
   }} />
     {!dataPending && !activeDataTarget && !activeTransfer && !deleteTarget && !auth.loading && !auth.user && local.profile && (deleteProfileOpen || deletionStatus) && <DeleteOfflineProfileDialog
@@ -111,15 +115,16 @@ function App() {
       if (activeTransfer.returnTo === "offline" && !auth.user && local.profile?.id === activeTransfer.id) setDeleteProfileOpen(true);
       if (activeTransfer.returnTo === "online" && auth.user?.id === activeTransfer.id && activeTransfer.account) setOnlineTarget(activeTransfer.account);
     }} /></Suspense>}
-    <UpdateHost localOnly={!auth.user} blocked={workspaceBlocked || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer)} />
+    <UpdateHost localOnly={!auth.user} blocked={workspaceBlocked || tourActive || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer)} />
   </WorkspacePreferencesProvider>;
 }
 
-function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup, workspaceDeletionBlocked, capturePaused, onlineDeletionPending, onDeleteOfflineProfile, onDeleteAccount, onOpenTransfer, onDeleteData }: {
+function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, setLocalSetup, workspaceDeletionBlocked, capturePaused, onlineDeletionPending, onDeleteOfflineProfile, onDeleteAccount, onOpenTransfer, onDeleteData, onTourActiveChange }: {
   auth: ReturnType<typeof useAuth>; local: ReturnType<typeof useLocalProfile>;
   workspaceDeletionBlocked: boolean; capturePaused: boolean; onlineDeletionPending: boolean; onDeleteOfflineProfile: () => void; onDeleteAccount: () => void; onOpenTransfer: (target: TransferTarget) => void; onDeleteData: (target: DataDeletionTarget) => void;
   accountEntry: boolean; setAccountEntry: (value: boolean) => void;
   localSetup: boolean; setLocalSetup: (value: boolean) => void;
+  onTourActiveChange: (value: boolean) => void;
 }) {
   const preferenceWorkspaceId = useWorkspaceId();
   const usingLocalProfile = !auth.user && Boolean(local.profile) && !accountEntry && !onlineDeletionPending;
@@ -136,6 +141,20 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     : localWorkspaceId ? { id: localWorkspaceId } : null,
   [auth.loading, auth.user, accountTerms.ready, auth.mfa.loading, auth.mfa.required, auth.passwordRecoveryRequired, localWorkspaceId, workspaceDeletionBlocked]);
   const notesState = useNotes(notesUser, Boolean(notesUser), offlineMode);
+  const noteCounts = useMemo(() => {
+    const folders: Record<string, number> = {};
+    let all = 0, unfiled = 0, drafts = 0;
+    for (const note of notesState.notes) {
+      if (note.deletedAt) continue;
+      all++;
+      if (note.folderId === null) unfiled++;
+      else folders[note.folderId] = (folders[note.folderId] ?? 0) + 1;
+      if (note.isDraft) drafts++;
+    }
+    return { folders, all, unfiled, drafts };
+  }, [notesState.notes]);
+  const updateNote = notesState.updateNote;
+  const saveNoteDraft = useCallback((id: string) => updateNote(id, { isDraft: false }), [updateNote]);
   const reminderState = useReminders(notesUser?.id ?? null, offlineMode);
   const syncStatus = notesState.syncStatus === "error" || reminderState.error ? "error"
     : notesState.syncStatus === "offline" ? "offline"
@@ -161,6 +180,15 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const sidebarCollapsed = sidebarPreference === "true";
   const [page, setPage] = useState<AppPage>("notes");
   const [settingsInitialCategory, setSettingsInitialCategory] = useState("general");
+  const startTour = useCallback(() => { setPage("notes"); if (isComposerOpen) window.dispatchEvent(new Event('scribe:restore-note-draft')); }, [isComposerOpen]);
+  const tour = useWorkspaceTour(Boolean(notesUser) && notesState.cacheReady && !workspaceDeletionBlocked && !capturePaused, startTour);
+  const navigateTour = useCallback((route: TourRoute) => {
+    if (route === 'notes') { setPage('notes'); return; }
+    setSettingsInitialCategory(route);
+    setPage('preferences');
+    document.querySelector<HTMLButtonElement>(`[data-tour="settings-${route}"]`)?.click();
+  }, []);
+  useEffect(() => { onTourActiveChange(tour.open); }, [tour.open, onTourActiveChange]);
   useEffect(() => registerUpdateGuard(async () => {
     if (isComposerOpen) throw new Error("Save or close your new-note draft, then install the update from About.");
     if (reminderNoteId || isCreateFolderOpen || editingFolderId) throw new Error("Finish the open reminder or folder dialog, then install the update from About.");
@@ -361,6 +389,8 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     saveSidebarCollapsed(String(nextCollapsed));
   }, [sidebarCollapsed, saveSidebarCollapsed]);
 
+  const showTourEditor = tour.open && tour.step === 'new-note';
+  const goToTourStep = tour.goTo;
   const openNewNote = useCallback(() => {
     if (isComposerOpen) {
       window.dispatchEvent(new Event("scribe:restore-note-draft"));
@@ -369,13 +399,15 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
       setIsComposerOpen(true);
       setIsComposerModalActive(true);
     }
-  }, [isComposerOpen]);
+    if (showTourEditor) goToTourStep('write');
+  }, [isComposerOpen, showTourEditor, goToTourStep]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if (
         !notesUser ||
         page !== "notes" ||
+        tour.open ||
         isComposerModalActive ||
         event.defaultPrevented ||
         event.isComposing
@@ -431,6 +463,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     page,
     shortcuts,
     toggleSidebar,
+    tour.open,
   ]);
 
   const handleDeleteNote = (note: Note) => {
@@ -441,6 +474,9 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
       notesState.permanentlyDelete(note.id);
     } else {
       notesState.moveToTrash(note.id);
+      // Context-menu actions capture the render that opened the menu, before
+      // the coach advances from the card to the Trash menu item.
+      if (tour.open && ['delete-note', 'delete-menu'].includes(tour.step) && note.id === tour.practiceNoteId) tour.goTo('organize');
     }
     notesState.setSelectedId(null);
   };
@@ -449,6 +485,14 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     notesState.selectSection("all");
     notesState.setSelectedId(id);
   };
+
+  const guidedTour = tour.open && <Suspense fallback={null}><WorkspaceTour key={notesUser?.id}
+    displayName={accountProfile.displayName} localOnly={usingLocalProfile} dark={isDark} accentColor={accentColors[accent].color}
+    shortcut={formatShortcut(shortcuts.quickCapture)} quickCapture={writingPreferences.quickCapture} launch={writingPreferences.launch} tray={writingPreferences.minimizeToTray}
+    reminders={writingPreferences.reminders} desktopNotifications={writingPreferences.desktop} cloudSync={!offlineMode}
+    step={tour.step} composerOpen={isComposerOpen} practiceNoteId={tour.practiceNoteId}
+    practiceNoteAvailable={notesState.notes.some(note => note.id === tour.practiceNoteId && !note.deletedAt)} onStepChange={tour.goTo} onNavigate={navigateTour}
+    onClose={tour.close} onFinish={() => { tour.close(); setPage('notes'); }} /></Suspense>;
 
   if (auth.loading || (auth.user && auth.mfa.loading))
     return (
@@ -539,13 +583,14 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           { "--accent": accentColors[accent].color } as React.CSSProperties
         }
       >
+        {guidedTour}
         <TitleBar
           dark={isDark}
           onToggleTheme={() => changeTheme(!isDark)}
           syncStatus={syncStatus}
         />
         {cloudSyncDialog}
-        <SettingsPage
+        <Suspense fallback={<LoadingSpinner />}><SettingsPage
           key={preferenceWorkspaceId}
           initialCategory={settingsInitialCategory}
           onSignIn={openSignIn}
@@ -602,7 +647,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           onMoveSystemFolder={(offset) =>
             notesState.moveFolder("system:unfiled", offset)
           }
-        />
+        /></Suspense>
         <SyncFeedback onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
       </div>
     );
@@ -641,7 +686,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
             if (note.isDraft) items.push({ label: "Save draft", action: () => notesState.updateNote(note.id, { isDraft: false }) });
             items.push({ label: "Move to Unfiled", separator: true, disabled: note.folderId === null, action: () => notesState.updateNote(note.id, { folderId: null }) });
             notesState.folders.forEach((folder) => items.push({ label: `Move to ${folder.name}`, disabled: note.folderId === folder.id, action: () => notesState.updateNote(note.id, { folderId: folder.id }) }));
-            items.push({ label: "Move to trash", separator: true, danger: true, action: () => handleDeleteNote(note) });
+            items.push({ label: "Move to trash", separator: true, danger: true, tourId: tour.open && note.id === tour.practiceNoteId ? 'practice-trash' : undefined, action: () => handleDeleteNote(note) });
           }
         } else if (folderId) {
           const index = notesState.folders.findIndex((folder) => folder.id === folderId);
@@ -663,7 +708,11 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
             { label: "Move down", disabled: folderId === "system:unfiled" ? notesState.unfiledPosition === notesState.folders.length : index === notesState.folders.length - 1, action: () => notesState.moveFolder(folderId, 1) },
           ];
         } else if (target.closest(".notes-pane") && !isComposerModalActive) items = [{ label: "New Note", action: openNewNote }];
-        if (items.length) { event.preventDefault(); event.stopPropagation(); openContextMenu(event.clientX, event.clientY, items, target.closest<HTMLElement>("[data-context-note], [data-context-folder]") ?? target); }
+        if (items.length) {
+          event.preventDefault(); event.stopPropagation();
+          openContextMenu(event.clientX, event.clientY, items, target.closest<HTMLElement>("[data-context-note], [data-context-folder]") ?? target);
+          if (tour.open && tour.step === 'delete-note' && note?.id === tour.practiceNoteId) tour.goTo('delete-menu');
+        }
       }}
       className={`app-shell ${isDark ? "theme-dark" : "theme-light"} accent-${accent}`}
       style={
@@ -674,6 +723,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
       }
     >
       <TooltipLayer />
+      {guidedTour}
       {cloudSyncDialog}
       <TitleBar
         dark={isDark}
@@ -686,7 +736,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         onToggleOfflineMode={usingLocalProfile ? undefined : () => changeOfflineMode(!offlineMode)}
       />
       <div
-        className={`app-layout ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}
+        className={`app-layout ${sidebarCollapsed && !tour.open ? "sidebar-collapsed" : ""}`}
         inert={isComposerModalActive}
       >
         <Sidebar
@@ -695,25 +745,10 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           folderId={notesState.folderId}
           folders={notesState.folders}
           unfiledPosition={notesState.unfiledPosition}
-          folderCounts={notesState.folders.reduce<Record<string, number>>(
-            (counts, folder) => {
-              counts[folder.id] = notesState.notes.filter(
-                (note) => !note.deletedAt && note.folderId === folder.id,
-              ).length;
-              return counts;
-            },
-            {},
-          )}
-          noteCount={notesState.notes.filter((note) => !note.deletedAt).length}
-          unfiledCount={
-            notesState.notes.filter(
-              (note) => !note.deletedAt && note.folderId === null,
-            ).length
-          }
-          draftCount={
-            notesState.notes.filter((note) => !note.deletedAt && note.isDraft)
-              .length
-          }
+          folderCounts={noteCounts.folders}
+          noteCount={noteCounts.all}
+          unfiledCount={noteCounts.unfiled}
+          draftCount={noteCounts.drafts}
           search={notesState.search}
           onSearchChange={notesState.setSearch}
           onSelectSection={notesState.selectSection}
@@ -729,7 +764,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
             setAccountEntry(true);
             notesState.clearUserData();
           }}
-          collapsed={sidebarCollapsed}
+          collapsed={sidebarCollapsed && !tour.open}
           onToggleCollapsed={toggleSidebar}
           onExpandSidebar={() => saveSidebarCollapsed("false")}
           shortcuts={shortcuts}
@@ -744,7 +779,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           section={notesState.section}
           folder={notesState.folder}
           search={notesState.search}
-          onSaveDraft={(id) => notesState.updateNote(id, { isDraft: false })}
+          onSaveDraft={saveNoteDraft}
           onSelectNote={notesState.setSelectedId}
           onTogglePinned={notesState.togglePinned}
           onCreateNote={openNewNote}
@@ -800,9 +835,10 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           folders={notesState.folders}
           initialFolderId={composerInitialFolderId}
           onSave={(draft) => {
-            notesState.createNote(draft);
+            const noteId = notesState.createNote(draft);
             setIsComposerOpen(false);
             setIsComposerModalActive(false);
+            if (tour.open) { notesState.setSearch(''); tour.rememberPracticeNote(noteId); tour.goTo('delete-note'); }
           }}
           onDiscard={(draft) => {
             notesState.createNote({ ...draft, isDraft: true });
@@ -810,6 +846,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           onClose={() => {
             setIsComposerOpen(false);
             setIsComposerModalActive(false);
+            if (tour.open) tour.goTo('organize');
           }}
           onModalActiveChange={setIsComposerModalActive}
         />

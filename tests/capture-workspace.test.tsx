@@ -17,6 +17,32 @@ beforeEach(() => {
 });
 
 describe('native workspace handoff', () => {
+  it('retries a shortcut worker that is not ready during startup', async () => {
+    const implementation = native.invoke.getMockImplementation()!;
+    let attempts = 0;
+    native.invoke.mockImplementation(async (command, args) => {
+      if (command === 'set_capture_enabled' && ++attempts === 1) throw 'Global capture is not ready.';
+      return implementation(command, args);
+    });
+    const { useQuickCapture } = await import('../src/features/capture/captureBridge');
+    const error = vi.fn();
+    renderHook(() => useQuickCapture(offlineId, { key: ' ', shift: true }, true, error));
+    await waitFor(() => expect(native.invoke).toHaveBeenCalledWith('set_capture_enabled', { enabled: true }));
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('does not repeatedly retry a shortcut claimed by another app', async () => {
+    const implementation = native.invoke.getMockImplementation()!;
+    native.invoke.mockImplementation(async (command, args) => {
+      if (command === 'set_capture_shortcut') throw 'That global shortcut is unavailable or used by another app. Choose a different shortcut.';
+      return implementation(command, args);
+    });
+    const { useQuickCapture } = await import('../src/features/capture/captureBridge');
+    const error = vi.fn();
+    renderHook(() => useQuickCapture(offlineId, { key: ' ', shift: true }, true, error));
+    await waitFor(() => expect(error).toHaveBeenCalledOnce());
+    expect(native.invoke.mock.calls.filter(call => call[0] === 'set_capture_shortcut')).toHaveLength(1);
+  });
   it('registers an offline workspace before enabling capture or configuring notifications', async () => {
     const { useQuickCapture, waitForCaptureAccount } = await import('../src/features/capture/captureBridge');
     const { configureDesktopNotifications } = await import('../src/features/notifications/desktopNotifications');

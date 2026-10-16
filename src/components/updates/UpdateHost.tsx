@@ -32,6 +32,7 @@ export function UpdateHost({ blocked, localOnly }: { blocked: boolean; localOnly
     }
   }, []);
   useEffect(() => {
+    if (!workspaceId || !state.automatic) return;
     const timer = window.setTimeout(() => void updateActions.check(false), 12_000);
     const interval = window.setInterval(() => void updateActions.check(false), 60 * 60 * 1000);
     const online = () => void updateActions.check(false);

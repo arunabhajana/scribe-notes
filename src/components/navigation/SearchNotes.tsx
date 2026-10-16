@@ -36,7 +36,7 @@ export function SearchNotes({
             );
     }, [collapsed, onExpand]);
     return (
-        <div className="search-box">
+        <div className="search-box" data-tour="search-notes">
             <Icon name="search" size={15} />
             <input
                 ref={inputRef}

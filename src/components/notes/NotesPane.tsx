@@ -1,4 +1,5 @@
 import type { Note, NoteSection } from "../../types/note";
+import { memo, useMemo } from "react";
 import type { NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
 import { EmptyNotes } from "./EmptyNotes";
@@ -11,6 +12,16 @@ import {
   formatShortcut,
   type ShortcutBindings,
 } from "../../features/shortcuts/keyboardShortcuts";
+
+const NoteRow = memo(function NoteRow({ note, folderConfig, selected, reminder, onSaveDraft, onSelectNote, onTogglePinned, onEditReminder }: {
+  note: Note; folderConfig?: NoteFolder; selected: boolean; reminder?: NoteReminder;
+  onSaveDraft: (id: string) => void; onSelectNote: (id: string) => void;
+  onTogglePinned: (id: string) => void; onEditReminder: (id: string) => void;
+}) {
+  return <NoteCard note={note} folderConfig={folderConfig} selected={selected} reminder={reminder}
+    onSelect={() => { if (note.isDraft && !note.deletedAt) onSaveDraft(note.id); onSelectNote(note.id); }}
+    onTogglePinned={() => onTogglePinned(note.id)} onEditReminder={() => onEditReminder(note.id)} />;
+});
 
 export function NotesPane({
   notes,
@@ -49,6 +60,7 @@ export function NotesPane({
   onEditReminder: (noteId: string) => void;
   loading?: boolean;
 }) {
+  const foldersById = useMemo(() => new Map(folders.map(item => [item.id, item])), [folders]);
   const title =
     section === "drafts"
       ? "Drafts"
@@ -70,6 +82,7 @@ export function NotesPane({
         </div>
         <button
           className="new-note-button"
+          data-tour="new-note"
           onClick={onCreateNote}
           data-tooltip={`New Note · ${formatShortcut(shortcuts.newNote)}`}
         >
@@ -91,18 +104,16 @@ export function NotesPane({
           />
         ) : (
           notes.map((note) => (
-            <NoteCard
+            <NoteRow
               reminder={reminders[note.id]}
-              onEditReminder={() => onEditReminder(note.id)}
+              onEditReminder={onEditReminder}
               key={note.id}
               note={note}
-              folderConfig={folders.find((item) => item.id === note.folderId)}
+              folderConfig={note.folderId ? foldersById.get(note.folderId) : undefined}
               selected={selectedId === note.id}
-              onSelect={() => {
-                if (note.isDraft && !note.deletedAt) onSaveDraft(note.id);
-                onSelectNote(note.id);
-              }}
-              onTogglePinned={() => onTogglePinned(note.id)}
+              onSaveDraft={onSaveDraft}
+              onSelectNote={onSelectNote}
+              onTogglePinned={onTogglePinned}
             />
           ))
         )}

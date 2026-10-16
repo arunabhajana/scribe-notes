@@ -1,6 +1,7 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
 import { appName, buildLabel } from "../../features/appIdentity";
 import { UpdateSettings } from "../updates/UpdateSettings";
+import { QuickTourSettings } from "../onboarding/QuickTourSettings";
 import { AccountRequiredNotice } from "./AccountRequiredNotice";
 import { pauseCaptureShortcut } from "../../features/capture/captureBridge";
 import { AppLogo } from "../AppLogo";
@@ -141,6 +142,7 @@ type SettingSearchEntry = {
   offlineTerms?: string;
 };
 const settingSearchIndex: SettingSearchEntry[] = [
+  { label: "Quick tour", detail: "Explore Scribe or repeat the guided tour.", category: "about", terms: "tour welcome walkthrough guide help first use getting started repeat replay", targetId: "setting-guided-tour" },
   { label: "Launch at startup", detail: "Open Scribe when you sign in to your computer.", category: "editor", terms: "startup launch windows open boot" },
   { label: "Close to system tray", detail: "Keep Scribe running in the system tray when you close its window.", category: "editor", terms: "close minimize tray notification area hide background" },
   { label: "Cloud sync", detail: "Choose whether this device uploads and downloads notes.", category: "general", terms: "offline network internet sync pause local enable disable cloud", availability: "online" },
@@ -1388,15 +1390,8 @@ function CategoryContent({
                 <span>Version {import.meta.env.VITE_APP_VERSION} · {buildLabel}</span>
               </div>
             </div>
-            <div className="settings-info-banner">
-              <span className="settings-info-icon">
-                <Icon name="info" size={17} />
-              </span>
-              <span>
-                Built for thoughtful Notes, with local saves and cloud sync.
-              </span>
-            </div>
             <UpdateSettings localOnly={profile.localOnly} />
+            <QuickTourSettings />
           </SettingCard>
         </>
       );
@@ -1677,6 +1672,7 @@ export function SettingsPage({
           {filteredCategories.map((item) => (
             <button
               key={item.id}
+              data-tour={`settings-${item.id}`}
               onClick={() => {
                 setCategoryId(item.id);
                 setQuery("");

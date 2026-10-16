@@ -1,4 +1,6 @@
 .note-card.note-card-compact {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 132px;
   min-height: 132px;
   padding: 14px;
   gap: 8px;
