@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { appName } from "../../features/appIdentity";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useWritingPreferences } from "../../features/settings/writingPreferences";
@@ -111,7 +112,7 @@ export function TitleBar({
         </>}
       </div>
       <div className="titlebar-title" data-tauri-drag-region>
-        Scribe
+        {appName}
       </div>
       <div className="titlebar-trailing">
         {onToggleOfflineMode && (

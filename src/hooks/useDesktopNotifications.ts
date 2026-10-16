@@ -12,7 +12,7 @@ export function useDesktopNotifications({ userId, notes, reminders, ready, deskt
   desktop: boolean; enabled: boolean; sounds: boolean; cloudSyncError: string | null;
   cloudSyncHealthy: boolean;
 }) {
-  const [issue, setIssue] = useState<{ userId: string | null; message: string } | null>(null);
+  const [issue, setIssue] = useState<{ userId: string | null; message: string; source?: "setup" } | null>(null);
   const [focused, setFocused] = useState(() => document.hasFocus() && document.visibilityState === "visible");
   useEffect(() => {
     let active = true;
@@ -56,6 +56,7 @@ export function useDesktopNotifications({ userId, notes, reminders, ready, deskt
     if (!isTauri()) return;
     let active = true;
     let stops: (() => void)[] = [];
+    let configureRevision = 0;
     const account = (JSON.parse(config) as { userId: string | null }).userId;
     const refresh = () => {
       if (account) void getInAppNotifications(account).then((alerts) => {
@@ -63,8 +64,16 @@ export function useDesktopNotifications({ userId, notes, reminders, ready, deskt
       }).catch(() => undefined);
     };
     const configure = () => {
-      void configureDesktopNotifications(JSON.parse(config)).catch(() => {
-        if (active) setIssue({ userId: account, message: "Desktop notifications couldn't start. Quit and reopen Scribe to restart the notification service." });
+      if (!active) return;
+      const requested = ++configureRevision;
+      void configureDesktopNotifications(JSON.parse(config)).then(() => {
+        if (active && requested === configureRevision) {
+          setIssue(current => current?.userId === account && current.source === "setup" ? null : current);
+        }
+      }).catch((error: unknown) => {
+        if (!active || requested !== configureRevision) return;
+        const detail = typeof error === "string" ? error : error instanceof Error ? error.message : "Unknown notification setup error.";
+        setIssue({ userId: account, source: "setup", message: `Desktop notification setup failed: ${detail.slice(0, 400)}` });
       });
     };
     // Subscribe first, so a due reminder's immediate delivery error isn't lost.

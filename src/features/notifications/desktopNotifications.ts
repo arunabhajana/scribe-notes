@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { appScheme } from "../appIdentity";
 import { waitForCaptureAccount } from "../capture/captureBridge";
 
 export type ReminderNotificationPlan = { noteId: string; title: string; dueAt: number; updatedAt: number; leadMinutes: number };
@@ -34,7 +35,7 @@ export function notificationTarget(rawUrl: string): NotificationTarget | null {
   try {
     const url = new URL(rawUrl);
     const userId = url.searchParams.get("user");
-    if (url.protocol !== "com.scribe.notes:" || url.hostname !== "notifications" || !userId || !uuid.test(userId)) return null;
+    if (url.protocol !== `${appScheme}:` || url.hostname !== "notifications" || !userId || !uuid.test(userId)) return null;
     if (url.pathname === "/home") return { userId, noteId: null };
     const noteId = url.searchParams.get("note");
     return url.pathname === "/open-note" && noteId && uuid.test(noteId) ? { userId, noteId } : null;

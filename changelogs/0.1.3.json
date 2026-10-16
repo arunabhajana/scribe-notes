@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.3",
+  "title": "More reliable capture and notifications",
+  "summary": "Improved workspace registration for Quick Capture and notifications, with clearer errors and better separation between development and installed builds.",
+  "sections": [
+    {
+      "type": "fixed",
+      "items": [
+        "Quick Capture verifies its active workspace before enabling the global shortcut, retries temporary registration failures, and repairs the connection when opened.",
+        "Workspace changes are registered in order so a delayed startup reset cannot replace a newer active workspace.",
+        "Notification setup errors show the underlying reason and clear after a successful retry.",
+        "Development builds use separate Windows notification identities and shortcuts, preventing them from overwriting the installed app’s registration.",
+        "Development sign-in and notification links use a separate URL scheme. Installed builds restore their own link registration when launched."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "Development builds are labelled Scribe Dev in the title bar, tray, Quick Capture and Windows notifications. About identifies development and production builds.",
+        "Development Quick Capture defaults to Ctrl + Shift + D, while installed builds keep Ctrl + Shift + Space. New custom shortcut choices are preserved.",
+        "Windows startup entries use distinct names for development and installed builds. Existing note and profile storage locations are unchanged."
+      ]
+    }
+  ]
+}

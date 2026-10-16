@@ -3,13 +3,16 @@ use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt as AutostartManagerExt};
+use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 mod desktop_notifications;
 mod spelling_context_menu;
 mod quick_capture;
 mod security;
 mod data_export;
 mod app_updates;
+
+pub(crate) const APP_NAME: &str = if cfg!(debug_assertions) { "Scribe Dev" } else { "Scribe" };
+pub(crate) const APP_SCHEME: &str = if cfg!(debug_assertions) { "com.scribe.notes.dev" } else { "com.scribe.notes" };
 
 #[derive(serde::Serialize)]
 struct DeviceInfo {
@@ -56,6 +59,15 @@ fn get_autostart_enabled(app: AppHandle, window: tauri::WebviewWindow) -> Result
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let mut context = tauri::generate_context!();
+    // Set the runtime allowlist before either deep-link plugin initializes.
+    // Installer metadata continues to register only the production scheme.
+    context.config_mut().plugins.0.insert("deep-link".into(), serde_json::json!({
+        "desktop": { "schemes": [APP_SCHEME] }
+    }));
+    let autostart = tauri_plugin_autostart::Builder::new().app_name(APP_NAME);
+    #[cfg(target_os = "macos")]
+    let autostart = autostart.macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent);
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
@@ -67,10 +79,7 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            None,
-        ))
+        .plugin(autostart.build())
         .invoke_handler(tauri::generate_handler![
             set_autostart_enabled,
             get_autostart_enabled,
@@ -96,14 +105,19 @@ pub fn run() {
             desktop_notifications::clear_workspace_notifications
         ])
         .setup(|app| {
+            if let Some(main) = app.get_webview_window("main") {
+                main.set_title(APP_NAME)?;
+            }
             spelling_context_menu::initialize(app.handle())?;
             desktop_notifications::initialize(app.handle())?;
             quick_capture::initialize(app.handle())?;
             spelling_context_menu::initialize_window(app.handle(), "quick-capture")?;
-            #[cfg(all(debug_assertions, windows))]
+            #[cfg(windows)]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
-                app.deep_link().register_all()?;
+                // Reopening production repairs a scheme claimed by older dev builds.
+                // Dev now registers only its own scheme.
+                app.deep_link().register(APP_SCHEME)?;
             }
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -113,8 +127,8 @@ pub fn run() {
                 )?;
             }
 
-            let show_item = MenuItem::with_id(app, "show", "Show Scribe", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit Scribe", true, None::<&str>)?;
+            let show_item = MenuItem::with_id(app, "show", format!("Show {APP_NAME}"), true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", format!("Quit {APP_NAME}"), true, None::<&str>)?;
             let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
             let tray = TrayIconBuilder::new()
                 .icon(
@@ -122,7 +136,7 @@ pub fn run() {
                         .expect("default app icon is configured")
                         .clone(),
                 )
-                .tooltip("Scribe")
+                .tooltip(APP_NAME)
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
@@ -154,6 +168,6 @@ pub fn run() {
             let _tray_icon = tray;
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while building tauri application");
 }

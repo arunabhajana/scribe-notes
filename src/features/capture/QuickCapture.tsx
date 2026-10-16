@@ -1,4 +1,5 @@
 import { assertWorkspaceWritable, workspaceDeletionStatus } from "../auth/workspaceDeletionState";
+import { appName } from "../appIdentity";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -7,7 +8,7 @@ import { ArrowUpRight, Bell, Check, FileText, X } from "lucide-react";
 import { offlineStore } from "../notes/offlineStore";
 import { notifyQuickCaptureSaved } from "../notifications/desktopNotifications";
 import { accentColors, type AccentColor } from "../settings/accentColors";
-import { formatShortcut, getShortcutBindings } from "../shortcuts/keyboardShortcuts";
+import { defaultShortcutBindings, formatShortcut, getShortcutBindings } from "../shortcuts/keyboardShortcuts";
 import type { Note, NoteFolder } from "../../types/note";
 import { CaptureFolderPicker } from "./CaptureFolderPicker";
 import { smartPaste } from "./smartPaste";
@@ -47,7 +48,7 @@ function QuickCaptureContent({ account, setAccount }: { account: string | null; 
   const [preferences] = useWritingPreferences();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [appearance, setAppearance] = useState({ dark: true, accent: accentColors.violet.color as string, font: "DM Sans", shortcut: "Ctrl + Shift + Space" });
+  const [appearance, setAppearance] = useState({ dark: true, accent: accentColors.violet.color as string, font: "DM Sans", shortcut: formatShortcut(defaultShortcutBindings.quickCapture) });
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const reminderTrigger = useRef<HTMLButtonElement>(null);
   const plainPaste = useRef(false);
@@ -169,7 +170,7 @@ function QuickCaptureContent({ account, setAccount }: { account: string | null; 
       if (event.ctrlKey && event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void save(); }
     }}>
     <header className="capture-header" data-tauri-drag-region>
-      <div className="capture-brand" data-tauri-drag-region><img src="/scribe-logo-sidebar.png" alt="" /><span>Scribe<span className="capture-subtitle">Quick capture</span></span></div>
+      <div className="capture-brand" data-tauri-drag-region><img src="/scribe-logo-sidebar.png" alt="" /><span>{appName}<span className="capture-subtitle">Quick capture</span></span></div>
       <button className="capture-icon-button capture-close" type="button" aria-label="Close quick capture; keep draft" data-tooltip="Close · Esc (draft is kept)" onClick={close} disabled={saving}><X size={17} /></button>
     </header>
     {ready && account ? <form className="capture-form" onSubmit={(event) => { void save(event); }}>

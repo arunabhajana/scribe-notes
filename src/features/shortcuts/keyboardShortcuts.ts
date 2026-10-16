@@ -37,7 +37,7 @@ export type ShortcutBinding = { key: string; shift: boolean };
 export type ShortcutBindings = Record<ShortcutId, ShortcutBinding>;
 
 export const defaultShortcutBindings: ShortcutBindings = {
-  quickCapture: { key: " ", shift: true },
+  quickCapture: { key: import.meta.env.DEV ? "d" : " ", shift: true },
   toggleEditMode: { key: "e", shift: false },
   newNote: { key: "n", shift: false },
   search: { key: "k", shift: false },
@@ -54,6 +54,10 @@ export function parseShortcutBindings(saved: string | null): ShortcutBindings {
   try {
     if (!saved) return defaultShortcutBindings;
     const parsed = JSON.parse(saved) as Partial<ShortcutBindings>;
+    // Separate the old built-in dev chord once; explicit new choices stay intact.
+    if (import.meta.env.DEV && !("buildEnvironment" in parsed) && parsed.quickCapture?.key === " " && parsed.quickCapture.shift) {
+      parsed.quickCapture = defaultShortcutBindings.quickCapture;
+    }
     const bindings = Object.fromEntries(
       shortcutActions.map(({ id }) => {
         let binding = parsed[id];
@@ -79,6 +83,10 @@ export function parseShortcutBindings(saved: string | null): ShortcutBindings {
   } catch {
     return defaultShortcutBindings;
   }
+}
+
+export function serializeShortcutBindings(bindings: ShortcutBindings) {
+  return JSON.stringify({ ...bindings, buildEnvironment: import.meta.env.DEV ? "development" : "production" });
 }
 
 export function getShortcutBindings(workspaceId: string | null = null): ShortcutBindings {

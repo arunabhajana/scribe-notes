@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { appScheme, authCallbackUrl } from "../features/appIdentity";
 import type { Session, UserIdentity } from "@supabase/supabase-js";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -94,7 +95,7 @@ export function useAuth() {
     if (oauthStarting.current) return "A sign-in request is already starting.";
     oauthStarting.current = true;
     try {
-      const redirectTo = isTauri() ? "com.scribe.notes://auth/callback" : window.location.origin;
+      const redirectTo = isTauri() ? authCallbackUrl : window.location.origin;
       const { data, error } = await supabase.auth.linkIdentity({
         provider,
         options: {
@@ -221,7 +222,7 @@ export function useAuth() {
       return;
     }
     if (
-      callback.protocol !== "com.scribe.notes:" ||
+      callback.protocol !== `${appScheme}:` ||
       callback.hostname !== "auth" ||
       callback.pathname !== "/callback" || callback.username || callback.password || callback.port
     )
@@ -340,7 +341,7 @@ export function useAuth() {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: isTauri() ? "com.scribe.notes://auth/callback" : window.location.origin,
+          redirectTo: isTauri() ? authCallbackUrl : window.location.origin,
           skipBrowserRedirect: true,
           scopes: provider === "github" ? "read:user user:email" : "openid email profile",
           ...(provider === "google" ? { queryParams: { prompt: "select_account" } } : {}),
@@ -408,7 +409,7 @@ export function useAuth() {
     try {
       rememberEmailIntent("recovery", normalizedEmail);
       const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        redirectTo: isTauri() ? "com.scribe.notes://auth/callback" : window.location.origin,
+        redirectTo: isTauri() ? authCallbackUrl : window.location.origin,
       });
       if (error) clearEmailIntent();
       return error?.message ?? null;
@@ -455,7 +456,7 @@ export function useAuth() {
         options: {
           data: { display_name: displayName, terms_version: TERMS_VERSION, terms_accepted: true },
           emailRedirectTo: isTauri()
-            ? "com.scribe.notes://auth/callback"
+            ? authCallbackUrl
             : window.location.origin,
         },
       });
