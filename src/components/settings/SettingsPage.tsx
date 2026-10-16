@@ -1,4 +1,5 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
+import { UpdateSettings } from "../updates/UpdateSettings";
 import { AccountRequiredNotice } from "./AccountRequiredNotice";
 import { pauseCaptureShortcut } from "../../features/capture/captureBridge";
 import { AppLogo } from "../AppLogo";
@@ -175,6 +176,8 @@ const settingSearchIndex: SettingSearchEntry[] = [
   { label: "Delete account", detail: "Review and permanently delete your account, cloud data and this device’s saved copy.", category: "account", terms: "delete remove account privacy", availability: "online" },
   { label: "Delete offline profile", detail: "Review and permanently delete this workspace’s local data.", category: "account", terms: "offline local profile delete remove erase privacy", availability: "offline" },
   { label: "About Scribe", detail: "View version and product information.", category: "about", terms: "version information app", targetId: "setting-scribe" },
+  { label: "App updates", detail: "Check GitHub Releases and install a signed update.", category: "about", terms: "update upgrade download install automatic github release", targetId: "setting-app-updates" },
+  { label: "What’s New", detail: "Read features, improvements and fixes in each release.", category: "about", terms: "changelog changes release notes features fixed improvements", targetId: "setting-whats-new" },
 ];
 
 function SettingToggle({
@@ -1392,6 +1395,7 @@ function CategoryContent({
                 Built for thoughtful Notes, with local saves and cloud sync.
               </span>
             </div>
+            <UpdateSettings />
           </SettingCard>
         </>
       );

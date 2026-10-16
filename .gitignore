@@ -16,6 +16,7 @@ coverage/
 /release/
 /releases/
 /bundle/
+/release-files/
 
 # Temporary files and test reports
 /tmp/
