@@ -110,7 +110,7 @@ function App() {
       if (activeTransfer.returnTo === "offline" && !auth.user && local.profile?.id === activeTransfer.id) setDeleteProfileOpen(true);
       if (activeTransfer.returnTo === "online" && auth.user?.id === activeTransfer.id && activeTransfer.account) setOnlineTarget(activeTransfer.account);
     }} /></Suspense>}
-    <UpdateHost blocked={workspaceBlocked || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer)} />
+    <UpdateHost localOnly={!auth.user} blocked={workspaceBlocked || deleteProfileOpen || Boolean(deleteTarget) || Boolean(activeDataTarget) || Boolean(activeTransfer)} />
   </WorkspacePreferencesProvider>;
 }
 

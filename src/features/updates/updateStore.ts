@@ -4,58 +4,76 @@ import { useSyncExternalStore } from 'react';
 import { updateChangelog } from './changelogs';
 import { prepareUpdateInstall } from './installSafety';
 import type { Changelog } from '../../../scripts/lib/changelog.mts';
+import { automaticUpdatesEnabled, saveAutomaticUpdates } from './updatePreference';
+import { updateCheckFailure } from './updateErrors';
 
 type Phase = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'installing';
 type State = {
   phase: Phase; version: string | null; summary: string; changelog: Changelog | null;
   downloaded: number; total: number | null; error: string | null; checkedAt: number | null;
   configured: boolean | null; automatic: boolean; toast: boolean; dialog: boolean;
+  workspaceId: string | null; localOnly: boolean; notice: string | null;
 };
 const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* In-memory controls still work. */ } };
-const autoKey = 'scribe-updates:auto:v1';
-const checkKey = 'scribe-updates:last-check:v1';
+const checkKey = () => `scribe-updates:last-check:v2:${state.workspaceId ?? 'entry'}`;
 let state: State = { phase: 'idle', version: null, summary: '', changelog: null, downloaded: 0, total: null,
-  error: null, checkedAt: null, configured: null, automatic: read(autoKey) !== 'false', toast: false, dialog: false };
+  error: null, checkedAt: null, configured: null, automatic: false, toast: false, dialog: false,
+  workspaceId: null, localOnly: false, notice: null };
 const listeners = new Set<() => void>();
 let update: Update | null = null;
 let busy = false;
+let scopeRevision = 0;
 const cooldown = 6 * 60 * 60 * 1000;
 function patch(next: Partial<State>) { state = { ...state, ...next }; listeners.forEach(listener => listener()); }
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 export function useUpdates() { return useSyncExternalStore(subscribe, () => state); }
 
 export const updateActions = {
+  setWorkspace(workspaceId: string | null, localOnly: boolean) {
+    const automatic = automaticUpdatesEnabled(workspaceId, localOnly);
+    if (state.workspaceId === workspaceId && state.localOnly === localOnly && state.automatic === automatic) return;
+    scopeRevision++;
+    const changed = state.workspaceId !== workspaceId || state.localOnly !== localOnly;
+    patch({ workspaceId, localOnly, automatic, ...(changed ? { error: null, notice: null, checkedAt: null, toast: false } : {}) });
+  },
   async check(manual = true) {
     if (busy || state.phase === 'ready' || state.phase === 'installing') return;
-    if (!isTauri()) { if (manual) patch({ configured: false, error: 'Update checks are available in the installed Windows app.' }); return; }
+    if (!isTauri()) { if (manual) patch({ configured: false, error: null, notice: 'Update checks are available in the installed Windows app.' }); return; }
+    if (!navigator.onLine) { if (manual) patch({ error: 'You’re offline. Connect to the internet to check for updates. Your local notes are still available.', notice: null }); return; }
     if (!manual) {
       if (!state.automatic) return;
-      const last = Number(read(checkKey));
+      const last = Number(read(checkKey()));
       if (Number.isFinite(last) && last > 0 && Date.now() - last >= 0 && Date.now() - last < cooldown) return;
     }
     busy = true;
+    const revision = scopeRevision;
+    const requestCheckKey = checkKey();
     const previousPhase = state.phase;
-    patch({ phase: 'checking', error: null });
+    patch({ phase: 'checking', error: null, notice: null });
     try {
       const configured = await invoke<boolean>('updater_configured');
+      if (revision !== scopeRevision) { patch({ phase: previousPhase }); return; }
       patch({ configured });
       if (!configured) {
-        patch({ phase: previousPhase, error: manual ? 'Updates are not configured in this build. Install an official release to receive signed updates.' : null });
+        patch({ phase: previousPhase, notice: manual ? 'Updates are not configured in this build. Install an official signed release to receive updates.' : null });
         return;
       }
       const candidate = await check({ timeout: 20_000 });
+      if (revision !== scopeRevision) { if (candidate) await candidate.close().catch(() => undefined); patch({ phase: previousPhase }); return; }
       if (update) await update.close().catch(() => undefined);
       update = candidate;
       const now = Date.now();
-      write(checkKey, String(now));
+      write(requestCheckKey, String(now));
       if (candidate) {
         const log = updateChangelog(candidate.rawJson.changelog, candidate.version);
         patch({ phase: 'available', version: candidate.version, summary: log?.summary ?? candidate.body?.slice(0, 240) ?? 'A new version of Scribe is ready.',
           changelog: log, checkedAt: now, toast: manual || read('scribe-updates:later:v1') !== candidate.version });
       } else patch({ phase: 'idle', version: null, summary: '', changelog: null, toast: false, checkedAt: now });
-    } catch {
-      patch({ phase: previousPhase, error: 'Could not check for updates. Check your connection and try again from About.' });
+    } catch (cause) {
+      if (revision !== scopeRevision) { patch({ phase: previousPhase }); return; }
+      const failure = updateCheckFailure(cause);
+      patch({ phase: previousPhase, error: failure.kind === 'error' ? failure.message : null, notice: failure.kind === 'info' ? failure.message : null });
     } finally { busy = false; }
   },
   later() {
@@ -64,7 +82,12 @@ export const updateActions = {
   },
   open() { patch({ dialog: true, toast: false }); },
   close() { if (state.phase !== 'installing') patch({ dialog: false }); },
-  setAutomatic(value: boolean) { write(autoKey, String(value)); patch({ automatic: value }); },
+  setAutomatic(value: boolean, expectedWorkspaceId = state.workspaceId) {
+    if (!expectedWorkspaceId || state.workspaceId !== expectedWorkspaceId) throw new Error('The workspace changed. Reopen About to change this preference.');
+    saveAutomaticUpdates(expectedWorkspaceId, value);
+    scopeRevision++;
+    patch({ automatic: value });
+  },
   async download() {
     if (!update || busy || state.phase !== 'available') return;
     busy = true;

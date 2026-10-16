@@ -893,7 +893,20 @@
   border: 0;
   color: inherit;
   background: transparent;
-  font: inherit;
+  font: 10.5px/16px Consolas, "Cascadia Code", monospace;
+  white-space: pre;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.note-card-preview .markdown-preview pre {
+  margin: 3px 0;
+  padding: 3px 6px;
+  max-height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-2);
 }
 .note-card-preview .markdown-preview a {
   color: inherit;
@@ -4973,6 +4986,7 @@
   display: flex;
   flex-direction: column;
   padding: 0 24px;
+  overflow-y: auto;
 }
 .composer-folder-row {
   height: 48px;
@@ -5040,6 +5054,8 @@
   border: 0;
   outline: none;
   resize: none;
+  overflow-y: auto;
+  scroll-padding-block: 24px;
   font:
     13px/1.8 "DM Sans",
     sans-serif;

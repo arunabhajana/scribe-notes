@@ -25,6 +25,7 @@ import { applyMarkdownAction, continueMarkdownList } from "../editor/markdownFor
 import { MarkdownPreview } from "../editor/MarkdownPreview";
 import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
 import { isMacOS } from "../../features/shortcuts/keyboardShortcuts";
+import { keepCaretVisible } from '../editor/keepCaretVisible';
 
 type NoteDraft = {
   title: string;
@@ -58,6 +59,16 @@ export function NewNoteComposer({
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
   const [preview, setPreview] = useState(false);
   const bodyInputRef = useRef<HTMLTextAreaElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const caretScrollFrame = useRef<number | null>(null);
+  const scheduleCaretScroll = () => {
+    if (caretScrollFrame.current !== null) cancelAnimationFrame(caretScrollFrame.current);
+    caretScrollFrame.current = requestAnimationFrame(() => {
+      caretScrollFrame.current = null;
+      if (bodyInputRef.current && bodyScrollRef.current) keepCaretVisible(bodyInputRef.current, bodyScrollRef.current);
+    });
+  };
+  useEffect(() => () => { if (caretScrollFrame.current !== null) cancelAnimationFrame(caretScrollFrame.current); }, []);
   const wordCount = useMemo(
     () => (body.trim() ? body.trim().split(/\s+/).length : 0),
     [body],
@@ -110,11 +121,14 @@ export function NewNoteComposer({
     onModalActiveChange(minimized);
     setMinimized(!minimized);
   };
-  const applyAction = (action: MarkdownAction) =>
+  const applyAction = (action: MarkdownAction) => {
     applyMarkdownAction(bodyInputRef.current, body, action, setBody);
+    scheduleCaretScroll();
+  };
   const handleFormattingKeyDown = (
     event: ReactKeyboardEvent<HTMLTextAreaElement>,
   ) => {
+    scheduleCaretScroll();
     continueMarkdownList(event, setBody);
     if (!(isMacOS() ? event.metaKey : event.ctrlKey)) return;
     const key = event.key.toLowerCase();
@@ -188,7 +202,7 @@ export function NewNoteComposer({
           </div>
         </header>
 
-        <div className="composer-body">
+        <div ref={bodyScrollRef} className="composer-body">
           <div className="composer-folder-row">
             <label>Folder</label>
             <div className="composer-folder-picker">
@@ -272,7 +286,8 @@ export function NewNoteComposer({
               ref={bodyInputRef}
               className="composer-content-input"
               value={body}
-              onChange={(event) => setBody(event.target.value)}
+              onChange={(event) => { setBody(event.target.value); scheduleCaretScroll(); }}
+              onCompositionEnd={scheduleCaretScroll}
               onKeyDown={handleFormattingKeyDown}
               placeholder="Start writing..."
               aria-label="Note content (Markdown)"

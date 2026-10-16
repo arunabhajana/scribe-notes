@@ -96,6 +96,10 @@ Exports contain your note content; store them somewhere you trust. **Scribe does
 
 Export anything you want to keep before permanent deletion. Turning sync off, signing out and moving notes to Trash are not account deletion or permanent content erasure. Enabling sync again after deleting cloud content can upload retained local notes.
 
+### App updates
+
+Open **Settings › About** to check for updates or read **What’s New**. Offline profiles start with automatic update checks off. Enabling them shows an explanation and requires confirmation; the choice is saved separately for each workspace on this device. Update requests contact GitHub using the internet, without including your notes, display name or Scribe sign-in details. Downloads and installation require your action. Manual checks remain available with automatic checks off. Only published stable releases with update metadata appear in the updater; drafts and prereleases do not.
+
 ### Help and feedback
 
 Use [GitHub Issues](https://github.com/arunabhajana/scribe-windows/issues) for bugs and feature requests. Include the app version, Windows version, reproduction steps and a screenshot if useful. Remove private notes, email addresses, tokens and authenticator codes from shared screenshots/logs.

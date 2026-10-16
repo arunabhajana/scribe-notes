@@ -8,12 +8,14 @@ beforeEach(() => {
   mocks.invoke.mockReset().mockResolvedValue(true);
   mocks.check.mockReset();
   mocks.native.mockReturnValue(true);
+  vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
 });
 const candidate = () => ({ version: '1.2.3', body: 'Brief update', rawJson: {}, download: vi.fn().mockResolvedValue(undefined), install: vi.fn().mockResolvedValue(undefined), close: vi.fn().mockResolvedValue(undefined) });
 
 describe('updater lifecycle', () => {
   it('does not contact GitHub when automatic checks are disabled', async () => {
     const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('online-test', false);
     updateActions.setAutomatic(false);
     await updateActions.check(false);
     expect(mocks.check).not.toHaveBeenCalled();
@@ -24,6 +26,7 @@ describe('updater lifecycle', () => {
   it('limits automatic checks but allows an explicit retry', async () => {
     mocks.check.mockResolvedValue(null);
     const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('online-test', false);
     await updateActions.check(false); await updateActions.check(false);
     expect(mocks.check).toHaveBeenCalledOnce();
     await updateActions.check(true);
@@ -90,5 +93,56 @@ describe('updater lifecycle', () => {
     await updateActions.check();
     expect(mocks.check).toHaveBeenCalledOnce();
     complete(null); await first;
+  });
+  it('defaults an offline profile off even when the old global flag was enabled', async () => {
+    localStorage.setItem('scribe-updates:auto:v1', 'true');
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('offline-test', true);
+    await updateActions.check(false);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.check).not.toHaveBeenCalled();
+  });
+  it('keeps offline opt-in separate from an online workspace and remembers it', async () => {
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    mocks.check.mockResolvedValue(null);
+    updateActions.setWorkspace('online-test', false);
+    updateActions.setAutomatic(true);
+    updateActions.setWorkspace('offline-test', true);
+    await updateActions.check(false);
+    expect(mocks.check).not.toHaveBeenCalled();
+    updateActions.setAutomatic(true);
+    await updateActions.check(false);
+    expect(mocks.check).toHaveBeenCalledOnce();
+    updateActions.setWorkspace('another-offline', true);
+    await updateActions.check(false);
+    expect(mocks.check).toHaveBeenCalledOnce();
+    const { automaticUpdatesEnabled } = await import('../src/features/updates/updatePreference');
+    expect(automaticUpdatesEnabled('offline-test', true)).toBe(true);
+    expect(automaticUpdatesEnabled('another-offline', true)).toBe(false);
+  });
+  it('does not start a delayed background request after switching to an offline workspace', async () => {
+    let configured!: (value: boolean) => void;
+    mocks.invoke.mockReturnValue(new Promise(resolve => { configured = resolve; }));
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('online-test', false);
+    const pending = updateActions.check(false);
+    updateActions.setWorkspace('offline-test', true);
+    configured(true); await pending;
+    expect(mocks.check).not.toHaveBeenCalled();
+  });
+  it('does not let a confirmation from another workspace enable checks here', async () => {
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('offline-test', true);
+    expect(() => updateActions.setAutomatic(true, 'different-workspace')).toThrow('workspace changed');
+    await updateActions.check(false);
+    expect(mocks.check).not.toHaveBeenCalled();
+  });
+  it('does not send requests when the device is offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('offline-test', true);
+    await updateActions.check();
+    expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.check).not.toHaveBeenCalled();
   });
 });
