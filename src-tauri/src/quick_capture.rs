@@ -32,20 +32,6 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
         #[cfg(windows)]
         worker: Mutex::new(None),
     });
-    let window =
-        WebviewWindowBuilder::new(app, "quick-capture", WebviewUrl::App("index.html".into()))
-            .title(format!("Quick capture · {}", crate::APP_NAME))
-            .inner_size(560.0, 350.0)
-            .resizable(false)
-            .decorations(false)
-            .transparent(false)
-            .shadow(false)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .visible(false)
-            .center()
-            .build()?;
-    window.set_decorations(false)?;
     if let Some(main) = app.get_webview_window("main") {
         let app = app.clone();
         main.on_window_event(move |event| {
@@ -56,13 +42,6 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
             }
         });
     }
-    let handle = window.clone();
-    window.on_window_event(move |event| {
-        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-            api.prevent_close();
-            let _ = handle.hide();
-        }
-    });
     #[cfg(windows)]
     {
         use windows::Win32::{
@@ -211,11 +190,33 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
             }
         });
         let thread = ready_receiver
-            .recv()
+            .recv_timeout(std::time::Duration::from_secs(3))
             .map_err(|_| std::io::Error::other("Could not initialize global capture."))?;
         *app.state::<CaptureState>().worker.lock().unwrap() = Some((sender, thread));
     }
     Ok(())
+}
+
+// Avoid allocating a second WebView/React tree until capture is actually used.
+// Keep it after first use so hiding it cannot interrupt an in-flight note save.
+fn capture_window(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
+    if let Some(window) = app.get_webview_window("quick-capture") { return Ok(window); }
+    let window = WebviewWindowBuilder::new(app, "quick-capture", WebviewUrl::App("index.html".into()))
+        .title(format!("Quick capture · {}", crate::APP_NAME))
+        .inner_size(560.0, 350.0).resizable(false).decorations(false)
+        .transparent(false).shadow(false).always_on_top(true).skip_taskbar(true)
+        .visible(false).center().build()?;
+    let handle = window.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = handle.hide();
+        }
+    });
+    if let Err(error) = crate::spelling_context_menu::initialize_window(app, "quick-capture") {
+        log::warn!("Quick Capture spelling menu unavailable: {error}");
+    }
+    Ok(window)
 }
 
 // A capture window never restores or changes the main window's state.
@@ -230,7 +231,7 @@ fn show(app: &AppHandle) {
     {
         return;
     }
-    if let Some(window) = app.get_webview_window("quick-capture") {
+    if let Ok(window) = capture_window(app) {
         let _ = app.emit_to("main", "scribe:capture-prepare", ());
         if !window.is_focused().unwrap_or(false) {
             let focused = app.get_webview_window("main").is_some_and(|main| {
@@ -262,6 +263,8 @@ fn show(app: &AppHandle) {
         let _ = window.set_decorations(false);
         let _ = window.show();
         let _ = window.set_focus();
+    } else {
+        let _ = app.emit_to("main", "scribe:capture-error", "Quick Capture could not open. Reopen Scribe and try again.");
     }
 }
 
@@ -365,7 +368,7 @@ async fn update_shortcut(
         };
         let (reply, receiver) = std::sync::mpsc::channel();
         {
-            let state = app.state::<CaptureState>();
+            let state = app.try_state::<CaptureState>().ok_or("Global capture is not ready.")?;
             let worker = state
                 .worker
                 .lock()
@@ -409,8 +412,8 @@ pub fn set_capture_account(
     if user_id.as_ref().is_some_and(|id| uuid::Uuid::parse_str(id).is_err()) {
         return Err("Invalid capture account.".into());
     }
-    *app.state::<CaptureState>()
-        .user_id
+    let state = app.try_state::<CaptureState>().ok_or("Global capture is not ready.")?;
+    *state.user_id
         .lock()
         .map_err(|_| "Could not update capture account.")? = user_id;
     if let Some(capture) = app.get_webview_window("quick-capture") {

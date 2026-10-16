@@ -4,6 +4,10 @@ import { MarkdownPreview } from "../editor/MarkdownPreview";
 import { Bell } from "lucide-react";
 import { formatReminderTime, type NoteReminder } from "../../features/reminders/reminderTypes";
 import "./noteCard.css";
+import { useMemo } from "react";
+import { notePreview } from "../../features/notes/notePreview";
+
+const relativeTime = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
 export function NoteCard({
   note,
@@ -22,9 +26,7 @@ export function NoteCard({
   reminder?: NoteReminder;
   onEditReminder: () => void;
 }) {
-  const relativeTime = new Intl.RelativeTimeFormat(undefined, {
-    numeric: "auto",
-  });
+  const preview = useMemo(() => notePreview(note.body), [note.body]);
   const ageSeconds =
     (new Date().getTime() - new Date(note.updatedAt).getTime()) / 1000;
   const seconds = Math.max(0, Math.round(ageSeconds));
@@ -71,9 +73,9 @@ export function NoteCard({
           <Icon name="pin" size={14} />
         </button>
       </div>
-      {note.body.trim() ? (
+      {preview.trim() ? (
         <div className="note-card-preview">
-          <MarkdownPreview value={note.body} />
+          <MarkdownPreview value={preview} />
         </div>
       ) : <p className="note-card-empty">No additional text</p>}
       <div className="card-meta">

@@ -6,6 +6,7 @@ import type { ShortcutBinding } from "../shortcuts/keyboardShortcuts";
 let accountUpdate: Promise<void> = Promise.resolve();
 let accountQueue: Promise<void> = Promise.resolve();
 let accountRevision = 0;
+let shortcutQueue: Promise<void> = Promise.resolve();
 function registerAccount(userId: string | null) {
   const revision = ++accountRevision;
   accountUpdate = accountQueue.then(async () => {
@@ -73,17 +74,49 @@ export function useQuickCapture(userId: string | null, binding: ShortcutBinding,
   }, [userId, showError]);
   useEffect(() => {
     let active = true;
+    let pending = false;
+    let configured = false;
     const onShortcutError = (event: Event) => showError((event as CustomEvent<string>).detail);
     window.addEventListener("scribe:capture-shortcut-error", onShortcutError);
-    void (async () => {
-      await setCaptureEnabled(false);
-      await waitForCaptureAccount();
-      if (!active || !enabled) return;
-      await registerCaptureShortcut({ key: binding.key, shift: binding.shift });
-      if (active) await setCaptureEnabled(true);
-    })().catch((error: unknown) => {
-      if (active) showError(typeof error === "string" ? error : "Quick capture could not register its shortcut. Choose another in Settings → Shortcuts.");
-    });
-    return () => { active = false; window.removeEventListener("scribe:capture-shortcut-error", onShortcutError); };
+    const configure = () => {
+      if (!active || pending || configured) return;
+      pending = true;
+      // Serialize React startup/workspace transitions: an obsolete effect must
+      // never disable a shortcut after its replacement has already enabled it.
+      shortcutQueue = shortcutQueue.catch(() => undefined).then(async () => {
+        for (let attempt = 0; attempt < 4 && active; attempt++) {
+          try {
+            await waitForCaptureAccount();
+            if (!active) return;
+            await setCaptureEnabled(false);
+            if (!active) return;
+            if (enabled) {
+              await registerCaptureShortcut({ key: binding.key, shift: binding.shift });
+              if (!active) return;
+              await setCaptureEnabled(true);
+            }
+            configured = true;
+            return;
+          } catch (error) {
+            if (!active) return;
+            const detail = typeof error === "string" ? error : error instanceof Error ? error.message : "Quick Capture could not register its shortcut. Choose another in Settings → Shortcuts.";
+            // A real hotkey conflict needs a different binding, rather than retries.
+            const transient = /not ready|not available|could not update|could not register/i.test(detail);
+            if (transient && attempt < 3) {
+              await new Promise(resolve => window.setTimeout(resolve, 250 * (attempt + 1)));
+            } else { showError(detail); return; }
+          }
+        }
+      }).finally(() => { pending = false; });
+    };
+    configure();
+    window.addEventListener("focus", configure);
+    const subscription = isTauri() ? listen<string>("scribe:capture-error", event => { if (active) showError(event.payload); }) : null;
+    return () => {
+      active = false;
+      window.removeEventListener("focus", configure);
+      window.removeEventListener("scribe:capture-shortcut-error", onShortcutError);
+      void subscription?.then(stop => stop()).catch(() => undefined);
+    };
   }, [binding.key, binding.shift, enabled, showError, userId]);
 }

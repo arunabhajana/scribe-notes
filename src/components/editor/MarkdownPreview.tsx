@@ -1,7 +1,7 @@
 import { inlineLinkPreview } from "./inlineLinkPreview";
 import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import "./linkPreviews.css";
 import { openingCodeFence, closesCodeFence, compactCodeBlock, type CodeFence } from '../../features/notes/codeFences';
 
@@ -133,6 +133,8 @@ export function MarkdownPreview({
   onToggleTask?: (lineIndex: number, checked: boolean) => void;
 }) {
   const [linkError, setLinkError] = useState("");
+  const tasksInteractive = Boolean(onToggleTask);
+  const html = useMemo(() => markdownToHtml(value, tasksInteractive), [value, tasksInteractive]);
   if (!value.trim())
     return (
       <div className="markdown-preview-empty">
@@ -143,7 +145,7 @@ export function MarkdownPreview({
     <>
     <div
       className="markdown-preview"
-      dangerouslySetInnerHTML={{ __html: markdownToHtml(value, Boolean(onToggleTask)) }}
+      dangerouslySetInnerHTML={{ __html: html }}
       onClick={(event) => {
         const link = (event.target as HTMLElement).closest<HTMLAnchorElement>("a.inline-link-preview");
         if (link) {

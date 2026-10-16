@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.5",
+  "title": "A warmer welcome, a lighter workspace",
+  "summary": "Get to know Scribe with an optional workspace tour, enjoy smoother note browsing, and find a cleaner What’s New view with more reliable Quick Capture at startup.",
+  "sections": [
+    {
+      "type": "feature",
+      "items": [
+        "A new interactive welcome tour introduces Scribe in 15 short steps. Create a note, try its right-click menu and learn how to move it to Trash, then explore the main settings. Keep the note or skip anytime, and replay the tour from About.",
+        "The tour adapts to offline profiles and online accounts, explains which optional features are off, and shows where to enable them. Offline users can keep using Scribe without signing in."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "Scribe starts with less background work and loads Quick Capture’s window only when you first need it.",
+        "Browsing and editing notes is lighter, especially with long notes and larger collections. Card previews stay compact while the full note remains available when opened.",
+        "What’s New has a wider layout, clearer change cards and expandable descriptions. The title, version picker and Done button stay within reach as you scroll."
+      ]
+    },
+    {
+      "type": "fixed",
+      "items": [
+        "Quick Capture recovers from temporary shortcut setup delays when Scribe opens, reducing unexpected shortcut-not-ready messages.",
+        "Moving between notes and settings leaves less unnecessary work running in the background."
+      ]
+    }
+  ]
+}

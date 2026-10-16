@@ -60,16 +60,23 @@ export function TitleBar({
   useEffect(() => {
     if (!desktop) return;
     const appWindow = getCurrentWindow();
+    let disposed = false;
+    let frame = 0;
     let unlisten: (() => void) | undefined;
-    void appWindow.isMaximized().then(setMaximized);
-    void appWindow
-      .onResized(() => {
-        void appWindow.isMaximized().then(setMaximized);
-      })
-      .then((handler) => {
-        unlisten = handler;
+    const refresh = () => {
+      if (disposed || frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        void appWindow.isMaximized().then(value => { if (!disposed) setMaximized(value); }).catch(() => undefined);
       });
-    return () => unlisten?.();
+    };
+    refresh();
+    void appWindow
+      .onResized(refresh)
+      .then((handler) => {
+        if (disposed) handler(); else unlisten = handler;
+      }).catch(() => undefined);
+    return () => { disposed = true; cancelAnimationFrame(frame); unlisten?.(); };
   }, [desktop]);
 
   const toggleMaximize = () => {
@@ -147,6 +154,7 @@ export function TitleBar({
             className="titlebar-action"
             onClick={onOpenSettings}
             aria-label="Open settings"
+            data-tour="open-settings"
             data-tooltip={`Settings${settingsShortcut ? ` · ${settingsShortcut}` : ""}`}
           >
             <Settings2 size={14} />

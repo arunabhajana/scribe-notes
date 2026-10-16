@@ -4,7 +4,7 @@ import { StatusToast } from "../feedback/LoadingFeedback";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-import { MenuContext, type ContextMenuItem } from "./contextMenuState";
+import { MenuContext, closeContextMenuEvent, type ContextMenuItem } from "./contextMenuState";
 type Menu = { x: number; y: number; items: ContextMenuItem[]; target: HTMLElement | null };
 
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
@@ -15,6 +15,11 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     const rect = target?.getBoundingClientRect();
     setMenu(items.length ? { x: x || rect?.left || 8, y: y || rect?.bottom || 8, items, target: target ?? null } : null);
   };
+  useEffect(() => {
+    const close = () => setMenu(null);
+    window.addEventListener(closeContextMenuEvent, close);
+    return () => window.removeEventListener(closeContextMenuEvent, close);
+  }, []);
   useEffect(() => {
     let pendingNative: MouseEvent | null = null;
     let active = true;
@@ -79,6 +84,6 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
         const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
         buttons[next]?.focus();
       }
-    }}>{menu.items.map((item, index) => <button key={`${item.label}-${index}`} role="menuitem" disabled={item.disabled} className={`${item.danger ? "is-danger" : ""} ${item.separator ? "has-separator" : ""}`} onClick={() => { setMenu(null); menu.target?.focus(); Promise.resolve().then(item.action).catch(() => setError("Could not complete this action. Clipboard access may be unavailable; you can use keyboard shortcuts.")); }}>{item.label}</button>)}</div>, document.body,
+    }}>{menu.items.map((item, index) => <button key={`${item.label}-${index}`} role="menuitem" data-tour={item.tourId} disabled={item.disabled} className={`${item.danger ? "is-danger" : ""} ${item.separator ? "has-separator" : ""}`} onClick={() => { setMenu(null); menu.target?.focus(); Promise.resolve().then(item.action).catch(() => setError("Could not complete this action. Clipboard access may be unavailable; you can use keyboard shortcuts.")); }}>{item.label}</button>)}</div>, document.body,
   )}{error && <div className="status-toast-stack"><StatusToast message={error} onDismiss={() => setError(null)} /></div>}</MenuContext.Provider>;
 }

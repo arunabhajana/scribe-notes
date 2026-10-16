@@ -263,6 +263,7 @@ export function NewNoteComposer({
           </div>
           <input
             className="composer-title-input"
+            data-tour="note-title"
             autoFocus
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -285,6 +286,7 @@ export function NewNoteComposer({
             <textarea
               ref={bodyInputRef}
               className="composer-content-input"
+              data-tour="note-content"
               value={body}
               onChange={(event) => { setBody(event.target.value); scheduleCaretScroll(); }}
               onCompositionEnd={scheduleCaretScroll}
@@ -325,6 +327,7 @@ export function NewNoteComposer({
             <button
               type="submit"
               className="composer-save"
+              data-tour="save-note"
               data-tooltip="Save Note"
             >
               <span>Save Note</span>

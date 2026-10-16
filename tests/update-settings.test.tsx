@@ -8,6 +8,8 @@ import { WorkspacePreferencesContext } from '../src/features/settings/workspaceP
 import { UpdateSettings } from '../src/components/updates/UpdateSettings';
 import { VersionDropdown } from '../src/components/updates/VersionDropdown';
 import { updateActions } from '../src/features/updates/updateStore';
+import { UpdateDiagnostics } from '../src/components/updates/UpdateDiagnostics';
+import { formatUpdateDiagnostic } from '../src/features/updates/updateDiagnostics';
 
 let workspace = 0;
 let workspaceId: string;
@@ -26,25 +28,25 @@ beforeEach(() => {
 const settings = () => render(<WorkspacePreferencesContext.Provider value={workspaceId}><UpdateSettings localOnly /></WorkspacePreferencesContext.Provider>);
 
 describe('offline update consent', () => {
-  it('keeps the checkbox off until confirmed, and cancel sends no request', () => {
+  it('keeps the switch off until confirmed, and cancel sends no request', () => {
     settings();
-    const checkbox = screen.getByRole('checkbox');
-    expect(checkbox).not.toBeChecked();
-    fireEvent.click(checkbox);
+    const toggle = screen.getByRole('switch');
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
     expect(screen.getByRole('dialog')).toHaveTextContent('IP address');
     expect(screen.getByRole('dialog')).toHaveTextContent('does not enable cloud sync');
-    expect(checkbox).not.toBeChecked();
+    expect(toggle).not.toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Keep checks off' }));
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(checkbox).not.toBeChecked();
+    expect(toggle).not.toBeChecked();
     expect(mocks.check).not.toHaveBeenCalled();
   });
   it('enables and checks only after confirmation', async () => {
     settings();
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('switch'));
     fireEvent.click(screen.getByRole('button', { name: 'Enable checks' }));
     await waitFor(() => expect(mocks.check).toHaveBeenCalledOnce());
-    expect(screen.getByRole('checkbox')).toBeChecked();
+    expect(screen.getByRole('switch')).toBeChecked();
     await waitFor(() => expect(screen.getByText('You’re up to date.')).toBeVisible());
   });
   it('shows a neutral release-feed notice and keeps manual checks available', async () => {
@@ -54,25 +56,29 @@ describe('offline update consent', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Draft and prerelease'));
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('button', { name: 'View releases' })).toBeEnabled();
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.getByRole('switch')).not.toBeChecked();
   });
-  it('shows the native timeout cause and lets users copy a redacted report', async () => {
+  it('keeps diagnostics hidden in settings while preserving the copyable component for later use', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    mocks.check.mockRejectedValue({ message: 'error sending request for url (https://github.com/owner/repo/latest.json)', diagnostic: {
+    const failure = { message: 'error sending request for url (https://github.com/owner/repo/latest.json)', diagnostic: {
       stage: 'check', category: 'timeout', nativeError: 'error sending request', causes: ['operation timed out'],
       elapsedMs: 60001, timeoutMs: 60000, endpoints: ['https://user:secret@github.com/owner/repo/latest.json?token=secret'],
-    } });
+    } };
+    mocks.check.mockRejectedValue(failure);
     settings();
     fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('too long'));
+    expect(screen.queryByText('Update debug details')).toBeNull();
+    const diagnostic = render(<UpdateDiagnostics report={formatUpdateDiagnostic(failure, 60001, 'check', true, false)} />);
     fireEvent.click(screen.getByText('Update debug details'));
     expect(screen.getByText(/Cause 1: operation timed out/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Copy debug details' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
     expect(writeText.mock.calls[0][0]).toContain('Elapsed: 60001 ms');
     expect(writeText.mock.calls[0][0]).not.toContain('secret');
-    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(screen.getByRole('switch')).not.toBeChecked();
+    diagnostic.unmount();
     mocks.check.mockResolvedValue(null);
     fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await waitFor(() => expect(screen.queryByText('Update debug details')).toBeNull());

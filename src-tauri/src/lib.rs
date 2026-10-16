@@ -109,10 +109,9 @@ pub fn run() {
             if let Some(main) = app.get_webview_window("main") {
                 main.set_title(APP_NAME)?;
             }
+            quick_capture::initialize(app.handle())?;
             spelling_context_menu::initialize(app.handle())?;
             desktop_notifications::initialize(app.handle())?;
-            quick_capture::initialize(app.handle())?;
-            spelling_context_menu::initialize_window(app.handle(), "quick-capture")?;
             #[cfg(windows)]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;

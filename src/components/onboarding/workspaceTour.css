@@ -1,0 +1,40 @@
+.workspace-tour-layer { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; --tour-accent: var(--accent, #8970ed); }
+.workspace-tour-layer.theme-light { --surface: #fff; --border: #dcdce6; --text: #22222b; --muted: #626372; }
+.tour-shade { position: fixed; background: #08090db8; pointer-events: auto; }
+.tour-target-shield { position: fixed; pointer-events: auto; }
+.tour-spotlight { position: fixed; border: 2px solid var(--tour-accent); border-radius: 10px; box-shadow: 0 0 0 3px #8970ed22, 0 0 26px #8970ed35; pointer-events: none; }
+.workspace-tour { position: fixed; width: min(350px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; border: 1px solid var(--border, #34353e); border-radius: 16px; background: var(--surface, #191a20); color: var(--text, #f0f0f3); box-shadow: 0 16px 70px #0007; overflow: hidden; pointer-events: auto; outline: none; }
+.workspace-tour > header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 19px 0; }
+.tour-brand { color: var(--tour-accent); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.tour-icon-button { display: grid; place-items: center; flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; color: var(--muted, #a6a7b2); background: transparent; cursor: pointer; }
+.tour-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 13px 21px 20px; scrollbar-width: thin; }
+.tour-step-icon { display: grid; place-items: center; width: 45px; height: 45px; margin-bottom: 17px; border-radius: 12px; color: var(--tour-accent); background: color-mix(in srgb, var(--tour-accent) 16%, transparent); }
+.tour-greeting { margin: 0 0 9px; color: var(--muted, #a6a7b2); font-size: 12px; }
+.workspace-tour h2 { margin: 0 0 10px; color: var(--text, #f0f0f3); font-size: 20px; line-height: 1.35; letter-spacing: -.03em; overflow-wrap: anywhere; }
+#workspace-tour-description { margin: 0; font-size: 12px; line-height: 1.8; color: color-mix(in srgb, var(--text, #f0f0f3) 85%, var(--muted, #a6a7b2)); }
+.tour-interaction { display: flex; align-items: center; gap: 7px; margin: 15px 0 0; color: var(--tour-accent); font-size: 11px; }
+.tour-current-status { margin: 15px 0 0; padding: 10px 12px; border-radius: 8px; color: var(--text, #f0f0f3); background: color-mix(in srgb, var(--tour-accent) 15%, transparent); font-size: 11px; line-height: 1.6; }
+.tour-waiting { margin: 12px 0 0; color: var(--muted, #a6a7b2); font-size: 11px; line-height: 1.6; }
+.workspace-tour > footer { flex: none; display: grid; gap: 15px; padding: 15px 20px; border-top: 1px solid var(--border, #34353e); }
+.tour-progress { display: flex; align-items: center; gap: 12px; font-size: 10px; color: var(--muted, #a6a7b2); }
+.tour-progress progress { flex: 1; min-width: 0; height: 3px; appearance: none; border: 0; border-radius: 4px; overflow: hidden; background: var(--border, #34353e); }
+.tour-progress progress::-webkit-progress-bar { background: var(--border, #34353e); }
+.tour-progress progress::-webkit-progress-value { background: var(--tour-accent); }
+.tour-progress progress::-moz-progress-bar { background: var(--tour-accent); }
+.tour-actions { display: flex; align-items: center; gap: 8px; }
+.tour-actions > button { display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-height: 35px; border-radius: 8px; padding: 9px 11px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.tour-skip { margin-right: auto; padding-left: 0 !important; border: 0; color: var(--muted, #a6a7b2); background: transparent; }
+.tour-back { border: 1px solid var(--border, #34353e); color: var(--text, #f0f0f3); background: transparent; }
+.tour-next { border: 1px solid transparent; color: white; background: var(--tour-accent); }
+.tour-next:disabled { opacity: .5; cursor: wait; }
+.tour-skip-practice { justify-self: end; border: 0; padding: 0; background: transparent; color: var(--muted, #a6a7b2); font: inherit; font-size: 11px; cursor: pointer; }
+.workspace-tour button:focus-visible { outline: 2px solid var(--tour-accent); outline-offset: 3px; }
+@media (max-width: 1050px) { .workspace-tour { width: min(300px, calc(100vw - 24px)); } }
+@media (max-height: 700px) {
+  .workspace-tour > header { padding: 12px 17px 0; }
+  .tour-body { padding: 10px 19px 14px; }
+  .workspace-tour h2 { font-size: 18px; margin-bottom: 8px; }
+  #workspace-tour-description { line-height: 1.65; }
+  .tour-interaction, .tour-current-status { margin-top: 11px; }
+  .workspace-tour > footer { gap: 10px; padding: 12px 18px; }
+}
