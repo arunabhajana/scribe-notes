@@ -1,25 +1,27 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { check, type Update } from '@tauri-apps/plugin-updater';
+import type { Update } from '@tauri-apps/plugin-updater';
 import { useSyncExternalStore } from 'react';
 import { updateChangelog } from './changelogs';
 import { prepareUpdateInstall } from './installSafety';
 import type { Changelog } from '../../../scripts/lib/changelog.mts';
 import { automaticUpdatesEnabled, saveAutomaticUpdates } from './updatePreference';
 import { updateCheckFailure } from './updateErrors';
+import { checkNativeUpdate } from './nativeUpdater';
+import { formatUpdateDiagnostic } from './updateDiagnostics';
 
 type Phase = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'installing';
 type State = {
   phase: Phase; version: string | null; summary: string; changelog: Changelog | null;
   downloaded: number; total: number | null; error: string | null; checkedAt: number | null;
   configured: boolean | null; automatic: boolean; toast: boolean; dialog: boolean;
-  workspaceId: string | null; localOnly: boolean; notice: string | null;
+  workspaceId: string | null; localOnly: boolean; notice: string | null; diagnostic: string | null;
 };
 const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* In-memory controls still work. */ } };
 const checkKey = () => `scribe-updates:last-check:v2:${state.workspaceId ?? 'entry'}`;
 let state: State = { phase: 'idle', version: null, summary: '', changelog: null, downloaded: 0, total: null,
   error: null, checkedAt: null, configured: null, automatic: false, toast: false, dialog: false,
-  workspaceId: null, localOnly: false, notice: null };
+  workspaceId: null, localOnly: false, notice: null, diagnostic: null };
 const listeners = new Set<() => void>();
 let update: Update | null = null;
 let busy = false;
@@ -35,12 +37,12 @@ export const updateActions = {
     if (state.workspaceId === workspaceId && state.localOnly === localOnly && state.automatic === automatic) return;
     scopeRevision++;
     const changed = state.workspaceId !== workspaceId || state.localOnly !== localOnly;
-    patch({ workspaceId, localOnly, automatic, ...(changed ? { error: null, notice: null, checkedAt: null, toast: false } : {}) });
+    patch({ workspaceId, localOnly, automatic, ...(changed ? { error: null, notice: null, diagnostic: null, checkedAt: null, toast: false } : {}) });
   },
   async check(manual = true) {
     if (busy || state.phase === 'ready' || state.phase === 'installing') return;
-    if (!isTauri()) { if (manual) patch({ configured: false, error: null, notice: 'Update checks are available in the installed Windows app.' }); return; }
-    if (!navigator.onLine) { if (manual) patch({ error: 'You’re offline. Connect to the internet to check for updates. Your local notes are still available.', notice: null }); return; }
+    if (!isTauri()) { if (manual) patch({ configured: false, error: null, diagnostic: null, notice: 'Update checks are available in the installed Windows app.' }); return; }
+    if (!navigator.onLine) { if (manual) patch({ error: 'You’re offline. Connect to the internet to check for updates. Your local notes are still available.', notice: null, diagnostic: null }); return; }
     if (!manual) {
       if (!state.automatic) return;
       const last = Number(read(checkKey()));
@@ -50,7 +52,9 @@ export const updateActions = {
     const revision = scopeRevision;
     const requestCheckKey = checkKey();
     const previousPhase = state.phase;
-    patch({ phase: 'checking', error: null, notice: null });
+    const started = performance.now();
+    let stage = 'configuration';
+    patch({ phase: 'checking', error: null, notice: null, diagnostic: null });
     try {
       const configured = await invoke<boolean>('updater_configured');
       if (revision !== scopeRevision) { patch({ phase: previousPhase }); return; }
@@ -59,7 +63,8 @@ export const updateActions = {
         patch({ phase: previousPhase, notice: manual ? 'Updates are not configured in this build. Install an official signed release to receive updates.' : null });
         return;
       }
-      const candidate = await check({ timeout: 20_000 });
+      stage = 'check';
+      const candidate = await checkNativeUpdate();
       if (revision !== scopeRevision) { if (candidate) await candidate.close().catch(() => undefined); patch({ phase: previousPhase }); return; }
       if (update) await update.close().catch(() => undefined);
       update = candidate;
@@ -73,7 +78,8 @@ export const updateActions = {
     } catch (cause) {
       if (revision !== scopeRevision) { patch({ phase: previousPhase }); return; }
       const failure = updateCheckFailure(cause);
-      patch({ phase: previousPhase, error: failure.kind === 'error' ? failure.message : null, notice: failure.kind === 'info' ? failure.message : null });
+      patch({ phase: previousPhase, error: failure.kind === 'error' ? failure.message : null, notice: failure.kind === 'info' ? failure.message : null,
+        diagnostic: formatUpdateDiagnostic(cause, performance.now() - started, stage, state.localOnly, state.automatic) });
     } finally { busy = false; }
   },
   later() {

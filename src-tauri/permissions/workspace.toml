@@ -2,7 +2,7 @@
 [[permission]]
 identifier = "main-commands"
 description = "Account, settings, export and notification commands for the main window."
-commands.allow = ["updater_configured", "prepare_app_update", "finish_app_update", "set_autostart_enabled", "get_autostart_enabled", "get_device_info", "save_export_file", "set_capture_shortcut", "set_capture_enabled", "pause_capture_shortcut", "set_capture_account", "prepare_workspace_data_reset", "restart_after_data_reset", "get_capture_account", "configure_desktop_notifications", "show_desktop_notification", "get_in_app_notifications", "dismiss_in_app_notification", "clear_workspace_notifications"]
+commands.allow = ["updater_configured", "check_app_update", "prepare_app_update", "finish_app_update", "set_autostart_enabled", "get_autostart_enabled", "get_device_info", "save_export_file", "set_capture_shortcut", "set_capture_enabled", "pause_capture_shortcut", "set_capture_account", "prepare_workspace_data_reset", "restart_after_data_reset", "get_capture_account", "configure_desktop_notifications", "show_desktop_notification", "get_in_app_notifications", "dismiss_in_app_notification", "clear_workspace_notifications"]
 
 [[permission]]
 identifier = "capture-commands"

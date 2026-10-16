@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.4",
+  "title": "More reliable update checks",
+  "summary": "Update checks allow more time for GitHub to respond, show clearer errors, and include copyable debug details to help troubleshoot connection problems.",
+  "sections": [
+    {
+      "type": "fixed",
+      "items": [
+        "Increased the update check timeout from 20 to 60 seconds to accommodate slower connections and GitHub download redirects.",
+        "Fixed connection failures being incorrectly reported as unreadable update information because the error contained the latest.json URL.",
+        "Updated release links and the fallback updater configuration to use the current scribe-notes repository."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "Failed update checks now include expandable debug details in About, showing the endpoint, elapsed time, failure category and underlying native errors.",
+        "Added a Copy debug details button. Reports stay in the app until copied and redact URL credentials, query tokens, email addresses and Windows user-directory names.",
+        "Timeouts now receive a specific explanation instead of a generic update information error."
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 const mocks = vi.hoisted(() => ({ invoke: vi.fn(), check: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: mocks.invoke }));
-vi.mock('@tauri-apps/plugin-updater', () => ({ check: mocks.check }));
+vi.mock('../src/features/updates/nativeUpdater', () => ({ checkNativeUpdate: mocks.check }));
 import { WorkspacePreferencesContext } from '../src/features/settings/workspacePreferences';
 import { UpdateSettings } from '../src/components/updates/UpdateSettings';
 import { VersionDropdown } from '../src/components/updates/VersionDropdown';
@@ -55,6 +55,27 @@ describe('offline update consent', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('button', { name: 'View releases' })).toBeEnabled();
     expect(screen.getByRole('checkbox')).not.toBeChecked();
+  });
+  it('shows the native timeout cause and lets users copy a redacted report', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    mocks.check.mockRejectedValue({ message: 'error sending request for url (https://github.com/owner/repo/latest.json)', diagnostic: {
+      stage: 'check', category: 'timeout', nativeError: 'error sending request', causes: ['operation timed out'],
+      elapsedMs: 60001, timeoutMs: 60000, endpoints: ['https://user:secret@github.com/owner/repo/latest.json?token=secret'],
+    } });
+    settings();
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('too long'));
+    fireEvent.click(screen.getByText('Update debug details'));
+    expect(screen.getByText(/Cause 1: operation timed out/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy debug details' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain('Elapsed: 60001 ms');
+    expect(writeText.mock.calls[0][0]).not.toContain('secret');
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    mocks.check.mockResolvedValue(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await waitFor(() => expect(screen.queryByText('Update debug details')).toBeNull());
   });
 });
 
