@@ -52,6 +52,7 @@ import { TooltipLayer } from "./components/layout/TooltipLayer";
 import {
   formatShortcut,
   parseShortcutBindings,
+  serializeShortcutBindings,
   matchesShortcut,
   shortcutActions,
   type ShortcutBindings,
@@ -348,7 +349,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const changeShortcuts = async (value: ShortcutBindings) => {
     const globalChanged = value.quickCapture.key !== shortcuts.quickCapture.key || value.quickCapture.shift !== shortcuts.quickCapture.shift;
     if (globalChanged) await registerCaptureShortcut(value.quickCapture);
-    try { saveShortcuts(JSON.stringify(value)); }
+    try { saveShortcuts(serializeShortcutBindings(value)); }
     catch {
       if (globalChanged) await registerCaptureShortcut(shortcuts.quickCapture).catch(() => undefined);
       throw "Could not save shortcuts on this device. Check local storage and try again.";

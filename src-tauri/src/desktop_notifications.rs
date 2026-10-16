@@ -265,7 +265,16 @@ mod windows_impl {
         RegKey, RegValue,
         enums::{HKEY_CURRENT_USER, REG_EXPAND_SZ},
     };
+    // Development must not overwrite the installed app's Windows identity or
+    // point its notification shortcut at target/debug/app.exe.
+    #[cfg(not(debug_assertions))]
     const APP_ID: &str = "com.scribe.notes.notifications";
+    #[cfg(debug_assertions)]
+    const APP_ID: &str = "com.scribe.notes.notifications.dev";
+    #[cfg(not(debug_assertions))]
+    const SHORTCUT_FOLDER: &str = "Microsoft/Windows/Start Menu/Programs/Scribe";
+    #[cfg(debug_assertions)]
+    const SHORTCUT_FOLDER: &str = "Microsoft/Windows/Start Menu/Programs/Scribe Development";
     fn app_focused(app: &AppHandle) -> bool {
         app.get_webview_window("main").is_some_and(|window| {
             window.is_focused().unwrap_or(false)
@@ -295,7 +304,10 @@ mod windows_impl {
             log::warn!("Notification sound could not be played");
         }
     }
+    #[cfg(not(debug_assertions))]
     const ACTIVATOR: GUID = GUID::from_u128(0x1e35c979_784d_4a2e_991b_2e4c8e6d71c0);
+    #[cfg(debug_assertions)]
+    const ACTIVATOR: GUID = GUID::from_u128(0x1e35c979_784d_4a2e_991b_2e4c8e6d71c1);
     const PROPERTY_ID: PROPERTYKEY = PROPERTYKEY {
         fmtid: GUID::from_u128(0x9f4c2855_9f79_4b39_a8d0_e1d42de1d5f3),
         pid: 5,
@@ -386,7 +398,7 @@ mod windows_impl {
             let (registry, _) = RegKey::predef(HKEY_CURRENT_USER)
                 .create_subkey(format!("Software\\Classes\\AppUserModelId\\{APP_ID}"))
                 .map_err(|e| e.to_string())?;
-            registry_text(&registry, "DisplayName", "Scribe")?;
+            registry_text(&registry, "DisplayName", crate::APP_NAME)?;
             registry_text(&registry, "IconUri", self.logo.to_string_lossy().as_ref())?;
             // Protocol activation uses the shortcut's stub CLSID, not a registered
             // COM server. Remove the incompatible registration from earlier builds.
@@ -398,7 +410,7 @@ mod windows_impl {
             let programs = PathBuf::from(
                 std::env::var_os("APPDATA").ok_or("Windows app data is unavailable")?,
             )
-            .join("Microsoft/Windows/Start Menu/Programs/Scribe");
+            .join(SHORTCUT_FOLDER);
             std::fs::create_dir_all(&programs).map_err(|e| e.to_string())?;
             let executable = wide(&std::env::current_exe().map_err(|e| e.to_string())?);
             let icon_path = wide(&icon);
@@ -411,7 +423,7 @@ mod windows_impl {
                     .SetPath(PCWSTR(executable.as_ptr()))
                     .map_err(|e| e.to_string())?;
                 shortcut
-                    .SetDescription(&HSTRING::from("Scribe"))
+                    .SetDescription(&HSTRING::from(crate::APP_NAME))
                     .map_err(|e| e.to_string())?;
                 shortcut
                     .SetIconLocation(PCWSTR(icon_path.as_ptr()), 0)
@@ -613,8 +625,8 @@ mod windows_impl {
                     continue;
                 }
                 let uri = format!(
-                    "com.scribe.notes://notifications/open-note?user={user}&note={}",
-                    plan.note_id
+                    "{}://notifications/open-note?user={user}&note={}",
+                    crate::APP_SCHEME, plan.note_id
                 );
                 let attribution = if is_due {
                     "Note reminder".into()
@@ -808,8 +820,8 @@ mod windows_impl {
                         let id = key(&[&message.user_id, tag]);
                         {
                             let uri = format!(
-                                "com.scribe.notes://notifications/home?user={}",
-                                message.user_id
+                                "{}://notifications/home?user={}",
+                                crate::APP_SCHEME, message.user_id
                             );
                             let alert_id = key(&[&message.user_id, tag, &now().to_string()]);
                             let foreground = app_focused(&app) || (tag == "quick-capture" && message.in_app.unwrap_or(false));
@@ -869,7 +881,7 @@ mod windows_impl {
                     && now() >= *next_attempt
                     && !app_focused(&app)
                 {
-                    let uri = format!("com.scribe.notes://notifications/home?user={user}");
+                    let uri = format!("{}://notifications/home?user={user}", crate::APP_SCHEME);
                     match native.show(
                         "Unable to sync Notes",
                         "Your notes are saved locally. We'll retry syncing automatically.",

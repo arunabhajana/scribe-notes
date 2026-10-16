@@ -155,6 +155,10 @@ The separate product/legal website is not built here. Without `VITE_SCRIBE_WEBSI
 
 ### Run and build
 
+Development runs display **Scribe Dev** and use the existing `com.tauri.dev` data directory. Installed builds display **Scribe** and use `app.scribenotes.desktop`. Their notification registrations, link handlers and Windows startup entry names are separate. Quick Capture defaults to **Ctrl + Shift + D** in dev and **Ctrl + Shift + Space** in the installed app; choosing the same custom shortcut in both can still cause a Windows hotkey conflict.
+
+For native sign-in testing, add `com.scribe.notes.dev://auth/callback` to the Supabase project's **Authentication → URL Configuration → Redirect URLs**. Keep `com.scribe.notes://auth/callback` for installed builds. Signing into the same online account in both builds still accesses the same cloud account; use a separate test account or backend project when testing cloud changes.
+
 | Command | Result |
 | --- | --- |
 | `npm run dev` | Frontend server at `http://127.0.0.1:5173` |

@@ -1,4 +1,5 @@
 import { SettingsTooltipBoundary } from "./SettingsTooltipBoundary";
+import { appName, buildLabel } from "../../features/appIdentity";
 import { UpdateSettings } from "../updates/UpdateSettings";
 import { AccountRequiredNotice } from "./AccountRequiredNotice";
 import { pauseCaptureShortcut } from "../../features/capture/captureBridge";
@@ -1383,8 +1384,8 @@ function CategoryContent({
             <div className="about-mark">
               <AppLogo variant="transparent" />
               <div>
-                <strong>Scribe for Windows</strong>
-                <span>Version {import.meta.env.VITE_APP_VERSION} · Preview</span>
+                <strong>{appName} for Windows</strong>
+                <span>Version {import.meta.env.VITE_APP_VERSION} · {buildLabel}</span>
               </div>
             </div>
             <div className="settings-info-banner">

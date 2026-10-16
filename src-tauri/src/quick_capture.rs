@@ -34,7 +34,7 @@ pub fn initialize(app: &AppHandle) -> tauri::Result<()> {
     });
     let window =
         WebviewWindowBuilder::new(app, "quick-capture", WebviewUrl::App("index.html".into()))
-            .title("Quick capture · Scribe")
+            .title(format!("Quick capture · {}", crate::APP_NAME))
             .inner_size(560.0, 350.0)
             .resizable(false)
             .decorations(false)
@@ -231,6 +231,7 @@ fn show(app: &AppHandle) {
         return;
     }
     if let Some(window) = app.get_webview_window("quick-capture") {
+        let _ = app.emit_to("main", "scribe:capture-prepare", ());
         if !window.is_focused().unwrap_or(false) {
             let focused = app.get_webview_window("main").is_some_and(|main| {
                 main.is_visible().unwrap_or(false)
