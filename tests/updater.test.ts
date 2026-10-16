@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ check: vi.fn(), invoke: vi.fn(), native: vi.fn(() => true) }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke, isTauri: mocks.native }));
-vi.mock('@tauri-apps/plugin-updater', () => ({ check: mocks.check }));
+vi.mock('../src/features/updates/nativeUpdater', () => ({ checkNativeUpdate: mocks.check }));
 
 beforeEach(() => {
   vi.resetModules();
@@ -101,6 +101,16 @@ describe('updater lifecycle', () => {
     await updateActions.check(false);
     expect(mocks.invoke).not.toHaveBeenCalled();
     expect(mocks.check).not.toHaveBeenCalled();
+  });
+  it('allows a manual offline-profile check with automatic updates off', async () => {
+    mocks.check.mockResolvedValue(null);
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('offline-test', true);
+    await updateActions.check(true);
+    expect(mocks.check).toHaveBeenCalledOnce();
+    // A manual request must not opt the profile into future background requests.
+    await updateActions.check(false);
+    expect(mocks.check).toHaveBeenCalledOnce();
   });
   it('keeps offline opt-in separate from an online workspace and remembers it', async () => {
     const { updateActions } = await import('../src/features/updates/updateStore');

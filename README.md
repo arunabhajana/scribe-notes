@@ -34,7 +34,7 @@ Scribe Notes is a small, independent open-source project. Use an offline profile
 
 ### Installation
 
-1. Open the [Releases page](https://github.com/arunabhajana/scribe-windows/releases).
+1. Open the [Releases page](https://github.com/arunabhajana/scribe-notes/releases).
 2. When a published release is available, download its **Windows x64 `-setup.exe`** installer. x64 is the standard Intel/AMD desktop build, not an ARM64 installer.
 3. Run setup, choose an installation location and shortcuts, then launch Scribe.
 4. Create an offline profile or sign in to an online account.
@@ -102,7 +102,7 @@ Open **Settings › About** to check for updates or read **What’s New**. Offli
 
 ### Help and feedback
 
-Use [GitHub Issues](https://github.com/arunabhajana/scribe-windows/issues) for bugs and feature requests. Include the app version, Windows version, reproduction steps and a screenshot if useful. Remove private notes, email addresses, tokens and authenticator codes from shared screenshots/logs.
+Use [GitHub Issues](https://github.com/arunabhajana/scribe-notes/issues) for bugs and feature requests. Include the app version, Windows version, reproduction steps and a screenshot if useful. Remove private notes, email addresses, tokens and authenticator codes from shared screenshots/logs.
 
 If sync fails, read the message and check cloud storage. Quota errors keep changes locally; shorten content or permanently remove unwanted cloud content, including Trash, then retry. For capture problems, check that Scribe is running, Quick Capture is enabled and another app has not claimed its shortcut.
 
@@ -131,8 +131,8 @@ See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for native 
 ### Set up the repository
 
 ```powershell
-git clone https://github.com/arunabhajana/scribe-windows.git
-cd scribe-windows
+git clone https://github.com/arunabhajana/scribe-notes.git
+cd scribe-notes
 npm ci
 ```
 

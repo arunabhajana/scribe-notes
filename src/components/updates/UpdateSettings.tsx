@@ -5,6 +5,7 @@ import { WhatsNewDialog } from './WhatsNewDialog';
 import { openReleasePage } from '../../features/updates/releaseLink';
 import { AutomaticUpdatesDialog } from './AutomaticUpdatesDialog';
 import { useWorkspaceId } from '../../features/settings/workspacePreferences';
+import { UpdateDiagnostics } from './UpdateDiagnostics';
 
 export function UpdateSettings({ localOnly = false }: { localOnly?: boolean }) {
   const state = useUpdates();
@@ -18,6 +19,7 @@ export function UpdateSettings({ localOnly = false }: { localOnly?: boolean }) {
       {state.version ? <button type="button" className="update-primary" disabled={busy} onClick={updateActions.open}><Download size={15} />{state.phase === 'ready' ? 'Install update' : state.phase === 'downloading' ? 'View download' : 'View update'}</button> : <button type="button" className="update-secondary" disabled={busy} onClick={() => void updateActions.check()}><RefreshCw size={15} className={busy ? 'update-spin' : ''} />{busy ? 'Checking…' : 'Check for updates'}</button>}
     </div>
     {(state.error || state.notice) && <div className="update-feedback">{state.error ? <p className="update-error" role="alert">{state.error}</p> : <p className="update-notice" role="status">{state.notice}</p>}<button type="button" className="update-secondary" onClick={() => void openReleasePage().catch(() => undefined)}>View releases</button></div>}
+    {state.diagnostic && <UpdateDiagnostics key={state.diagnostic} report={state.diagnostic} />}
     {state.version && <p className="update-help">{state.summary}</p>}
     <label className="update-auto"><input className="update-auto-input" type="checkbox" checked={state.automatic} onChange={event => {
       setPreferenceError('');

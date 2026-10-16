@@ -20,7 +20,7 @@ if (!publicText.startsWith('untrusted comment:') || !keyLine || Buffer.from(keyL
   throw new Error('TAURI_UPDATER_PUBLIC_KEY must contain the full contents of the Tauri .pub file.');
 }
 if (!process.env.TAURI_SIGNING_PRIVATE_KEY) throw new Error('Set the TAURI_SIGNING_PRIVATE_KEY GitHub Actions secret.');
-const repository = process.env.GITHUB_REPOSITORY || 'arunabhajana/scribe-windows';
+const repository = process.env.GITHUB_REPOSITORY || 'arunabhajana/scribe-notes';
 if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error('Invalid release repository.');
 if (process.env.GITHUB_REF_NAME && process.env.GITHUB_REF_NAME !== `v${version}`) throw new Error('Release tag must match the package version.');
 const installer = JSON.parse(readFileSync(resolve(root, 'src-tauri/tauri.installer.conf.json'), 'utf8'));

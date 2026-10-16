@@ -85,6 +85,7 @@ pub fn run() {
             get_autostart_enabled,
             get_device_info,
             app_updates::updater_configured,
+            app_updates::check_app_update,
             app_updates::prepare_app_update,
             app_updates::finish_app_update,
             data_export::save_export_file,

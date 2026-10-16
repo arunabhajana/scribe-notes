@@ -7,6 +7,7 @@ fn main() {
             "get_autostart_enabled",
             "get_device_info",
             "updater_configured",
+            "check_app_update",
             "prepare_app_update",
             "finish_app_update",
             "save_export_file",

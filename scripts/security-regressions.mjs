@@ -97,7 +97,7 @@ const nativePermissions = await readFile(new URL("../src-tauri/permissions/works
 const captureCommands = nativePermissions.split('identifier = "capture-commands"')[1];
 check(Boolean(captureCommands) && !/save_export_file|set_capture_account|clear_workspace_notifications/.test(captureCommands), "capture commands exclude account changes, exports and destructive cleanup");
 const captureCapability = JSON.parse(await readFile(new URL('../src-tauri/capabilities/quick-capture.json', import.meta.url)));
-check(!captureCapability.permissions.some(item => typeof item === 'string' && item.startsWith('updater:')) && !/updater_configured|prepare_app_update|finish_app_update/.test(captureCommands), 'Quick Capture cannot check, download or install app updates');
+check(!captureCapability.permissions.some(item => typeof item === 'string' && item.startsWith('updater:')) && !/updater_configured|check_app_update|prepare_app_update|finish_app_update/.test(captureCommands), 'Quick Capture cannot check, download or install app updates');
 const nativeSource = await readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
 const nativeBuild = await readFile(new URL("../src-tauri/build.rs", import.meta.url), "utf8");
 const registeredCommands = nativeSource.match(/generate_handler!\[([\s\S]*?)\]/)[1].split(",").map(name => name.trim().split("::").pop()).filter(Boolean).sort();
