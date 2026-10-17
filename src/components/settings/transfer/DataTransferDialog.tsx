@@ -23,7 +23,7 @@ export function DataTransferDialog({ target, returnToDeletion, onClose }: { targ
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [folder, setFolder] = useState("all");
   const [drafts, setDrafts] = useState(true);
-  const [trash, setTrash] = useState(target.mode === "import");
+  const [trash, setTrash] = useState(target.mode === "import" || Boolean(target.noteIds));
   const [reminders, setReminders] = useState(target.mode === "export");
   const [emptyFolders, setEmptyFolders] = useState(target.mode === "import");
   const [allowCopies, setAllowCopies] = useState(false);
@@ -44,10 +44,10 @@ export function DataTransferDialog({ target, returnToDeletion, onClose }: { targ
   }, []);
   useEffect(() => {
     let active = true;
-    if (exporting) void loadExportSource(target.id).then(data => { if (active) { setSource(data); setSelected(new Set(data.notes.map(note => note.id))); } }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Could not read saved notes."); });
+    if (exporting) void loadExportSource(target.id).then(data => { if (active) { setSource(data); setSelected(new Set(target.noteIds ? data.notes.filter(note => target.noteIds!.includes(note.id)).map(note => note.id) : data.notes.map(note => note.id))); } }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Could not read saved notes."); });
     else void offlineStore.pendingImports(target.id).then(jobs => { if (active) setPendingJobs(jobs.length); }).catch(() => { if (active) setError("Could not open local import storage."); });
     return () => { active = false; };
-  }, [target.id, exporting, revision]);
+  }, [target.id, target.noteIds, exporting, revision]);
   const eligible = useMemo(() => source?.notes.filter(note => (!note.isDraft || drafts || Boolean(note.deletedAt)) && (!note.deletedAt || trash) && (folder === "all" || (folder === "unfiled" ? !note.folderId : note.folderId === folder))) ?? [], [source, drafts, trash, folder]);
   const selection = useMemo(() => new Set(eligible.filter(note => selected.has(note.id)).map(note => note.id)), [eligible, selected]);
   const selectedSource = useMemo(() => {

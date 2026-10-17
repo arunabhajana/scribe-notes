@@ -8,6 +8,7 @@ import { useWritingPreferences } from "../../features/settings/writingPreference
 
 export function EditorHeader({
   note,
+  saveStatus = "saved",
   titleEditable,
   onUpdateTitle,
   onTogglePinned,
@@ -21,6 +22,7 @@ export function EditorHeader({
   reminder,
   onSetReminder,
 }: {
+  saveStatus?: "saved" | "saving" | "failed";
   note: Note;
   titleEditable: boolean;
   onUpdateTitle: (title: string) => void;
@@ -81,8 +83,8 @@ export function EditorHeader({
           </button>
         )}
       </div>
-      <span className="save-status" data-tooltip="All changes are saved on this device">
-        <span className="save-dot" />Saved
+      <span className={`save-status is-${saveStatus}`} role="status" data-tooltip={saveStatus === "saved" ? "All changes are saved on this device" : saveStatus === "saving" ? "Saving workspace changes on this device" : "Some edits have not saved. Keep Scribe open and use Recover edits."}>
+        <span className="save-dot" />{saveStatus === "saved" ? "Saved" : saveStatus === "saving" ? "Saving..." : "Save failed"}
       </span>
       </div>
       <div className="editor-actions">

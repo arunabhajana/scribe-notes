@@ -11,6 +11,7 @@ import { applyMarkdownAction } from "./markdownFormatting";
 import { isMacOS } from "../../features/shortcuts/keyboardShortcuts";
 
 type EditorPaneProps = {
+  saveStatus?: "saved" | "saving" | "failed";
   editModeShortcut: string;
   reminder?: NoteReminder;
   onSetReminder: () => void;
@@ -38,6 +39,7 @@ type EditorPaneProps = {
 };
 
 export function EditorPane({
+  saveStatus = "saved",
   editModeShortcut,
   reminder,
   onSetReminder,
@@ -101,6 +103,7 @@ export function EditorPane({
   return (
     <section className="editor-pane" data-context-note={note.id} data-sync-editing={bodyEditing ? "true" : undefined}>
       <EditorHeader
+        saveStatus={saveStatus}
         reminder={reminder}
         onSetReminder={onSetReminder}
         note={note}

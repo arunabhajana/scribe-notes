@@ -1,3 +1,4 @@
+import type { SyncIssueKind } from "../features/notes/syncIssue";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../features/auth/supabaseClient";
 import { REMINDERS_CHANGED_EVENT, reminderStore } from "../features/reminders/reminderStore";
@@ -9,7 +10,7 @@ import { isCloudSyncEnabled } from "../features/settings/cloudSyncPreference";
 
 export function useReminders(userId: string | null, offlineMode: boolean) {
   const [cache, setCache] = useState<ReminderCache | null>(null);
-  const [issue, setIssue] = useState<{ userId: string; message: string; kind: "local" | "cloud" } | null>(null);
+  const [issue, setIssue] = useState<{ userId: string; message: string; kind: "local" | "cloud"; actionKind?: SyncIssueKind } | null>(null);
   const [syncingFor, setSyncingFor] = useState<string | null>(null);
   const wake = useRef<() => void>(() => undefined);
 
@@ -73,7 +74,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
         failures++;
         retryAt = Date.now() + Math.min(300_000, 15_000 * 2 ** Math.min(failures - 1, 5));
         const message = cause && typeof cause === "object" && "message" in cause ? String(cause.message) : "";
-        if (active) setIssue({ userId, kind: cloudRequestPending ? "cloud" : "local", message: !cloudRequestPending ? "Could not update local reminder storage. Please reopen Scribe and try again." : message.includes("SCRIBE_STORAGE_LIMIT_REACHED") ? CLOUD_STORAGE_LIMIT_MESSAGE : /schema cache|function .*does not exist/i.test(message)
+        if (active) setIssue({ userId, kind: cloudRequestPending ? "cloud" : "local", actionKind: cloudRequestPending ? message.includes("SCRIBE_STORAGE_LIMIT_REACHED") ? "storage-limit" : "cloud" : "other", message: !cloudRequestPending ? "Could not update local reminder storage. Please reopen Scribe and try again." : message.includes("SCRIBE_STORAGE_LIMIT_REACHED") ? CLOUD_STORAGE_LIMIT_MESSAGE : /schema cache|function .*does not exist/i.test(message)
           ? "Reminders are saved locally. Apply the reminder migration in Supabase to enable cloud sync."
           : "Reminder sync is paused. Your reminders are saved on this device. Check your connection and retry sync; Scribe also retries automatically." });
       } finally {
@@ -149,6 +150,7 @@ export function useReminders(userId: string | null, offlineMode: boolean) {
     syncing: !offlineMode && syncingFor === userId && userId !== null,
     error: issue?.userId === userId && (!offlineMode || issue.kind === "local") ? issue.message : null,
     cloudSyncError: !offlineMode && issue?.userId === userId && issue.kind === "cloud" ? issue.message : null,
+    errorKind: issue?.userId === userId ? issue.actionKind ?? "other" : "other",
     clearError: () => setIssue(null),
     save,
   };

@@ -96,6 +96,14 @@ Exports contain your note content; store them somewhere you trust. **Scribe does
 
 Export anything you want to keep before permanent deletion. Turning sync off, signing out and moving notes to Trash are not account deletion or permanent content erasure. Enabling sync again after deleting cloud content can upload retained local notes.
 
+### Note tools in v0.2
+
+- **Select notes with the mouse:** Ctrl-click to add or remove notes, Shift-click to select a range, or drag across the list. Right-click the selection to move, trash, restore or export it. Ctrl+A selects all notes in the current view, and Escape clears a group selection. Export opens the existing review screen with that selection; nothing is downloaded automatically. A move to Trash offers Undo for 12 seconds.
+- **Note history** in a note's right-click menu enables optional history for the active workspace on this device. It is off by default and keeps at most 10 earlier titles/texts per note, automatic snapshots at most once a minute plus a checkpoint before restoring, with a 100 KB limit per version and a 2 MB workspace allowance. Old versions are evicted first. History is excluded from sync and exports. Turning history off clears all saved history for that workspace; permanent note deletion or local workspace deletion also removes it. Moving a note to Trash keeps its history until permanent deletion. This is limited recovery, not a backup service.
+- A subtle **conflicts** link in the note-list footer appears when note conflicts need review. It reviews conflicts detected by v0.2 on this device. Earlier releases' conflict copies remain ordinary notes and can be found by searching for `conflict copy`. The review compares the preserved local copy with the current original. Using local text replaces only the original's title/text and moves the extra copy to Trash.
+- **Snooze** on an in-app reminder offers five minutes, fifteen minutes, one hour or a custom future time. The new schedule uses the normal local reminder store and optional sync. Scribe must be running to deliver it.
+- **Save recovery** appears after local-save failures. Keep the app open while it retries. Copy text or export current notes from memory to protect edits that have not reached storage. Recovery exports omit reminders and preferences; normal transfer size limits apply.
+
 ### App updates
 
 Open **Settings › About** to check for updates or read **What’s New**. Offline profiles start with automatic update checks off. Enabling them shows an explanation and requires confirmation; the choice is saved separately for each workspace on this device. Update requests contact GitHub using the internet, without including your notes, display name or Scribe sign-in details. Downloads and installation require your action. Manual checks remain available with automatic checks off. Only published stable releases with update metadata appear in the updater; drafts and prereleases do not.

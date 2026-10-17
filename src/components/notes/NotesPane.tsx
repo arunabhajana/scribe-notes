@@ -1,5 +1,10 @@
+import { VirtualNoteList } from "./VirtualNoteList";
+import { type ReactNode } from "react";
+import { useNoteSelection } from "./useNoteSelection";
+import { useContextMenu, type ContextMenuItem } from "../context-menu/contextMenuState";
+import "./workspaceTools.css";
 import type { Note, NoteSection } from "../../types/note";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import type { NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
 import { EmptyNotes } from "./EmptyNotes";
@@ -41,7 +46,13 @@ export function NotesPane({
   reminders,
   onEditReminder,
   loading = false,
+  tools, onBulk, onExportSelection, localSaveStatus = "saved", statusDetail,
 }: {
+  tools?: ReactNode;
+  localSaveStatus?: "saved" | "saving" | "failed";
+  statusDetail?: string;
+  onBulk?: (ids: string[], action: "trash" | "restore" | "move", folderId?: string | null) => void;
+  onExportSelection?: (ids: string[]) => void;
   notes: Note[];
   folders: NoteFolder[];
   selectedId: string | null;
@@ -60,7 +71,28 @@ export function NotesPane({
   onEditReminder: (noteId: string) => void;
   loading?: boolean;
 }) {
+  const selection = useNoteSelection(notes, selectedId);
+  const select = selection.click;
+  const openNote = useCallback((id: string) => { select(id, false, false); onSelectNote(id); }, [select, onSelectNote]);
+  const openContextMenu = useContextMenu();
+  const chosen = [...selection.selected];
+  const bulk = (action: "trash" | "restore" | "move", folderId?: string | null) => { onBulk?.(chosen, action, folderId); selection.clear(); };
+  const showSelectionMenu = (x: number, y: number, target: HTMLElement) => {
+    const items: ContextMenuItem[] = [
+      { label: `${chosen.length} notes selected`, disabled: true, action: () => {} },
+      { label: 'Export selected notes', action: () => onExportSelection?.(chosen) },
+    ];
+    if (section === 'trash') items.push({ label: 'Restore selected notes', separator: true, action: () => bulk('restore') });
+    else {
+      items.push({ label: 'Move to Unfiled', separator: true, action: () => bulk('move', null) });
+      for (const folder of folders) items.push({ label: `Move to ${folder.name}`, action: () => bulk('move', folder.id) });
+      items.push({ label: 'Move selected notes to Trash', separator: true, danger: true, action: () => bulk('trash') });
+    }
+    items.push({ label: 'Select all notes in this view', separator: true, action: () => selection.replace(notes.map(note => note.id)) }, { label: 'Clear selection', action: selection.clear });
+    openContextMenu(x, y, items, target);
+  };
   const foldersById = useMemo(() => new Map(folders.map(item => [item.id, item])), [folders]);
+  const renderNote = (note: Note) => <NoteRow reminder={reminders[note.id]} onEditReminder={onEditReminder} note={note} folderConfig={note.folderId ? foldersById.get(note.folderId) : undefined} selected={selection.explicit ? selection.selected.has(note.id) : selectedId === note.id} onSaveDraft={onSaveDraft} onSelectNote={openNote} onTogglePinned={onTogglePinned}/>;
   const title =
     section === "drafts"
       ? "Drafts"
@@ -72,7 +104,34 @@ export function NotesPane({
             ? "Trash"
             : folder || "All Notes";
   return (
-    <section className="notes-pane">
+    <section className="notes-pane" onClickCapture={event => {
+      const target = event.target as HTMLElement;
+      if (target.closest<HTMLElement>('.notes-scroll')?.dataset.suppressClick === 'true') { event.preventDefault(); event.stopPropagation(); return; }
+      const card = target.closest<HTMLElement>('.notes-scroll [data-context-note]');
+      if (!card) { if (target.closest('.notes-scroll')) selection.clear(); return; }
+      if (target.closest('button, input, a, select, textarea')) return;
+      const id = card.dataset.contextNote!;
+      if (event.ctrlKey || event.metaKey || event.shiftKey) { selection.click(id, event.ctrlKey || event.metaKey, event.shiftKey); event.preventDefault(); event.stopPropagation(); }
+    }} onContextMenu={event => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.notes-scroll')) return;
+      const id = target.closest<HTMLElement>('[data-context-note]')?.dataset.contextNote;
+      if (chosen.length > 1 && (!id || selection.selected.has(id))) {
+        event.preventDefault(); event.stopPropagation(); showSelectionMenu(event.clientX, event.clientY, target);
+      } else if (id) selection.replace([id]);
+      else if (notes.length) {
+        event.preventDefault(); event.stopPropagation();
+        openContextMenu(event.clientX, event.clientY, [{ label: 'New Note', action: onCreateNote }, { label: 'Select all notes in this view', separator: true, action: () => selection.replace(notes.map(note => note.id)) }], target);
+      }
+    }} onKeyDownCapture={event => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.notes-scroll') || target.closest('input, textarea, select')) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') { event.preventDefault(); event.stopPropagation(); selection.replace(notes.map(note => note.id)); }
+      if (event.key === 'Escape' && chosen.length > 1) { event.preventDefault(); event.stopPropagation(); selection.clear(); }
+      if ((event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') && chosen.length > 1) {
+        event.preventDefault(); event.stopPropagation(); const rect = target.getBoundingClientRect(); showSelectionMenu(rect.left + 20, rect.top + 20, target);
+      }
+    }}>
       <header className="pane-header">
         <div>
           <h1>{title}</h1>
@@ -94,34 +153,11 @@ export function NotesPane({
         <span>Sort by</span>
         <NoteSortDropdown value={sortOrder} onChange={onSortChange} />
       </div>
-      <div className="notes-scroll">
-        {loading ? <NotesSkeleton /> : notes.length === 0 ? (
-          <EmptyNotes
-            search={search}
-            isTrash={section === "trash"}
-            onCreateNote={onCreateNote}
-            newNoteShortcut={formatShortcut(shortcuts.newNote)}
-          />
-        ) : (
-          notes.map((note) => (
-            <NoteRow
-              reminder={reminders[note.id]}
-              onEditReminder={onEditReminder}
-              key={note.id}
-              note={note}
-              folderConfig={note.folderId ? foldersById.get(note.folderId) : undefined}
-              selected={selectedId === note.id}
-              onSaveDraft={onSaveDraft}
-              onSelectNote={onSelectNote}
-              onTogglePinned={onTogglePinned}
-            />
-          ))
-        )}
-      </div>
+      {loading ? <div className="notes-scroll"><NotesSkeleton /></div> : notes.length === 0 ? <div className="notes-scroll"><EmptyNotes search={search} isTrash={section === "trash"} onCreateNote={onCreateNote} newNoteShortcut={formatShortcut(shortcuts.newNote)}/></div> : <VirtualNoteList notes={notes} selectedId={selectedId} selectedIds={selection.explicit ? chosen : selectedId ? [selectedId] : []} onDragSelection={selection.replace}>{renderNote}</VirtualNoteList>}
       <footer className="list-footer">
-        <span>
+        <span title={statusDetail}>
           <Icon name="clock" size={13} />{" "}
-          {syncStatus === "syncing"
+          {localSaveStatus === "failed" ? "Save failed" : localSaveStatus === "saving" ? "Saving..." : syncStatus === "syncing"
             ? "Syncing…"
             : syncStatus === "synced"
               ? "Synced"
@@ -131,7 +167,8 @@ export function NotesPane({
                   ? "Sync issue"
                   : "On this device"}
         </span>
-        <span title="Search Notes">{formatShortcut(shortcuts.search)}</span>
+        {tools}
+        <span title="Ctrl-click to add notes, Shift-click for a range, or drag to select. Right-click for actions.">{chosen.length > 1 ? `${chosen.length} selected` : formatShortcut(shortcuts.search)}</span>
       </footer>
     </section>
   );

@@ -1,3 +1,4 @@
+import type { SyncIssueKind } from "../../features/notes/syncIssue";
 import { Bell, CheckCircle2, CloudOff, X } from "lucide-react";
 import type { InAppNotification, NotificationTarget } from "../../features/notifications/desktopNotifications";
 import { AppLogo } from "../AppLogo";
@@ -5,7 +6,8 @@ import { formatReminderTime } from "../../features/reminders/reminderTypes";
 import "./appNotifications.css";
 import { useEffect } from "react";
 
-export function AppNotifications({ alerts, onDismiss, onOpen, onRetry, onStorage, onTrash }: {
+export function AppNotifications({ alerts, onDismiss, onOpen, onRetry, onStorage, onTrash, syncIssueKind, onSnooze }: {
+  syncIssueKind?: SyncIssueKind; onSnooze?: (alert: InAppNotification) => void;
   onRetry?: () => void; onStorage?: () => void; onTrash?: () => void;
   alerts: InAppNotification[]; onDismiss: (id: string) => Promise<void>; onOpen: (target: NotificationTarget) => void;
 }) {
@@ -27,7 +29,7 @@ export function AppNotifications({ alerts, onDismiss, onOpen, onRetry, onStorage
   return <section className="app-notification-stack" aria-label="Notifications" aria-live="polite" aria-relevant="additions">
     {syncAlert && <div className="app-sync-notice" role="status">
       {syncAlert.kind === "sync-error" ? <CloudOff size={17} /> : <CheckCircle2 size={17} />}
-      <div><strong>{syncAlert.title}</strong><p>{syncAlert.body}</p>{syncAlert.kind === "sync-error" && <div className="app-notification-actions">{syncAlert.body.includes("Cloud storage") ? <>{onStorage && <button type="button" onClick={onStorage}>View storage</button>}{onTrash && <button type="button" onClick={onTrash}>Open Trash</button>}</> : onRetry && <button type="button" onClick={onRetry}>Retry sync</button>}</div>}</div>
+      <div><strong>{syncAlert.title}</strong><p>{syncAlert.body}</p>{syncAlert.kind === "sync-error" && <div className="app-notification-actions">{syncIssueKind === "storage-limit" ? <>{onStorage && <button type="button" onClick={onStorage}>View storage</button>}{onTrash && <button type="button" onClick={onTrash}>Open Trash</button>}</> : onRetry && <button type="button" onClick={onRetry}>Retry sync</button>}</div>}</div>
       <button type="button" className="app-notification-close" aria-label="Dismiss sync notification" onClick={() => { void onDismiss(syncAlert.id); }}><X size={15} /></button>
     </div>}
     {cards.length > 3 && <span className="app-notification-count">{cards.length} notifications · dismiss to see more</span>}
@@ -41,7 +43,7 @@ export function AppNotifications({ alerts, onDismiss, onOpen, onRetry, onStorage
       {alert.kind === "reminder" && alert.dueAt && <time dateTime={new Date(alert.dueAt).toISOString()}>{alert.body === "Note reminder" ? "Scheduled for" : alert.body + " ·"} {formatReminderTime(new Date(alert.dueAt).toISOString())}</time>}
       <div className="app-notification-actions">
         {alert.noteId && <button type="button" className="notification-open" onClick={() => onOpen({ userId: alert.userId, noteId: alert.noteId! })}>Open note</button>}
-        {alert.kind === "reminder" && <span data-tooltip="Snooze is coming soon" tabIndex={0}><button type="button" disabled>Snooze</button></span>}
+        {alert.kind === "reminder" && <button type="button" onClick={() => onSnooze?.(alert)}>Snooze</button>}
         <button type="button" onClick={() => { void onDismiss(alert.id); }}>Dismiss</button>
       </div>
     </article>)}

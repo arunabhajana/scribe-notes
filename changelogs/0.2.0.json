@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "version": "0.2.0",
+  "title": "More control over your notes",
+  "summary": "Organise notes together, snooze reminders, revisit earlier text and see more clearly what is saved on your device or waiting to sync.",
+  "sections": [
+    {
+      "type": "feature",
+      "items": [
+        "Select notes with Ctrl-click, Shift-click or a mouse drag, then right-click to move, trash, restore or export the selection.",
+        "Undo a move to Trash immediately without leaving your workspace.",
+        "Snooze a reminder for five minutes, fifteen minutes, one hour or a custom time. The new schedule stays saved after restarting and syncs when enabled.",
+        "Note history is tucked into each note’s right-click menu and optionally keeps earlier titles and text on this device. Review a version before restoring it. History is off by default, has clear storage limits and can be cleared at any time.",
+        "Review new sync conflicts side by side. Keep both versions, open the preserved copy to combine changes yourself, or use its text in the original note."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "Local saving and cloud sync have separate status messages, including the last successful note sync and changes waiting to upload.",
+        "If local saving fails, keep Scribe open to retry or use recovery tools to copy the current text and export notes still held in memory.",
+        "Large note collections render fewer cards at once, and search reuses prepared text to keep browsing more responsive. Word counts and reading estimates give typing priority."
+      ]
+    },
+    {
+      "type": "fixed",
+      "items": [
+        "Searching in Trash now filters deleted notes correctly.",
+        "When another Scribe window blocks a storage upgrade, a useful explanation replaces an indefinite wait.",
+        "Sync messages choose their recovery actions from the type of problem, so changing message wording does not remove the correct actions.",
+        "Permanently deleting a note removes its local history. Clearing local workspace data also removes its history and conflict-review records."
+      ]
+    }
+  ]
+}
