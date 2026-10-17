@@ -66,8 +66,19 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   }, []);
   useEffect(() => {
     if (!menu) return;
-    menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
-    const close = (event: Event) => { if (!menuRef.current?.contains(event.target as Node)) setMenu(null); };
+    const scrollPositions = new Map<Element, [number, number]>();
+    for (let element = menu.target; element; element = element.parentElement) scrollPositions.set(element, [element.scrollLeft, element.scrollTop]);
+    menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+    const close = (event: Event) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      // A source card may have scrolled into view just before the menu opened.
+      // Its queued scroll event must not immediately dismiss the new menu.
+      if (event.type === 'scroll' && event.target instanceof Element) {
+        const position = scrollPositions.get(event.target);
+        if (position && position[0] === event.target.scrollLeft && position[1] === event.target.scrollTop) return;
+      }
+      setMenu(null);
+    };
     window.addEventListener("pointerdown", close);
     window.addEventListener("resize", close);
     window.addEventListener("scroll", close, true);

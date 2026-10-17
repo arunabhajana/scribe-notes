@@ -58,7 +58,7 @@ export function DeleteOfflineProfileDialog({ profile, interrupted, onClose, onDe
       {summary.pendingImports > 0 && <small>{summary.pendingImports} notes in unfinished imports will also be removed.</small>}
       <small>Includes the profile and local save queue. Estimated data size, not disk space recovered.</small>
     </section> : !interrupted && !error ? <p className="offline-delete-loading" role="status"><LoaderCircle size={16} className="offline-delete-spinner" /> Reading saved data…</p> : null}
-    {interrupted && !summary && <p>Removes this profile, notes (including Drafts and Trash), folders, reminders, preferences, Quick Capture draft and saved notification history.</p>}
+    {interrupted && !summary && <p>Removes this profile, notes (including Drafts and Trash), folders, reminders, preferences, Quick Capture draft, saved notification history, local note history and conflict reviews.</p>}
     <div className="offline-delete-scope"><strong>Other workspaces stay untouched.</strong><p>Saved data for other offline profiles and signed-in accounts, including their cloud data, will not be deleted.</p></div>
     {!interrupted && <>
       <p className="offline-delete-warning"><AlertTriangle size={16} /><span>Deletion cannot be undone. An export saved beforehand can be imported into an offline or online workspace later.</span></p>

@@ -1,3 +1,4 @@
+import type { SyncIssueKind } from "../../features/notes/syncIssue";
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, LoaderCircle, X } from "lucide-react";
 
@@ -40,8 +41,11 @@ export function StatusToast({ message, busy = false, onDismiss, actions }: {
   </div>;
 }
 
-export function SyncFeedback({ error, syncing, loading, onDismiss, onRetry, onStorage, onTrash }: {
+export function SyncFeedback({ error, syncing, loading, onDismiss, onRetry, onStorage, onTrash, errorKind, onRecover, onConflicts }: {
   error: string | null;
+  errorKind?: SyncIssueKind;
+  onRecover?: () => void;
+  onConflicts?: () => void;
   syncing: boolean;
   loading: boolean;
   onDismiss: () => void;
@@ -67,10 +71,10 @@ export function SyncFeedback({ error, syncing, loading, onDismiss, onRetry, onSt
     return () => window.clearTimeout(timer);
   }, [syncing, error]);
   return <div className="status-toast-stack">
-    {error && <StatusToast key={error} message={error} onDismiss={onDismiss} actions={error.includes("Cloud storage") ? [
+    {error && <StatusToast key={error} message={error} onDismiss={onDismiss} actions={errorKind === "storage-limit" ? [
       ...(onStorage ? [{ label: "View storage", onClick: onStorage }] : []),
       ...(onTrash ? [{ label: "Open Trash", onClick: onTrash }] : []),
-    ] : /cloud sync|reminder sync/i.test(error) && onRetry ? [{ label: "Retry sync", onClick: onRetry }] : undefined} />}
+    ] : errorKind === "cloud" && onRetry ? [{ label: "Retry sync", onClick: onRetry }] : errorKind === "local-save" && onRecover ? [{ label: "Recover unsaved edits", onClick: onRecover }] : errorKind === "conflict" && onConflicts ? [{ label: "Review conflicts", onClick: onConflicts }] : undefined} />}
     {showSync && <StatusToast busy message={loading ? "Loading your Notes…" : "Syncing your Notes…"} />}
   </div>;
 }

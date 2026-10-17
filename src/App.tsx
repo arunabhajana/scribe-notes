@@ -1,3 +1,5 @@
+import { NoteTools, type NoteTool } from "./components/notes/NoteTools";
+import type { InAppNotification } from "./features/notifications/desktopNotifications";
 import { usePendingDataDeletion, type DataDeletionTarget } from "./features/auth/dataDeletionState";
 import { prepareCloudReconnect } from "./features/settings/cloudGeneration";
 import type { TransferTarget } from "./features/transfer/transferTypes";
@@ -62,6 +64,7 @@ import {
 const DeleteDataDialog = lazy(() => import("./components/settings/DeleteDataDialog").then(module => ({ default: module.DeleteDataDialog })));
 const DataTransferDialog = lazy(() => import("./components/settings/transfer/DataTransferDialog").then(module => ({ default: module.DataTransferDialog })));
 const SettingsPage = lazy(() => import("./components/settings/SettingsPage").then(module => ({ default: module.SettingsPage })));
+const SnoozeDialog = lazy(() => import("./components/reminders/SnoozeDialog").then(module => ({ default: module.SnoozeDialog })));
 const WorkspaceTour = lazy(() => import("./components/onboarding/WorkspaceTour"));
 
 type AppPage = "notes" | "preferences";
@@ -141,6 +144,15 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     : localWorkspaceId ? { id: localWorkspaceId } : null,
   [auth.loading, auth.user, accountTerms.ready, auth.mfa.loading, auth.mfa.required, auth.passwordRecoveryRequired, localWorkspaceId, workspaceDeletionBlocked]);
   const notesState = useNotes(notesUser, Boolean(notesUser), offlineMode);
+  const [noteTool, setNoteTool] = useState<NoteTool>(null);
+  const [snoozeAlert, setSnoozeAlert] = useState<InAppNotification | null>(null);
+  const [trashUndo, setTrashUndo] = useState<{ owner: string; ids: string[]; timestamp: string } | null>(null);
+  useEffect(() => {
+    if (!trashUndo) return;
+    const timer = window.setTimeout(() => setTrashUndo(null), 12_000);
+    return () => window.clearTimeout(timer);
+  }, [trashUndo]);
+
   const noteCounts = useMemo(() => {
     const folders: Record<string, number> = {};
     let all = 0, unfiled = 0, drafts = 0;
@@ -392,6 +404,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const showTourEditor = tour.open && tour.step === 'new-note';
   const goToTourStep = tour.goTo;
   const openNewNote = useCallback(() => {
+    if (!notesState.cacheReady) { showNoteError("Local storage is not ready. Resolve the storage message and reopen Scribe before creating notes."); return; }
     if (isComposerOpen) {
       window.dispatchEvent(new Event("scribe:restore-note-draft"));
     } else {
@@ -400,7 +413,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
       setIsComposerModalActive(true);
     }
     if (showTourEditor) goToTourStep('write');
-  }, [isComposerOpen, showTourEditor, goToTourStep]);
+  }, [isComposerOpen, showTourEditor, goToTourStep, notesState.cacheReady, showNoteError]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -466,6 +479,13 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
     tour.open,
   ]);
 
+  const trashNotes = (ids: string[]) => {
+    if (!notesUser) return;
+    const timestamp = new Date().toISOString();
+    const active = notesState.notes.filter(note => ids.includes(note.id) && !note.deletedAt).map(note => note.id);
+    notesState.bulkUpdateNotes(active, { deletedAt: timestamp });
+    setTrashUndo({ owner: notesUser.id, ids: active, timestamp });
+  };
   const handleDeleteNote = (note: Note) => {
     if (note.deletedAt) {
       if (reminderState.reminders[note.id]?.dueAt) {
@@ -473,7 +493,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
       }
       notesState.permanentlyDelete(note.id);
     } else {
-      notesState.moveToTrash(note.id);
+      trashNotes([note.id]);
       // Context-menu actions capture the render that opened the menu, before
       // the coach advances from the card to the Trash menu item.
       if (tour.open && ['delete-note', 'delete-menu'].includes(tour.step) && note.id === tour.practiceNoteId) tour.goTo('organize');
@@ -648,7 +668,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
             notesState.moveFolder("system:unfiled", offset)
           }
         /></Suspense>
-        <SyncFeedback onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
+        <SyncFeedback errorKind={notesState.error ? notesState.errorKind : reminderState.errorKind} onRecover={() => { setPage("notes"); setNoteTool("recovery"); }} onConflicts={() => { setPage("notes"); setNoteTool("conflicts"); }} onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} error={notesState.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={notesState.clearError} />
       </div>
     );
 
@@ -665,6 +685,8 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           items = [
             ...(!target.closest(".editor-pane") ? [{ label: "Open Note", action: () => notesState.setSelectedId(note.id) }] : []),
             { label: "Copy Markdown", action: () => navigator.clipboard.writeText(note.body) },
+            { label: "Note history", action: () => { notesState.setSelectedId(note.id); setNoteTool("history"); } },
+            { label: "Export Note", action: () => { if (notesUser) onOpenTransfer({ id: notesUser.id, displayName: accountProfile.displayName, localOnly: usingLocalProfile, cloudSync: !offlineMode, mode: "export", noteIds: [note.id] }); } },
           ];
           if (note.deletedAt) items.push(
             { label: "Restore Note", separator: true, action: () => handleRestoreNote(note.id) },
@@ -771,6 +793,15 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           profile={accountProfile}
         />
         <NotesPane
+          key={`${notesUser?.id}:${notesState.section}:${notesState.folderId ?? ''}`}
+          tools={notesUser && notesState.cacheReady ? <NoteTools key={notesUser.id} userId={notesUser.id} notes={notesState.notes} folders={notesState.folders} selected={notesState.selectedNote} saveStatus={notesState.localSaveStatus} tool={noteTool} onTool={setNoteTool} onUpdate={notesState.updateNote} onOpen={id => { notesState.setSearch(''); notesState.selectSection('all'); notesState.setSelectedId(id); }} onRetry={notesState.retryLocalSaves}/> : undefined}
+          localSaveStatus={notesState.localSaveStatus}
+          statusDetail={`${notesState.localSaveStatus === 'saved' ? 'Saved on this device.' : notesState.localSaveStatus === 'saving' ? 'Saving on this device.' : 'Local saving needs attention.'} ${offlineMode ? 'Cloud sync is off.' : notesState.hasPendingSync ? 'Changes are waiting to sync.' : 'Cloud sync enabled.'}${notesState.lastSuccessfulSync ? ` Last synced ${new Date(notesState.lastSuccessfulSync).toLocaleString()}.` : ''}`}
+          onBulk={(ids, action, folderId) => {
+            if (action === 'trash') trashNotes(ids);
+            else notesState.bulkUpdateNotes(ids, action === 'restore' ? { deletedAt: null } : { folderId: folderId ?? null });
+          }}
+          onExportSelection={ids => { if (notesUser) onOpenTransfer({ id: notesUser.id, displayName: accountProfile.displayName, localOnly: usingLocalProfile, cloudSync: !offlineMode, mode: 'export', noteIds: ids }); }}
           reminders={reminderState.reminders}
           onEditReminder={setReminderNoteId}
           notes={notesState.visibleNotes}
@@ -794,6 +825,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           reminder={notesState.selectedId ? reminderState.reminders[notesState.selectedId] : undefined}
           onSetReminder={() => setReminderNoteId(notesState.selectedId)}
           note={notesState.selectedNote}
+          saveStatus={notesState.localSaveStatus}
           folders={notesState.folders}
           onMoveToFolder={(noteId, folderId) =>
             notesState.updateNote(noteId, { folderId })
@@ -866,9 +898,24 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         }}
         onClose={() => setReminderNoteId(null)}
       />}
-      <AppNotifications onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} alerts={desktopNotifications.alerts} onDismiss={desktopNotifications.dismiss} onOpen={setNotificationTarget} />
+      {trashUndo && trashUndo.owner === notesUser?.id && <div className="trash-undo" role="status"><span>{trashUndo.ids.length} {trashUndo.ids.length === 1 ? 'note moved' : 'notes moved'} to Trash</span><button type="button" onClick={() => {
+        const ids = notesState.notes.filter(note => trashUndo.ids.includes(note.id) && note.deletedAt === trashUndo.timestamp).map(note => note.id);
+        notesState.bulkUpdateNotes(ids, { deletedAt: null }); setTrashUndo(null);
+      }}>Undo</button><button type="button" aria-label="Dismiss undo" onClick={() => setTrashUndo(null)}>Dismiss</button></div>}
+      {snoozeAlert && snoozeAlert.userId === notesUser?.id && <Suspense fallback={null}><SnoozeDialog key={snoozeAlert.id} title={snoozeAlert.title} onClose={() => setSnoozeAlert(null)} onSave={async dueAt => {
+        const note = notesState.notes.find(item => item.id === snoozeAlert.noteId && !item.deletedAt);
+        if (!note) return 'This note is no longer available. Dismiss its notification instead.';
+        const current = reminderState.reminders[note.id];
+        if (!current?.dueAt || Date.parse(current.dueAt) !== snoozeAlert.dueAt) return 'This reminder was changed or removed since this alert. Open the note to review its current reminder.';
+        const error = await reminderState.save(note.id, dueAt, 0);
+        if (error) return error;
+        await desktopNotifications.dismiss(snoozeAlert.id);
+        setReminderNotice(`Reminder snoozed until ${formatReminderTime(dueAt)}.`);
+        return null;
+      }}/></Suspense>}
+      <AppNotifications syncIssueKind={notesState.cloudSyncError ? notesState.cloudSyncErrorKind : reminderState.errorKind} onSnooze={setSnoozeAlert} onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} alerts={desktopNotifications.alerts} onDismiss={desktopNotifications.dismiss} onOpen={setNotificationTarget} />
       {reminderNotice && !notesState.error && !reminderState.error && !desktopNotifications.error && <ReminderFeedback key={reminderNotice} message={reminderNotice} onDismiss={dismissReminderNotice} />}
-      <SyncFeedback onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} error={notesState.error ?? reminderState.error ?? desktopNotifications.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); desktopNotifications.clearError(); }} />
+      <SyncFeedback errorKind={notesState.error ? notesState.errorKind : reminderState.errorKind} onRecover={() => { setPage("notes"); setNoteTool("recovery"); }} onConflicts={() => { setPage("notes"); setNoteTool("conflicts"); }} onRetry={!offlineMode ? () => { notesState.retrySync(); reminderState.retrySync(); } : undefined} onStorage={() => { setSettingsInitialCategory("storage"); setPage("preferences"); }} onTrash={() => { notesState.selectSection("trash"); setPage("notes"); }} error={notesState.error ?? reminderState.error ?? desktopNotifications.error} syncing={notesState.syncStatus === "syncing"} loading={notesState.loading} onDismiss={() => { notesState.clearError(); reminderState.clearError(); desktopNotifications.clearError(); }} />
     </main>
   );
 }

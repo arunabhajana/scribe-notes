@@ -1,6 +1,8 @@
+import { matchesNoteSearch } from "../features/notes/noteSearch";
+import type { SyncIssueKind } from "../features/notes/syncIssue";
 import { CLOUD_RESET_EVENT, CLOUD_RESET_MESSAGE } from "../features/settings/cloudGeneration";
 import { WORKSPACE_DELETION_CHANGED, workspaceDeletionStatus } from "../features/auth/workspaceDeletionState";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { User } from "@supabase/supabase-js";
@@ -135,6 +137,10 @@ export function useNotes(
   const sortKey = `${user?.id ?? "local"}:${section === "all" && folderId ? `folder:${folderId}` : section}`;
   const { sortOrder, setSortOrder } = useNoteSortPreferences(sortKey);
   const [search, setSearch] = useState("");
+  const searchQuery = useDeferredValue(search.trim().toLocaleLowerCase());
+  const [actionableIssue, setActionableIssue] = useState<{ message: string; kind: SyncIssueKind } | null>(null);
+  const [localSaves, setLocalSaves] = useState<Record<string, { status: "saved" | "saving" | "failed"; message: string | null }>>({});
+  const [lastSuccessfulSync, setLastSuccessfulSync] = useState<{ userId: string; at: number } | null>(null);
   const [loadedForUser, setLoadedForUser] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cloudSyncError, setCloudSyncError] = useState<{ userId: string; message: string } | null>(null);
@@ -196,11 +202,18 @@ export function useNotes(
   }, [user?.id]);
   const clearError = useCallback(() => setError(null), []);
   const showError = useCallback((message: string) => setError(message), []);
+  const refreshLocalSave = useCallback((ownerId: string) => {
+    const tasks = [...localRetries.current.values()].filter(task => task.ownerId === ownerId);
+    const status = tasks.some(task => !task.running) ? "failed" : tasks.length ? "saving" : "saved";
+    const message = status === "failed" ? lastLocalError.current : null;
+    setLocalSaves(current => current[ownerId]?.status === status && current[ownerId]?.message === message ? current : { ...current, [ownerId]: { status, message } });
+  }, []);
   const persistLocally = useCallback((ownerId: string, key: string, run: () => Promise<void>) => {
     if (workspaceDeletionStatus(ownerId)) return;
     const taskKey = `${ownerId}:${key}`;
     const task = { run, running: true, ownerId };
     localRetries.current.set(taskKey, task);
+    refreshLocalSave(ownerId);
     if (activeUserId.current === ownerId) setHasPendingSync(true);
     const execute = () => {
       task.running = true;
@@ -220,12 +233,12 @@ export function useNotes(
           lastLocalError.current = `Local save failed; keep Scribe open while it retries. These latest changes are not yet protected against a crash: ${messageFor(cause)}`;
           setError(lastLocalError.current);
         }
-      }).finally(() => { task.running = false; });
+      }).finally(() => { task.running = false; refreshLocalSave(ownerId); });
     };
     // Retried work still uses the newest task for this entity; an older failed
     // edit must never resurrect a note that was subsequently deleted.
     execute();
-  }, []);
+  }, [refreshLocalSave]);
   const waitForLocalWrites = useCallback(async () => {
     const owner = activeUserId.current;
     const deadline = Date.now() + 12_000;
@@ -326,12 +339,16 @@ export function useNotes(
       failureCount.current = 0;
       retryAt.current = 0;
       lastPullAt.current = reply.hasMore ? 0 : Date.now();
+      setLastSuccessfulSync({ userId: user.id, at: Date.now() });
       lastSyncCursor.current = reply.cursor;
       const recoveredError = lastCloudError.current;
       setError((current) => current === recoveredError ? null : current);
       lastCloudError.current = null;
       setCloudSyncError(null);
-      if (local.conflicts) setError("Another device changed the same data. Your edits were preserved in conflict copies; conflicting deletions were canceled.");
+      if (local.conflicts) {
+        const message = "Another device changed the same data. Your edits were preserved in conflict copies; conflicting deletions were canceled.";
+        setActionableIssue({ message, kind: "conflict" }); setError(message);
+      }
       if (reply.hasMore || (local.outbox.length && prepared.batch.operations.length === 50)) {
         // Drain large queues in bounded batches, leaving time for local edits.
         window.setTimeout(() => flushOutboxRef.current(), 500);
@@ -348,6 +365,7 @@ export function useNotes(
       retryAt.current = Date.now() + delay + Math.random() * 1500;
       if (activeUserId.current === user.id) {
         lastCloudError.current = quotaReached ? CLOUD_STORAGE_LIMIT_MESSAGE : `Cloud sync paused. Your changes are saved on this device. Check your connection and retry sync; Scribe also retries automatically. Details: ${messageFor(cause)}`;
+        setActionableIssue({ message: lastCloudError.current, kind: quotaReached ? "storage-limit" : "cloud" });
         setError(lastCloudError.current);
         setCloudSyncError(submittedBatchId && !cloudResponseReceived ? { userId: user.id, message: lastCloudError.current } : null);
       }
@@ -561,21 +579,15 @@ export function useNotes(
   const visibleNotes = useMemo(
     () =>
       sortNotes(notes.filter((note) => {
-        if (section === "trash") return note.deletedAt !== null;
-        if (note.deletedAt) return false;
+        if (section === "trash" ? !note.deletedAt : Boolean(note.deletedAt)) return false;
         if (section === "drafts" && !note.isDraft) return false;
         if (section === "pinned" && !note.pinned) return false;
         if (section === "unfiled" && note.folderId !== null) return false;
         if (section === "all" && folderId && note.folderId !== folderId)
           return false;
-        const query = search.toLowerCase();
-        return (
-          !query ||
-          note.title.toLowerCase().includes(query) ||
-          note.body.toLowerCase().includes(query)
-        );
+        return matchesNoteSearch(note, searchQuery);
       }), sortOrder),
-    [notes, section, folderId, search, sortOrder],
+    [notes, section, folderId, searchQuery, sortOrder],
   );
 
   const updateNote = useCallback(
@@ -595,6 +607,17 @@ export function useNotes(
     },
     [user, configured, persistLocally],
   );
+
+  const bulkUpdateNotes = useCallback((ids: string[], patch: NotePatch) => {
+    if (workspaceDeletionStatus(user?.id ?? "")) return;
+    const wanted = new Set(ids);
+    const changed = notesRef.current.filter(note => wanted.has(note.id)).map(before => ({ before, after: { ...before, ...patch, updatedAt: now() } }));
+    const updates = new Map(changed.map(item => [item.after.id, item.after]));
+    for (const { after } of changed) editGeneration.current.set(`note:${after.id}`, (editGeneration.current.get(`note:${after.id}`) ?? 0) + 1);
+    notesRef.current = notesRef.current.map(note => updates.get(note.id) ?? note);
+    setNotes(current => current.map(note => updates.get(note.id) ?? note));
+    if (user && configured) for (const { before, after } of changed) persistLocally(user.id, `note:${after.id}`, () => offlineStore.putNote(user.id, after, before.updatedAt));
+  }, [user, configured, persistLocally]);
 
   const createNote = useCallback(
     (
@@ -843,8 +866,15 @@ export function useNotes(
     cloudReady: Boolean(user && pulledForUser === user.id),
     cloudSyncError: cloudSyncError?.userId === user?.id ? cloudSyncError?.message ?? null : null,
     error,
+    cloudSyncErrorKind: actionableIssue?.kind ?? "cloud",
+    errorKind: error && error === localSaves[user?.id ?? ""]?.message ? "local-save" as const : actionableIssue?.message === error ? actionableIssue.kind : "other" as const,
+    localSaveStatus: localSaves[user?.id ?? ""]?.status ?? "saved" as const,
+    retryLocalSaves: () => { for (const [key, task] of [...localRetries.current]) if (task.ownerId === user?.id && !task.running) persistLocally(task.ownerId, key.slice(task.ownerId.length + 1), task.run); },
+    lastSuccessfulSync: lastSuccessfulSync && lastSuccessfulSync.userId === user?.id ? lastSuccessfulSync.at : null,
+    hasPendingSync,
     createNote,
     updateNote,
+    bulkUpdateNotes,
     togglePinned,
     moveToTrash,
     restoreFromTrash,

@@ -1,3 +1,5 @@
+import { readWorkspacePreference } from "../settings/workspacePreferences";
+import { captureHistory, HISTORY_PREFERENCE, type HistoryRecord, type ConflictRecord } from "./noteHistory";
 import type { Note, NoteFolder } from "../../types/note";
 import { assertWorkspaceWritable, observeWorkspaceGeneration } from "../auth/workspaceDeletionState";
 import type { SyncBatch, SyncReply } from "./syncProtocol";
@@ -25,8 +27,9 @@ type CacheNote = Note & { key: string; userId: string };
 type CacheFolder = NoteFolder & { key: string; userId: string };
 
 const databaseName = "scribe-offline-v1";
-const databaseVersion = 4;
+const databaseVersion = 5;
 let databasePromise: Promise<IDBDatabase> | undefined;
+const historyCaptureAt = new Map<string, number>();
 
 function ensureStore(
   db: IDBDatabase,
@@ -64,13 +67,15 @@ function openDatabase() {
       }
       ensureStore(db, transaction, "syncLeases", { keyPath: "userId" });
       ensureStore(db, transaction, "syncState", { keyPath: "userId" });
-      for (const [name, keyPath] of [["importJobs", "id"], ["importHistory", "key"]]) {
+      for (const [name, keyPath] of [["importJobs", "id"], ["importHistory", "key"], ["noteHistory", "key"], ["conflicts", "key"]]) {
         const store = ensureStore(db, transaction, name, { keyPath });
         if (!store.indexNames.contains("userId")) store.createIndex("userId", "userId");
       }
     };
+    let blocked = false;
     request.onsuccess = () => {
       const db = request.result;
+      if (blocked) { db.close(); return; }
       db.onversionchange = () => {
         db.close();
         databasePromise = undefined;
@@ -79,7 +84,10 @@ function openDatabase() {
     };
     request.onerror = () =>
       reject(request.error ?? new Error("Could not open local notes storage."));
-    request.onblocked = () => undefined;
+    request.onblocked = () => {
+      blocked = true;
+      reject(new Error("Another Scribe window is blocking the local storage upgrade. Close other Scribe windows, then reopen this window. Your saved notes have not been erased."));
+    };
   }).catch((error: unknown) => {
     databasePromise = undefined;
     throw error;
@@ -195,9 +203,9 @@ export const offlineStore = {
   },
   async inspectWorkspace(userId: string) {
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases", "importJobs", "importHistory"], "readonly");
+    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases", "importJobs", "importHistory", "noteHistory", "conflicts"], "readonly");
     const done = transactionDone(tx);
-    const requests = ["notes", "folders", "outbox", "importJobs", "importHistory"].map(name => tx.objectStore(name).index("userId").getAll(userId));
+    const requests = ["notes", "folders", "outbox", "importJobs", "importHistory", "noteHistory", "conflicts"].map(name => tx.objectStore(name).index("userId").getAll(userId));
     requests.push(...["syncState", "syncLeases"].map(name => tx.objectStore(name).get(userId)));
     const rows = await Promise.all(requests.map(request => new Promise<unknown>((resolve, reject) => {
       request.onsuccess = () => resolve(request.result ?? null);
@@ -207,10 +215,11 @@ export const offlineStore = {
     return { bytes: new TextEncoder().encode(JSON.stringify(rows)).byteLength };
   },
   async deleteWorkspace(userId: string) {
+    for (const key of historyCaptureAt.keys()) if (key.startsWith(`${userId}:`)) historyCaptureAt.delete(key);
     const db = await openDatabase();
-    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases", "importJobs", "importHistory"], "readwrite", { durability: "strict" });
+    const tx = db.transaction(["notes", "folders", "outbox", "syncState", "syncLeases", "importJobs", "importHistory", "noteHistory", "conflicts"], "readwrite", { durability: "strict" });
     const done = transactionDone(tx);
-    for (const name of ["notes", "folders", "outbox", "importJobs", "importHistory"]) {
+    for (const name of ["notes", "folders", "outbox", "importJobs", "importHistory", "noteHistory", "conflicts"]) {
       const request = tx.objectStore(name).index("userId").openCursor(IDBKeyRange.only(userId));
       request.onsuccess = () => { const cursor = request.result; if (cursor) { cursor.delete(); cursor.continue(); } };
     }
@@ -283,7 +292,7 @@ export const offlineStore = {
 
   async commitBatch(userId: string, batch: SyncBatch, reply: SyncReply) {
     const db = await openDatabase();
-    const tx = workspaceWrite(db, userId, ["notes", "folders", "outbox", "syncState"]);
+    const tx = workspaceWrite(db, userId, ["notes", "folders", "outbox", "syncState", "noteHistory", "conflicts"]);
     const done = transactionDone(tx);
     const requests = ["notes", "folders", "outbox"].map((store) =>
       tx.objectStore(store).index("userId").getAll(userId));
@@ -341,6 +350,7 @@ export const offlineStore = {
               const note = copy as Note;
               note.title = `${note.title || "Untitled note"} (conflict copy)`;
               note.deletedAt = null;
+              tx.objectStore("conflicts").put({ key: rowKey(userId, id), userId, noteId: id, originalId: sent.entityId, createdAt: Date.now() } satisfies ConflictRecord);
             } else (copy as NoteFolder).name += ` (conflict ${id.slice(0, 6)})`;
             pending.set(`${sent.entity}:${id}`, {
               ...latest, key: [userId, sent.entity, id], entityId: id, snapshot: copy,
@@ -372,6 +382,10 @@ export const offlineStore = {
         apply(op.entity, op.entityId, op.kind === "delete" ? null : op.snapshot!);
       }
       for (const note of notes.values()) if (note.folderId && !folders.has(note.folderId)) note.folderId = null;
+      for (const name of ["noteHistory", "conflicts"]) {
+        const cursor = tx.objectStore(name).index("userId").openCursor(IDBKeyRange.only(userId));
+        cursor.onsuccess = () => { const row = cursor.result; if (row) { if (!notes.has(row.value.noteId)) row.delete(); row.continue(); } };
+      }
       // Replace only this account's records, atomically with cursor + outbox.
       for (let index = 0; index < 3; index++) {
         const store = tx.objectStore(["notes", "folders", "outbox"][index]);
@@ -460,13 +474,17 @@ export const offlineStore = {
     created = false,
   ) {
     const db = await openDatabase();
-    const tx = workspaceWrite(db, userId, ["notes", "outbox"]);
+    const tx = workspaceWrite(db, userId, ["notes", "outbox", "noteHistory"]);
     const cache = tx.objectStore("notes");
     const cached = cache.get(rowKey(userId, note.id)) as IDBRequest<CacheNote | undefined>;
     const store = tx.objectStore("outbox");
     const key: OutboxOperation["key"] = [userId, "note", note.id];
     const get = store.get(key) as IDBRequest<OutboxOperation | undefined>;
-    let remaining = 2;
+    const captureKey = rowKey(userId, note.id);
+    const capture = readWorkspacePreference(userId, HISTORY_PREFERENCE) === "true" && Date.now() - (historyCaptureAt.get(captureKey) ?? 0) >= 60_000;
+    const history = capture ? tx.objectStore("noteHistory").index("userId").getAll(userId) as IDBRequest<HistoryRecord[]> : null;
+    let captured = false;
+    let remaining = history ? 3 : 2;
     const ready = () => {
       if (--remaining) return;
       const previous = get.result;
@@ -474,6 +492,14 @@ export const offlineStore = {
       // editor. Never replace that server revision with stale UI metadata.
       const version = previous ? previous.baseVersion : created ? undefined : cached.result?.version ?? note.version;
       const snapshot = { ...note, version };
+      if (cached.result && history && readWorkspacePreference(userId, HISTORY_PREFERENCE) === "true") {
+        const records = captureHistory(history.result, userId, cached.result, snapshot);
+        if (records !== history.result) {
+          for (const row of history.result) tx.objectStore("noteHistory").delete(row.key);
+          for (const row of records) tx.objectStore("noteHistory").put(row);
+          captured = true;
+        }
+      }
       cache.put({ ...snapshot, userId, key: rowKey(userId, note.id) } satisfies CacheNote);
       store.put({ key, userId, entity: "note", entityId: note.id, kind: "upsert", snapshot,
         baseUpdatedAt: previous ? previous.baseUpdatedAt : created ? null : cached.result?.updatedAt ?? baseUpdatedAt,
@@ -481,7 +507,9 @@ export const offlineStore = {
       } satisfies OutboxOperation);
     };
     get.onsuccess = cached.onsuccess = ready;
+    if (history) history.onsuccess = ready;
     await transactionDone(tx);
+    if (captured) historyCaptureAt.set(captureKey, Date.now());
   },
 
   async putFolder(
@@ -528,7 +556,11 @@ export const offlineStore = {
   ) {
     const db = await openDatabase();
     const cacheName = entity === "note" ? "notes" : "folders";
-    const tx = workspaceWrite(db, userId, [cacheName, "outbox"]);
+    const tx = workspaceWrite(db, userId, [cacheName, "outbox", "noteHistory", "conflicts"]);
+    if (entity === "note") {
+      tx.objectStore("noteHistory").delete(rowKey(userId, entityId));
+      tx.objectStore("conflicts").delete(rowKey(userId, entityId));
+    }
     tx.objectStore(cacheName).delete(rowKey(userId, entityId));
     const store = tx.objectStore("outbox");
     const key: OutboxOperation["key"] = [userId, entity, entityId];
@@ -610,6 +642,51 @@ export const offlineStore = {
     get.onsuccess = () => {
       if (get.result?.ownerId === ownerId) store.delete(userId);
     };
+    await transactionDone(tx);
+  },
+
+  async noteHistory(userId: string, noteId: string): Promise<HistoryRecord | null> {
+    const db = await openDatabase();
+    const request = db.transaction("noteHistory", "readonly").objectStore("noteHistory").get(rowKey(userId, noteId));
+    return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result ?? null); request.onerror = () => reject(request.error); });
+  },
+  async checkpointNote(userId: string, noteId: string) {
+    if (readWorkspacePreference(userId, HISTORY_PREFERENCE) !== "true") return;
+    const db = await openDatabase();
+    const tx = workspaceWrite(db, userId, ["notes", "noteHistory"]);
+    const note = tx.objectStore("notes").get(rowKey(userId, noteId)) as IDBRequest<Note | undefined>;
+    const history = tx.objectStore("noteHistory").index("userId").getAll(userId) as IDBRequest<HistoryRecord[]>;
+    let remaining = 2;
+    const ready = () => {
+      if (--remaining || !note.result || readWorkspacePreference(userId, HISTORY_PREFERENCE) !== "true") return;
+      const records = captureHistory(history.result, userId, note.result, note.result, true);
+      if (records === history.result) return;
+      for (const record of history.result) tx.objectStore("noteHistory").delete(record.key);
+      for (const record of records) tx.objectStore("noteHistory").put(record);
+    };
+    note.onsuccess = history.onsuccess = ready;
+    await transactionDone(tx);
+  },
+  async clearHistory(userId: string, noteId?: string) {
+    for (const key of historyCaptureAt.keys()) if (noteId ? key === rowKey(userId, noteId) : key.startsWith(`${userId}:`)) historyCaptureAt.delete(key);
+    const db = await openDatabase();
+    const tx = workspaceWrite(db, userId, "noteHistory");
+    if (noteId) tx.objectStore("noteHistory").delete(rowKey(userId, noteId));
+    else {
+      const request = tx.objectStore("noteHistory").index("userId").openCursor(IDBKeyRange.only(userId));
+      request.onsuccess = () => { const cursor = request.result; if (cursor) { cursor.delete(); cursor.continue(); } };
+    }
+    await transactionDone(tx);
+  },
+  async conflicts(userId: string): Promise<ConflictRecord[]> {
+    const db = await openDatabase();
+    const request = db.transaction("conflicts", "readonly").objectStore("conflicts").index("userId").getAll(userId);
+    return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  },
+  async resolveConflict(userId: string, noteId: string) {
+    const db = await openDatabase();
+    const tx = workspaceWrite(db, userId, "conflicts");
+    tx.objectStore("conflicts").delete(rowKey(userId, noteId));
     await transactionDone(tx);
   },
 

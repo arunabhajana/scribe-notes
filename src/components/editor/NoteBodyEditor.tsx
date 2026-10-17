@@ -1,5 +1,5 @@
 import { useWritingPreferences } from "../../features/settings/writingPreferences";
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { KeyboardEvent } from "react";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { BookOpen, Pencil } from "lucide-react";
@@ -32,10 +32,13 @@ export function NoteBodyEditor({
 }) {
   const [writingPreferences] = useWritingPreferences();
   const [contentHovered, setContentHovered] = useState(false);
-  const readingText = value.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+  const statisticsBody = useDeferredValue(value);
+  const readingMinutes = useMemo(() => {
+  const readingText = statisticsBody.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/^\s*(?:```[^\n]*|#{1,6}\s+|>\s?|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/gm, " ")
     .replace(/<\/?u>/g, "").replace(/[*_`~]/g, "").trim();
-  const readingMinutes = readingText ? Math.max(1, Math.ceil(readingText.split(/\s+/).length / 200)) : null;
+  return readingText ? Math.max(1, Math.ceil(readingText.split(/\s+/).length / 200)) : null;
+  }, [statisticsBody]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const readingPosition = useRef<ReadingPosition | null>(null);
   const editingPosition = useRef<ReadingPosition | null>(null);
