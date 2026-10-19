@@ -1,8 +1,50 @@
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
+use std::sync::{Arc, Condvar, Mutex};
 use tauri_plugin_updater::UpdaterExt;
 
 const CHECK_TIMEOUT_MS: u64 = 60_000;
+const AUTOMATIC_CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+pub struct UpdateSchedule(Arc<(Mutex<Option<Instant>>, Condvar)>);
+
+// Windows can throttle timers in a hidden WebView. Keep the deadline in the
+// native process; only the main window may arm it after checking consent.
+#[tauri::command]
+pub fn set_update_check_schedule(window: WebviewWindow, enabled: bool, schedule: State<'_, UpdateSchedule>) -> Result<(), String> {
+    crate::security::require_main(&window)?;
+    let (deadline, wake) = &*schedule.0;
+    *deadline.lock().map_err(|_| "Update scheduling is unavailable")? = enabled.then(|| Instant::now() + AUTOMATIC_CHECK_INTERVAL);
+    wake.notify_one();
+    Ok(())
+}
+
+pub fn initialize_schedule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let schedule = Arc::new((Mutex::new(None::<Instant>), Condvar::new()));
+    app.manage(UpdateSchedule(schedule.clone()));
+    let handle = app.clone();
+    std::thread::Builder::new().name("scribe-update-schedule".into()).spawn(move || {
+        let (deadline, wake) = &*schedule;
+        loop {
+            let Ok(mut next) = deadline.lock() else { break; };
+            while next.is_none() {
+                let Ok(guard) = wake.wait(next) else { return; };
+                next = guard;
+            }
+            let remaining = next.unwrap().saturating_duration_since(Instant::now());
+            if !remaining.is_zero() {
+                let Ok((guard, _)) = wake.wait_timeout(next, remaining) else { return; };
+                drop(guard);
+                continue;
+            }
+            // Retain a fallback deadline if the WebView is temporarily paused.
+            *next = Some(Instant::now() + AUTOMATIC_CHECK_INTERVAL);
+            drop(next);
+            let _ = handle.emit_to("main", "scribe:check-for-updates", false);
+        }
+    })?;
+    Ok(())
+}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]

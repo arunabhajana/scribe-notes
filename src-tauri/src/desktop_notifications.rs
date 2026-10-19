@@ -44,6 +44,7 @@ pub struct NotificationMessage {
 enum Work {
     Configure(NotificationConfig),
     Show(NotificationMessage),
+    UpdateAvailable { version: String, summary: String },
     #[cfg(windows)]
     Failed {
         tag: String,
@@ -199,6 +200,23 @@ pub fn show_desktop_notification(
         .0
         .send(Work::Show(message))
         .map_err(|_| "Desktop notifications are unavailable. Restart Scribe.".to_string())
+}
+
+#[tauri::command]
+pub fn show_update_notification(
+    app: AppHandle,
+    window: tauri::WebviewWindow,
+    version: String,
+    summary: String,
+    service: State<'_, NotificationService>,
+) -> Result<(), String> {
+    crate::security::require_main(&window)?;
+    if version.is_empty() || version.len() > 64 || !version.starts_with(|c: char| c.is_ascii_digit())
+        || !version.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+')) || summary.len() > 4000 {
+        return Err("Invalid update notification.".into());
+    }
+    if !crate::app_updates::updater_configured(app, window)? { return Ok(()); }
+    service.0.send(Work::UpdateAvailable { version, summary }).map_err(|_| "Desktop notifications are unavailable".into())
 }
 
 pub fn initialize(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -469,6 +487,7 @@ mod windows_impl {
             sound: bool,
             open_note: bool,
             attribution: &str,
+            update_actions: bool,
         ) -> Result<bool, String> {
             self.prepare()
                 .map_err(|e| format!("Set up Windows notifications: {e}"))?;
@@ -485,7 +504,11 @@ mod windows_impl {
                 Err(error) => return Err(format!("Read Windows notification permission: {error}")),
                 Ok(_) => {}
             }
-            let action = if open_note {
+            let action = if update_actions {
+                format!("<actions><action content=\"Install update\" activationType=\"protocol\" arguments=\"{}\"/><action content=\"View changelog\" activationType=\"protocol\" arguments=\"{}\"/></actions>",
+                    xml(&format!("{}://updates/install", crate::APP_SCHEME)),
+                    xml(&format!("{}://updates/changelog", crate::APP_SCHEME)))
+            } else if open_note {
                 format!(
                     "<actions><action content=\"Open note\" activationType=\"protocol\" arguments=\"{}\"/></actions>",
                     xml(uri)
@@ -673,6 +696,7 @@ mod windows_impl {
                     false,
                     true,
                     &attribution,
+                    false,
                 );
                 match &shown {
                     Err(error) => {
@@ -754,6 +778,23 @@ mod windows_impl {
                     }
                     config = next;
                     retry_at = 0;
+                }
+                Ok(Work::UpdateAvailable { version, summary }) => {
+                    if !config.enabled || !config.desktop || app_focused(&app)
+                        || config.user_id.is_none() || crate::quick_capture::active_account(&app) != config.user_id {
+                        continue;
+                    }
+                    let delivered = key(&[config.user_id.as_deref().unwrap_or_default(), "update", &version]);
+                    if native.delivered.contains_key(&delivered) { continue; }
+                    let uri = format!("{}://updates/changelog", crate::APP_SCHEME);
+                    match native.show(&format!("Scribe {version} is available"), &summary, &uri, "app-update", false, false, "App update", true) {
+                        Ok(true) => {
+                            native.record(delivered.clone());
+                            if let Some((_, _, keys)) = native.active.get_mut("app-update") { keys.push(delivered); }
+                        }
+                        Ok(false) => {}
+                        Err(error) => report(&config, &error),
+                    }
                 }
                 Ok(Work::Failed {
                     tag,
@@ -845,7 +886,7 @@ mod windows_impl {
                             {
                                 continue;
                             }
-                            match native.show(title, body, &uri, tag, false, false, "") {
+                            match native.show(title, body, &uri, tag, false, false, "", false) {
                                 Ok(true) => {
                                     if is_sync_error {
                                         native.record(id.clone());
@@ -890,6 +931,7 @@ mod windows_impl {
                         false,
                         false,
                         "",
+                        false,
                     ) {
                         Ok(true) => *sent = true,
                         Ok(false) => *next_attempt = now() + 60_000,

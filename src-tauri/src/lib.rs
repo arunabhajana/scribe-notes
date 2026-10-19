@@ -1,5 +1,5 @@
 use tauri::{
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
@@ -74,6 +74,7 @@ pub fn run() {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
+                let _ = app.emit_to("main", "scribe:check-for-updates", true);
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -86,6 +87,7 @@ pub fn run() {
             get_device_info,
             app_updates::updater_configured,
             app_updates::check_app_update,
+            app_updates::set_update_check_schedule,
             app_updates::prepare_app_update,
             app_updates::finish_app_update,
             data_export::save_export_file,
@@ -101,6 +103,7 @@ pub fn run() {
             quick_capture::open_capture_main,
             desktop_notifications::configure_desktop_notifications,
             desktop_notifications::show_desktop_notification,
+            desktop_notifications::show_update_notification,
             desktop_notifications::get_in_app_notifications,
             desktop_notifications::dismiss_in_app_notification,
             desktop_notifications::clear_workspace_notifications
@@ -112,6 +115,7 @@ pub fn run() {
             quick_capture::initialize(app.handle())?;
             spelling_context_menu::initialize(app.handle())?;
             desktop_notifications::initialize(app.handle())?;
+            app_updates::initialize_schedule(app.handle())?;
             #[cfg(windows)]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -145,6 +149,7 @@ pub fn run() {
                             let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
+                            let _ = app.emit_to("main", "scribe:check-for-updates", true);
                         }
                     }
                     "quit" => app.exit(0),
@@ -161,6 +166,7 @@ pub fn run() {
                             let _ = window.unminimize();
                             let _ = window.show();
                             let _ = window.set_focus();
+                            let _ = tray.app_handle().emit_to("main", "scribe:check-for-updates", true);
                         }
                     }
                 })

@@ -19,8 +19,9 @@ export function AutomaticUpdatesDialog({ localOnly, onConfirm, onClose }: {
     <h2 id="automatic-updates-title">Enable automatic update checks?</h2>
     <p className="release-summary" id="automatic-updates-description">Scribe will use the internet to look for new versions while you use {localOnly ? 'this offline profile' : 'this workspace'}.</p>
     <ul className="update-consent-details">
-      <li>Scribe contacts GitHub Releases after startup and periodically while open. GitHub receives your IP address and standard network request information.</li>
+      <li>Scribe contacts GitHub Releases on each launch and every 30 minutes while running, including in the system tray. GitHub receives your IP address and standard network request information.</li>
       <li>Your notes, display name and Scribe sign-in details are not included in update requests. This does not enable cloud sync or upload your notes.</li>
+      <li>If desktop notifications are enabled, a new version can show a Windows notification while Scribe is in the background, with shortcuts to the install screen and changelog.</li>
       <li>Downloads and installation still require your action. You can turn checks off in About at any time, or check manually instead.</li>
     </ul>
     <p className="update-help">This choice is saved for this workspace on this device. {localOnly && 'Your offline notes remain available without an internet connection.'}</p>
