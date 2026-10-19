@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "version": "0.3.0",
+  "title": "Find faster, write with less friction",
+  "summary": "Find the right note, jump to text inside it, make a copy and understand earlier versions more easily.",
+  "sections": [
+    {
+      "type": "feature",
+      "items": [
+        "Search using several words or an exact phrase in quotes, with matching text highlighted in note titles and search previews. Choose a folder or view to narrow where you search.",
+        "Use compact search filters to look in titles or content, show pinned notes or find notes with reminders. Clear the filters whenever you want the full view back.",
+        "Press Ctrl+F or use the search button in an open note to find text, move between matches and optionally match letter case. Find works in reading and editing modes.",
+        "Duplicate a note from its right-click menu. The copy keeps its content and folder, with its own dates and no copied reminders, pins or history."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "Compare an earlier note version with the current text side by side. Highlights show what belongs to each version before you choose to restore it.",
+        "A small, dismissible tip explains Ctrl-click, Shift-click and dragging to select several notes, then right-clicking for actions.",
+        "Clearer keyboard focus and improved menu navigation make it easier to use Scribe without a mouse. Open note actions with Shift+F10, move through menus with the arrow keys and close the active control with Escape."
+      ]
+    },
+    {
+      "type": "fixed",
+      "items": [
+        "Markdown formatting and list continuation now use the editor’s undo history. Switching between reading and editing keeps the same text editor in place.",
+        "Pasted Markdown keeps its spacing and code indentation while Windows line endings are normalized consistently. Inside fenced code blocks, Tab and Shift+Tab indent or unindent code.",
+        "Escape closes the open folder menu first, then keeps nonempty work as a draft before closing the new-note composer. Find closes before leaving edit mode, and keyboard focus stays inside the open composer.",
+        "Caret scrolling avoids measuring the rest of a long note after the current line, reducing unnecessary work while typing."
+      ]
+    }
+  ]
+}

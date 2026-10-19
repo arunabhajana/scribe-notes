@@ -41,10 +41,15 @@ export function SearchNotes({
             <input
                 ref={inputRef}
                 aria-label="Search Notes"
-                placeholder="Search Notes..."
+                placeholder="Search notes…"
+                aria-description={'Search this view. Use quotes for an exact phrase. Choose a folder to search inside it.'}
                 title={`Search Notes · ${shortcut}`}
                 value={value}
+                maxLength={5000}
                 onChange={(event) => onChange(event.target.value)}
+                onKeyDown={event => {
+                    if (event.key === 'Escape' && value) { event.preventDefault(); event.stopPropagation(); onChange(''); }
+                }}
             />
             {value && (
                 <button

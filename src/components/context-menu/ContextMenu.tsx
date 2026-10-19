@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { StatusToast } from "../feedback/LoadingFeedback";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { editTextarea } from '../editor/textareaEdit';
 
 import { MenuContext, closeContextMenuEvent, type ContextMenuItem } from "./contextMenuState";
 type Menu = { x: number; y: number; items: ContextMenuItem[]; target: HTMLElement | null };
@@ -40,6 +41,10 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
         const original = input.value;
         const replace = (text: string) => {
           if (!input.isConnected || input.value !== original) throw new Error("The text changed. Open the menu again to paste safely.");
+          if (input instanceof HTMLTextAreaElement) {
+            editTextarea(input, original.slice(0, start) + text + original.slice(end), () => { input.dispatchEvent(new Event('input', { bubbles: true })); }, start + text.length);
+            return;
+          }
           const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
           Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(input, original.slice(0, start) + text + original.slice(end));
           input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -88,13 +93,13 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
   const variables = Object.fromEntries(["--surface-2", "--surface-3", "--text", "--muted", "--border", "--accent", "--accent-soft"].map((key) => [key, styles.getPropertyValue(key)]));
   return <MenuContext.Provider value={open}>{children}{menu && createPortal(
     <div ref={menuRef} role="menu" aria-label="Context actions" className="scribe-context-menu" style={{ ...variables, left: Math.max(8, Math.min(menu.x, window.innerWidth - 248)), top: Math.max(8, Math.min(menu.y, window.innerHeight - Math.min(menu.items.length * 35 + 12, 350) - 8)) }} onContextMenu={(event) => event.preventDefault()} onKeyDown={(event) => {
-      if (event.key === "Escape" || event.key === "Tab") { setMenu(null); menu.target?.focus(); if (event.key === "Escape") event.preventDefault(); }
+      if (event.key === "Escape" || event.key === "Tab") { setMenu(null); menu.target?.focus({ preventScroll: true }); if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); } }
       if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
         event.preventDefault(); const buttons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
         const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
         const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
         buttons[next]?.focus();
       }
-    }}>{menu.items.map((item, index) => <button key={`${item.label}-${index}`} role="menuitem" data-tour={item.tourId} disabled={item.disabled} className={`${item.danger ? "is-danger" : ""} ${item.separator ? "has-separator" : ""}`} onClick={() => { setMenu(null); menu.target?.focus(); Promise.resolve().then(item.action).catch(() => setError("Could not complete this action. Clipboard access may be unavailable; you can use keyboard shortcuts.")); }}>{item.label}</button>)}</div>, document.body,
+    }}>{menu.items.map((item, index) => <button key={`${item.label}-${index}`} role={item.checked === undefined ? "menuitem" : item.radio ? "menuitemradio" : "menuitemcheckbox"} aria-checked={item.checked} tabIndex={-1} data-tour={item.tourId} disabled={item.disabled} className={`${item.danger ? "is-danger" : ""} ${item.separator ? "has-separator" : ""}`} onClick={() => { setMenu(null); menu.target?.focus({ preventScroll: true }); Promise.resolve().then(item.action).catch(() => setError("Could not complete this action. Clipboard access may be unavailable; you can use keyboard shortcuts.")); }}>{item.checked !== undefined && <span aria-hidden="true" className="menu-check">{item.checked ? "✓" : ""}</span>}{item.label}</button>)}</div>, document.body,
   )}{error && <div className="status-toast-stack"><StatusToast message={error} onDismiss={() => setError(null)} /></div>}</MenuContext.Provider>;
 }

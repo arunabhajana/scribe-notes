@@ -1,4 +1,4 @@
-import { matchesNoteSearch } from "../features/notes/noteSearch";
+import { defaultSearchFilters, matchesNoteSearch, searchTerms, type NoteSearchFilters } from "../features/notes/noteSearch";
 import type { SyncIssueKind } from "../features/notes/syncIssue";
 import { CLOUD_RESET_EVENT, CLOUD_RESET_MESSAGE } from "../features/settings/cloudGeneration";
 import { WORKSPACE_DELETION_CHANGED, workspaceDeletionStatus } from "../features/auth/workspaceDeletionState";
@@ -137,7 +137,9 @@ export function useNotes(
   const sortKey = `${user?.id ?? "local"}:${section === "all" && folderId ? `folder:${folderId}` : section}`;
   const { sortOrder, setSortOrder } = useNoteSortPreferences(sortKey);
   const [search, setSearch] = useState("");
+  const [searchFilters, setSearchFilters] = useState<NoteSearchFilters>({ ...defaultSearchFilters });
   const searchQuery = useDeferredValue(search.trim().toLocaleLowerCase());
+  const queryTerms = useMemo(() => searchTerms(searchQuery), [searchQuery]);
   const [actionableIssue, setActionableIssue] = useState<{ message: string; kind: SyncIssueKind } | null>(null);
   const [localSaves, setLocalSaves] = useState<Record<string, { status: "saved" | "saving" | "failed"; message: string | null }>>({});
   const [lastSuccessfulSync, setLastSuccessfulSync] = useState<{ userId: string; at: number } | null>(null);
@@ -557,6 +559,7 @@ export function useNotes(
     setSection("all");
     setFolderId(null);
     setSearch("");
+    setSearchFilters({ ...defaultSearchFilters });
   }, []);
   useEffect(() => {
     const deleted = () => {
@@ -585,9 +588,10 @@ export function useNotes(
         if (section === "unfiled" && note.folderId !== null) return false;
         if (section === "all" && folderId && note.folderId !== folderId)
           return false;
-        return matchesNoteSearch(note, searchQuery);
+        if (searchFilters.pinned && !note.pinned) return false;
+        return matchesNoteSearch(note, searchQuery, searchFilters.field, queryTerms);
       }), sortOrder),
-    [notes, section, folderId, searchQuery, sortOrder],
+    [notes, section, folderId, searchQuery, queryTerms, searchFilters, sortOrder],
   );
 
   const updateNote = useCallback(
@@ -643,6 +647,8 @@ export function useNotes(
       setSection("all");
       setFolderId(note.folderId);
       setSelectedId(note.id);
+      setSearch("");
+      setSearchFilters({ ...defaultSearchFilters });
       if (user && configured) {
         persistLocally(user.id, `note:${note.id}`, () => offlineStore.putNote(user.id, note, null, true));
       }
@@ -650,6 +656,14 @@ export function useNotes(
     },
     [folderId, user, configured, persistLocally],
   );
+
+  const duplicateNote = useCallback((id: string) => {
+    const source = notesRef.current.find(note => note.id === id);
+    if (!source || source.deletedAt || workspaceDeletionStatus(user?.id ?? '')) return;
+    // Fresh identity, dates and revision; reminders and history stay with the original.
+    return createNote({ title: `${source.title || 'Untitled Note'} (copy)`, body: source.body,
+      folderId: source.folderId, isDraft: source.isDraft, pinned: false });
+  }, [createNote, user?.id]);
 
   const togglePinned = useCallback(
     (id: string) => {
@@ -860,6 +874,8 @@ export function useNotes(
     showError,
     search,
     setSearch,
+    searchFilters,
+    setSearchFilters,
     folders: notesForUser === user?.id ? folders : [],
     loading,
     cacheReady: Boolean(user && notesForUser === user.id),
@@ -873,6 +889,7 @@ export function useNotes(
     lastSuccessfulSync: lastSuccessfulSync && lastSuccessfulSync.userId === user?.id ? lastSuccessfulSync.at : null,
     hasPendingSync,
     createNote,
+    duplicateNote,
     updateNote,
     bulkUpdateNotes,
     togglePinned,

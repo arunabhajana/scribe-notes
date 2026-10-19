@@ -128,11 +128,16 @@ export function VirtualNoteList({ notes, selectedId, selectedIds = [], onDragSel
       if (state.active) { event.preventDefault(); updateDrag(); }
     }} onPointerUp={endDrag} onPointerCancel={endDrag}
     onScroll={event => setViewport({ top: event.currentTarget.scrollTop, height: event.currentTarget.clientHeight })} onKeyDown={event => {
-    if (!virtual || !['ArrowDown', 'ArrowUp'].includes(event.key) || !(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'button') return;
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || event.ctrlKey || event.metaKey || !(event.target instanceof HTMLElement) || event.target.getAttribute('role') !== 'button') return;
     const index = Number(event.target.closest<HTMLElement>('[data-note-index]')?.dataset.noteIndex);
     if (!Number.isInteger(index)) return;
     event.preventDefault();
-    const next = Math.max(0, Math.min(notes.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? notes.length - 1 : Math.max(0, Math.min(notes.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+    if (!virtual) {
+      const card = ref.current?.querySelector<HTMLElement>(`[data-note-index="${next}"] [role="button"]`);
+      card?.focus({ preventScroll: true }); card?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     focusIndex.current = next;
     if (ref.current) { ref.current.scrollTop = positions.offsets[next]; setViewport({ top: ref.current.scrollTop, height: ref.current.clientHeight }); }
   }}>

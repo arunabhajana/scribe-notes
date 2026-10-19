@@ -168,6 +168,9 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
   const updateNote = notesState.updateNote;
   const saveNoteDraft = useCallback((id: string) => updateNote(id, { isDraft: false }), [updateNote]);
   const reminderState = useReminders(notesUser?.id ?? null, offlineMode);
+  const searchedNotes = useMemo(() => notesState.searchFilters.reminder
+    ? notesState.visibleNotes.filter(note => Boolean(reminderState.reminders[note.id]?.dueAt))
+    : notesState.visibleNotes, [notesState.visibleNotes, notesState.searchFilters.reminder, reminderState.reminders]);
   const syncStatus = notesState.syncStatus === "error" || reminderState.error ? "error"
     : notesState.syncStatus === "offline" ? "offline"
     : notesState.syncStatus === "syncing" || reminderState.syncing ? "syncing"
@@ -426,6 +429,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
         event.isComposing
       )
         return;
+      if (document.querySelector('dialog[open], [role="dialog"][aria-modal="true"], [role="menu"], [role="listbox"]')) return;
       const action = shortcutActions.find((item) =>
         item.id !== "quickCapture" && matchesShortcut(event, shortcuts[item.id]),
       );
@@ -674,6 +678,16 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
 
   return (
     <main
+      onKeyDown={event => {
+        if (event.defaultPrevented || !(event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10')) return;
+        const target = event.target as HTMLElement;
+        if (target.closest('input, textarea, [contenteditable=true], [role="menu"], [role="listbox"]')) return;
+        const source = target.closest<HTMLElement>('[data-context-note], [data-context-folder]');
+        if (!source) return;
+        event.preventDefault(); event.stopPropagation();
+        const rect = source.getBoundingClientRect();
+        source.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + 18, clientY: rect.top + 18 }));
+      }}
       onContextMenu={(event) => {
         const target = event.target as HTMLElement;
         if (target.closest("input, textarea, [contenteditable=true]") || window.getSelection()?.toString()) return;
@@ -693,6 +707,7 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
             { label: "Delete permanently", danger: true, action: () => handleDeleteNote(note) },
           );
           else {
+            items.push({ label: "Duplicate Note", action: () => { notesState.duplicateNote(note.id); } });
             items.push({ label: note.pinned ? "Unpin Note" : "Pin Note", action: () => notesState.togglePinned(note.id) });
             items.push({ label: reminderState.reminders[note.id]?.dueAt ? "Edit reminder" : "Set reminder", disabled: reminderState.loading, action: () => setReminderNoteId(note.id) });
             items.push({ label: reminderPresetActionLabel(defaultPreset),
@@ -804,7 +819,9 @@ function WorkspaceApp({ auth, local, accountEntry, setAccountEntry, localSetup, 
           onExportSelection={ids => { if (notesUser) onOpenTransfer({ id: notesUser.id, displayName: accountProfile.displayName, localOnly: usingLocalProfile, cloudSync: !offlineMode, mode: 'export', noteIds: ids }); }}
           reminders={reminderState.reminders}
           onEditReminder={setReminderNoteId}
-          notes={notesState.visibleNotes}
+          notes={searchedNotes}
+          searchFilters={notesState.searchFilters}
+          onSearchFiltersChange={notesState.setSearchFilters}
           folders={notesState.folders}
           selectedId={notesState.selectedId}
           section={notesState.section}

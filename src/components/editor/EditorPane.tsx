@@ -1,4 +1,6 @@
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { NoteFindBar, type NoteFindState } from './NoteFindBar';
+import './noteFind.css';
 import type { Note } from "../../types/note";
 import type { NoteReminder } from "../../features/reminders/reminderTypes";
 import type { NoteFolder } from "../../types/note";
@@ -57,7 +59,29 @@ export function EditorPane({
   onRestoreNote,
 }: EditorPaneProps) {
   const [bodyEditing, setBodyEditing] = useState(false);
+  const [find, setFind] = useState<NoteFindState | null>(null);
+  const [findCount, setFindCount] = useState(0);
+  const paneRef = useRef<HTMLElement>(null);
   const bodyInputRef = useRef<HTMLTextAreaElement>(null);
+  const closeFind = () => {
+    setFind(null);
+    if (bodyEditing) bodyInputRef.current?.focus({ preventScroll: true });
+    else paneRef.current?.querySelector<HTMLElement>('.editor-body-view')?.focus({ preventScroll: true });
+  };
+  useEffect(() => {
+    const handleFind = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || !note || document.querySelector('[role="dialog"][aria-modal="true"], dialog[open], [role="menu"], [role="listbox"]')) return;
+      if ((isMacOS() ? event.metaKey : event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        const selection = bodyEditing && bodyInputRef.current ? bodyInputRef.current.value.slice(bodyInputRef.current.selectionStart, bodyInputRef.current.selectionEnd) : '';
+        setFind(current => current ?? { query: selection.length <= 200 ? selection : '', matchCase: false, index: 0, request: 0 });
+        requestAnimationFrame(() => paneRef.current?.querySelector<HTMLInputElement>('.note-find-bar input')?.focus());
+      }
+    };
+    window.addEventListener('keydown', handleFind);
+    return () => window.removeEventListener('keydown', handleFind);
+  }, [note, bodyEditing]);
+  const navigateFind = (direction: number) => setFind(current => current && ({ ...current, index: findCount ? (current.index + direction + findCount) % findCount : 0, request: current.request + 1 }));
   const applyAction = (action: MarkdownAction) =>
     applyMarkdownAction(
       bodyInputRef.current,
@@ -101,8 +125,13 @@ export function EditorPane({
       </section>
     );
   return (
-    <section className="editor-pane" data-context-note={note.id} data-sync-editing={bodyEditing ? "true" : undefined}>
+    <section ref={paneRef} className="editor-pane" data-context-note={note.id} data-sync-editing={bodyEditing ? "true" : undefined} onKeyDown={event => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+      if (find) { event.preventDefault(); event.stopPropagation(); closeFind(); }
+      else if (bodyEditing) { event.preventDefault(); event.stopPropagation(); window.dispatchEvent(new Event('scribe:toggle-note-mode')); requestAnimationFrame(() => paneRef.current?.querySelector<HTMLElement>('.editor-body-view')?.focus({ preventScroll: true })); }
+    }}>
       <EditorHeader
+        onFind={() => { setFind(current => current ?? { query: '', matchCase: false, index: 0, request: 0 }); requestAnimationFrame(() => paneRef.current?.querySelector<HTMLInputElement>('.note-find-bar input')?.focus()); }}
         saveStatus={saveStatus}
         reminder={reminder}
         onSetReminder={onSetReminder}
@@ -118,6 +147,7 @@ export function EditorPane({
         onCreateFolder={onCreateFolder}
         onRestore={() => onRestoreNote(note.id)}
       />
+      {find && <NoteFindBar value={find} count={findCount} onChange={setFind} onNavigate={navigateFind} onClose={closeFind}/>}
       {bodyEditing && !isTrash && (
         <EditorToolbar
           editModeShortcut={editModeShortcut}
@@ -127,6 +157,8 @@ export function EditorPane({
         />
       )}
       <NoteBodyEditor
+        find={find}
+        onFindCount={setFindCount}
         editModeShortcut={editModeShortcut}
         onEndEdit={() => setBodyEditing(false)}
         value={note.body}

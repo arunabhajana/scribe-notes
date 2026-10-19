@@ -4,6 +4,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMemo, useState } from "react";
 import "./linkPreviews.css";
 import { openingCodeFence, closesCodeFence, compactCodeBlock, type CodeFence } from '../../features/notes/codeFences';
+import { highlightMarkdown } from '../../features/notes/findText';
 
 function escapeHtml(value: string) {
   return value
@@ -128,13 +129,17 @@ function markdownToHtml(markdown: string, tasksInteractive: boolean) {
 export function MarkdownPreview({
   value,
   onToggleTask,
+  findQuery = '', findMatchCase = false,
 }: {
   value: string;
   onToggleTask?: (lineIndex: number, checked: boolean) => void;
+  findQuery?: string;
+  findMatchCase?: boolean;
 }) {
   const [linkError, setLinkError] = useState("");
   const tasksInteractive = Boolean(onToggleTask);
-  const html = useMemo(() => markdownToHtml(value, tasksInteractive), [value, tasksInteractive]);
+  const baseHtml = useMemo(() => markdownToHtml(value, tasksInteractive), [value, tasksInteractive]);
+  const html = useMemo(() => highlightMarkdown(baseHtml, findQuery, findMatchCase), [baseHtml, findQuery, findMatchCase]);
   if (!value.trim())
     return (
       <div className="markdown-preview-empty">

@@ -1,3 +1,4 @@
+import { usePopupKeyboard } from '../../hooks/usePopupKeyboard';
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../Icon";
 import type { AccountProfile } from "../../features/auth/accountProfile";
@@ -15,6 +16,7 @@ export function ProfileMenu({
 }) {
     const [open, setOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
+    const menuKeys = usePopupKeyboard(menuRef, open, setOpen);
     const initials = profile.displayName.trim().charAt(0).toUpperCase() || "A";
 
     useEffect(() => {
@@ -23,7 +25,7 @@ export function ProfileMenu({
             if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
         };
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setOpen(false);
+            if (event.key === "Escape" && !event.defaultPrevented) { event.preventDefault(); setOpen(false); menuRef.current?.querySelector<HTMLButtonElement>("button[aria-haspopup]")?.focus(); }
         };
         document.addEventListener("pointerdown", closeOnPointerDown);
         document.addEventListener("keydown", closeOnEscape);
@@ -34,7 +36,7 @@ export function ProfileMenu({
     }, [open]);
 
     return (
-        <div className="profile-menu-wrap" ref={menuRef}>
+        <div className="profile-menu-wrap" ref={menuRef} onKeyDown={menuKeys}>
             <button
                 className={`icon-button profile-menu ${collapsed ? "profile-menu-avatar" : ""}`}
                 aria-label="Account menu"

@@ -1,5 +1,6 @@
+import { usePopupKeyboard } from '../../hooks/usePopupKeyboard';
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, Folder, FolderPlus, Pencil, RotateCcw } from "lucide-react";
+import { Bell, ChevronDown, Folder, FolderPlus, Pencil, RotateCcw, Search } from "lucide-react";
 import { formatReminderTime, type NoteReminder } from "../../features/reminders/reminderTypes";
 import type { Note, NoteFolder } from "../../types/note";
 import { Icon } from "../Icon";
@@ -21,6 +22,7 @@ export function EditorHeader({
   onRestore,
   reminder,
   onSetReminder,
+  onFind,
 }: {
   saveStatus?: "saved" | "saving" | "failed";
   note: Note;
@@ -36,8 +38,11 @@ export function EditorHeader({
   onRestore: () => void;
   reminder?: NoteReminder;
   onSetReminder: () => void;
+  onFind?: () => void;
 }) {
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const folderRoot = useRef<HTMLDivElement>(null);
+  const folderKeys = usePopupKeyboard(folderRoot, folderMenuOpen, setFolderMenuOpen);
   const [writingPreferences] = useWritingPreferences();
   const [titleEditing, setTitleEditing] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +64,7 @@ export function EditorHeader({
             onBlur={() => setTitleEditing(false)}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === "Escape") {
+                event.preventDefault(); event.stopPropagation();
                 event.preventDefault();
                 event.currentTarget.blur();
               }
@@ -89,7 +95,7 @@ export function EditorHeader({
       </div>
       <div className="editor-actions">
         {!note.deletedAt && (
-          <div className="editor-folder-picker">
+          <div className="editor-folder-picker" ref={folderRoot} onKeyDown={folderKeys}>
             <button
               type="button"
               className={`editor-folder-trigger ${folderMenuOpen ? "is-open" : ""}`}
@@ -175,6 +181,7 @@ export function EditorHeader({
           </div>
         )}
         <div className="editor-note-tools">
+        {onFind && <button type="button" className="action-button" onClick={onFind} aria-label="Find in note" data-tooltip="Find in note · Ctrl+F"><Search size={15}/></button>}
         {!note.deletedAt && (
           <button className={`action-button reminder-action${reminder?.dueAt ? " has-reminder" : ""}`} onClick={onSetReminder}
             aria-label={reminder?.dueAt ? "Edit reminder" : "Set reminder"}
