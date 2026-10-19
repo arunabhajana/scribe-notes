@@ -21,10 +21,12 @@ import {
 } from "lucide-react";
 import type { NoteFolder } from "../../types/note";
 import { EditorToolbar, type MarkdownAction } from "../editor/EditorToolbar";
-import { applyMarkdownAction, continueMarkdownList } from "../editor/markdownFormatting";
+import { applyMarkdownAction, continueMarkdownList, indentCode } from "../editor/markdownFormatting";
 import { MarkdownPreview } from "../editor/MarkdownPreview";
 import { setMarkdownTaskCheckedAtLine } from "../../features/notes/markdownTasks";
 import { isMacOS } from "../../features/shortcuts/keyboardShortcuts";
+import { usePopupKeyboard } from '../../hooks/usePopupKeyboard';
+import { pasteMarkdown } from '../editor/textareaEdit';
 import { keepCaretVisible } from '../editor/keepCaretVisible';
 
 type NoteDraft = {
@@ -57,6 +59,9 @@ export function NewNoteComposer({
   const [pinned, setPinned] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const folderRoot = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const folderKeys = usePopupKeyboard(folderRoot, folderMenuOpen, setFolderMenuOpen);
   const [preview, setPreview] = useState(false);
   const bodyInputRef = useRef<HTMLTextAreaElement>(null);
   const bodyScrollRef = useRef<HTMLDivElement>(null);
@@ -76,11 +81,17 @@ export function NewNoteComposer({
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !minimized) onClose();
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || minimized) return;
+      event.preventDefault();
+      if (folderMenuOpen) { setFolderMenuOpen(false); folderRoot.current?.querySelector<HTMLButtonElement>('button[aria-haspopup]')?.focus(); }
+      else {
+        if (title.trim() || body.trim()) onDiscard({ title, body, folderId, pinned });
+        onClose();
+      }
     };
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [minimized, onClose]);
+  }, [minimized, onClose, folderMenuOpen, title, body, folderId, pinned, onDiscard]);
 
   useEffect(() => {
     const restoreDraft = (event: Event) => {
@@ -130,6 +141,7 @@ export function NewNoteComposer({
   ) => {
     scheduleCaretScroll();
     continueMarkdownList(event, setBody);
+    indentCode(event, setBody);
     if (!(isMacOS() ? event.metaKey : event.ctrlKey)) return;
     const key = event.key.toLowerCase();
     const action: MarkdownAction | null =
@@ -159,11 +171,17 @@ export function NewNoteComposer({
       onClick={minimizeOnBackdrop}
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      <form
+      <form ref={formRef} onKeyDown={event => {
+        if (event.key !== 'Tab' || minimized || event.defaultPrevented) return;
+        const elements = [...formRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex="0"]') ?? []].filter(element => element.getClientRects().length > 0);
+        const first = elements[0], last = elements.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }}
         className="composer-window"
         onSubmit={submit}
         role="dialog"
-        aria-modal="true"
+        aria-modal={!minimized}
         aria-label="Create a Note"
       >
         <header className="composer-header">
@@ -194,8 +212,8 @@ export function NewNoteComposer({
               type="button"
               className="composer-control composer-close"
               onClick={discardOrKeepDraft}
-              aria-label="Discard draft"
-              data-tooltip="Discard draft"
+              aria-label="Close and keep as draft"
+              data-tooltip="Close and keep as draft · Escape"
             >
               <X size={14} />
             </button>
@@ -205,7 +223,7 @@ export function NewNoteComposer({
         <div ref={bodyScrollRef} className="composer-body">
           <div className="composer-folder-row">
             <label>Folder</label>
-            <div className="composer-folder-picker">
+            <div className="composer-folder-picker" ref={folderRoot} onKeyDown={folderKeys}>
               <button
                 type="button"
                 className={`composer-folder-trigger ${folderMenuOpen ? "is-open" : ""}`}
@@ -282,20 +300,21 @@ export function NewNoteComposer({
                 setBody((current) => setMarkdownTaskCheckedAtLine(current, lineIndex, checked));
               }} />
             </div>
-          ) : (
-            <textarea
+          ) : null}
+            <textarea hidden={preview}
               ref={bodyInputRef}
               className="composer-content-input"
               data-tour="note-content"
               value={body}
               onChange={(event) => { setBody(event.target.value); scheduleCaretScroll(); }}
               onCompositionEnd={scheduleCaretScroll}
+              onPaste={event => { pasteMarkdown(event, setBody); scheduleCaretScroll(); }}
               onKeyDown={handleFormattingKeyDown}
               placeholder="Start writing..."
               aria-label="Note content (Markdown)"
+              aria-description="Inside a fenced code block, Tab indents and Shift+Tab unindents. Escape keeps your work as a draft and closes."
               spellCheck={writingPreferences.spellcheck}
             />
-          )}
         </div>
 
         <footer className="composer-footer">

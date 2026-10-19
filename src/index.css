@@ -32,3 +32,13 @@ button {
 ::selection {
   background: #6052df88;
 }
+
+/* One visible keyboard focus treatment across controls and custom widgets. */
+:root :is(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent, #9d89ff);
+  outline-offset: 3px;
+}
+:root :is(input, textarea):focus-visible { outline-offset: 1px; }
+@media (forced-colors: active) {
+  :root :is(button, a, input, textarea, select, [tabindex]):focus-visible { outline-color: Highlight; }
+}

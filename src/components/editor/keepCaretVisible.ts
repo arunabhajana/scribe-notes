@@ -14,7 +14,8 @@ export function keepCaretVisible(input: HTMLTextAreaElement, pane: HTMLElement) 
   marker.textContent = "\u200b";
   mirror.append(marker);
   // Include the suffix so wrapping at the caret matches the real textarea.
-  mirror.append(document.createTextNode(input.value.slice(offset)));
+  const nextLine = input.value.indexOf('\n', offset);
+  mirror.append(document.createTextNode(input.value.slice(offset, nextLine < 0 ? input.value.length : nextLine)));
   document.body.append(mirror);
   const caretY = marker.getBoundingClientRect().top - mirror.getBoundingClientRect().top;
   mirror.remove();

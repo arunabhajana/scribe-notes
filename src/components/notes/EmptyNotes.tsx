@@ -5,11 +5,13 @@ export function EmptyNotes({
     isTrash,
     onCreateNote,
     newNoteShortcut,
+    filtered = false,
 }: {
     search: string;
     isTrash: boolean;
     onCreateNote: () => void;
     newNoteShortcut: string;
+    filtered?: boolean;
 }) {
     return (
         <div className="empty-notes">
@@ -17,14 +19,14 @@ export function EmptyNotes({
                 <Icon name={isTrash ? "trash" : "note"} size={21} />
             </div>
             <strong>
-                {search
+                {search || filtered
                     ? "No Notes found"
                     : isTrash
                         ? "Trash is empty"
                         : "No Notes here yet"}
             </strong>
             <span>
-                {search ? "Try another search term." : "Create a Note to get started."}
+                {filtered ? 'Try another search or clear the filters above.' : search ? "Try another search term." : isTrash ? 'Notes moved to Trash appear here.' : "Create a Note to get started."}
             </span>
             {!isTrash && (
                 <button

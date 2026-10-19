@@ -1,4 +1,7 @@
 import { VirtualNoteList } from "./VirtualNoteList";
+import { SearchFilters } from './SearchFilters';
+import { SelectionHint } from './SelectionHint';
+import type { NoteSearchFilters } from '../../features/notes/noteSearch';
 import { type ReactNode } from "react";
 import { useNoteSelection } from "./useNoteSelection";
 import { useContextMenu, type ContextMenuItem } from "../context-menu/contextMenuState";
@@ -18,12 +21,13 @@ import {
   type ShortcutBindings,
 } from "../../features/shortcuts/keyboardShortcuts";
 
-const NoteRow = memo(function NoteRow({ note, folderConfig, selected, reminder, onSaveDraft, onSelectNote, onTogglePinned, onEditReminder }: {
+const NoteRow = memo(function NoteRow({ note, folderConfig, selected, reminder, onSaveDraft, onSelectNote, onTogglePinned, onEditReminder, search }: {
+  search: string;
   note: Note; folderConfig?: NoteFolder; selected: boolean; reminder?: NoteReminder;
   onSaveDraft: (id: string) => void; onSelectNote: (id: string) => void;
   onTogglePinned: (id: string) => void; onEditReminder: (id: string) => void;
 }) {
-  return <NoteCard note={note} folderConfig={folderConfig} selected={selected} reminder={reminder}
+  return <NoteCard note={note} folderConfig={folderConfig} selected={selected} reminder={reminder} search={search}
     onSelect={() => { if (note.isDraft && !note.deletedAt) onSaveDraft(note.id); onSelectNote(note.id); }}
     onTogglePinned={() => onTogglePinned(note.id)} onEditReminder={() => onEditReminder(note.id)} />;
 });
@@ -35,6 +39,7 @@ export function NotesPane({
   section,
   folder,
   search,
+  searchFilters, onSearchFiltersChange,
   onSaveDraft,
   onSelectNote,
   onTogglePinned,
@@ -59,6 +64,8 @@ export function NotesPane({
   section: NoteSection;
   folder: string;
   search: string;
+  searchFilters: NoteSearchFilters;
+  onSearchFiltersChange: (value: NoteSearchFilters) => void;
   onSaveDraft: (id: string) => void;
   onSelectNote: (id: string) => void;
   onTogglePinned: (id: string) => void;
@@ -92,7 +99,7 @@ export function NotesPane({
     openContextMenu(x, y, items, target);
   };
   const foldersById = useMemo(() => new Map(folders.map(item => [item.id, item])), [folders]);
-  const renderNote = (note: Note) => <NoteRow reminder={reminders[note.id]} onEditReminder={onEditReminder} note={note} folderConfig={note.folderId ? foldersById.get(note.folderId) : undefined} selected={selection.explicit ? selection.selected.has(note.id) : selectedId === note.id} onSaveDraft={onSaveDraft} onSelectNote={openNote} onTogglePinned={onTogglePinned}/>;
+  const renderNote = (note: Note) => <NoteRow search={search} reminder={reminders[note.id]} onEditReminder={onEditReminder} note={note} folderConfig={note.folderId ? foldersById.get(note.folderId) : undefined} selected={selection.explicit ? selection.selected.has(note.id) : selectedId === note.id} onSaveDraft={onSaveDraft} onSelectNote={openNote} onTogglePinned={onTogglePinned}/>;
   const title =
     section === "drafts"
       ? "Drafts"
@@ -127,7 +134,7 @@ export function NotesPane({
       const target = event.target as HTMLElement;
       if (!target.closest('.notes-scroll') || target.closest('input, textarea, select')) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') { event.preventDefault(); event.stopPropagation(); selection.replace(notes.map(note => note.id)); }
-      if (event.key === 'Escape' && chosen.length > 1) { event.preventDefault(); event.stopPropagation(); selection.clear(); }
+      if (event.key === 'Escape' && selection.explicit) { event.preventDefault(); event.stopPropagation(); selection.clear(); }
       if ((event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') && chosen.length > 1) {
         event.preventDefault(); event.stopPropagation(); const rect = target.getBoundingClientRect(); showSelectionMenu(rect.left + 20, rect.top + 20, target);
       }
@@ -150,10 +157,11 @@ export function NotesPane({
         </button>
       </header>
       <div className="notes-sort-row">
-        <span>Sort by</span>
+        <SearchFilters value={searchFilters} onChange={onSearchFiltersChange}/>
         <NoteSortDropdown value={sortOrder} onChange={onSortChange} />
       </div>
-      {loading ? <div className="notes-scroll"><NotesSkeleton /></div> : notes.length === 0 ? <div className="notes-scroll"><EmptyNotes search={search} isTrash={section === "trash"} onCreateNote={onCreateNote} newNoteShortcut={formatShortcut(shortcuts.newNote)}/></div> : <VirtualNoteList notes={notes} selectedId={selectedId} selectedIds={selection.explicit ? chosen : selectedId ? [selectedId] : []} onDragSelection={selection.replace}>{renderNote}</VirtualNoteList>}
+      {!loading && notes.length > 1 && <SelectionHint/>}
+      {loading ? <div className="notes-scroll"><NotesSkeleton /></div> : notes.length === 0 ? <div className="notes-scroll"><EmptyNotes filtered={searchFilters.pinned || searchFilters.reminder || searchFilters.field !== 'all'} search={search} isTrash={section === "trash"} onCreateNote={onCreateNote} newNoteShortcut={formatShortcut(shortcuts.newNote)}/></div> : <VirtualNoteList notes={notes} selectedId={selectedId} selectedIds={selection.explicit ? chosen : selectedId ? [selectedId] : []} onDragSelection={selection.replace}>{renderNote}</VirtualNoteList>}
       <footer className="list-footer">
         <span title={statusDetail}>
           <Icon name="clock" size={13} />{" "}

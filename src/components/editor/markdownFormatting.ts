@@ -1,6 +1,34 @@
+import { editTextarea } from './textareaEdit';
 import type { MarkdownAction } from "./EditorToolbar";
 import type { KeyboardEvent } from "react";
 import { codeFenceFor, openingCodeFence, closesCodeFence, insideCodeFence } from '../../features/notes/codeFences';
+
+export function indentCode(event: KeyboardEvent<HTMLTextAreaElement>, onChange: (value: string) => void) {
+  if (event.key !== 'Tab' || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
+  const input = event.currentTarget, value = input.value;
+  const start = input.selectionStart, end = input.selectionEnd;
+  if (!insideCodeFence(value, start) || !insideCodeFence(value, end)) return;
+  event.preventDefault();
+  if (start === end && !event.shiftKey) {
+    editTextarea(input, value.slice(0, start) + '  ' + value.slice(end), onChange, start + 2);
+    return;
+  }
+  const lineStart = start === 0 ? 0 : value.lastIndexOf('\n', start - 1) + 1;
+  const lastPosition = end > start && value[end - 1] === '\n' ? end - 1 : end;
+  const nextBreak = value.indexOf('\n', lastPosition);
+  const lineEnd = nextBreak < 0 ? value.length : nextBreak;
+  const lines = value.slice(lineStart, lineEnd).split('\n');
+  let firstDelta = 0, totalDelta = 0;
+  const replacement = lines.map((line, index) => {
+    const changed = event.shiftKey ? line.replace(/^(?:\t| {1,2})/, '') : `  ${line}`;
+    const delta = changed.length - line.length;
+    if (index === 0) firstDelta = delta;
+    totalDelta += delta;
+    return changed;
+  }).join('\n');
+  editTextarea(input, value.slice(0, lineStart) + replacement + value.slice(lineEnd), onChange,
+    Math.max(lineStart, start + firstDelta), Math.max(lineStart, end + totalDelta));
+}
 
 export function continueMarkdownList(event: KeyboardEvent<HTMLTextAreaElement>, onChange: (value: string) => void) {
   if (event.key !== "Enter" || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented || event.nativeEvent.isComposing) return;
@@ -27,7 +55,7 @@ export function continueMarkdownList(event: KeyboardEvent<HTMLTextAreaElement>, 
     next = value.slice(0, start) + prefix + value.slice(end);
     caret = start + prefix.length;
   }
-  onChange(next);
+  editTextarea(input, next, onChange, caret);
   requestAnimationFrame(() => {
     if (!input.isConnected) return;
     input.setSelectionRange(caret, caret);
@@ -45,7 +73,7 @@ const inlineDelimiters: Partial<Record<MarkdownAction, [string, string]>> = {
 function trimMarkdownMarkers(value: string, start: number, end: number) {
   let contentStart = start;
   let contentEnd = end;
-  const firstLineStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+  const firstLineStart = start === 0 ? 0 : value.lastIndexOf("\n", start - 1) + 1;
   const prefix = value.slice(firstLineStart, start);
   const listPrefixLength =
     prefix.match(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/)?.[0].length ?? 0;
@@ -89,7 +117,7 @@ export function applyMarkdownAction(
   if (!input) return;
   const start = input.selectionStart;
   const end = input.selectionEnd;
-  const lineStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+  const lineStart = start === 0 ? 0 : value.lastIndexOf("\n", start - 1) + 1;
   const lineEndIndex = value.indexOf("\n", start);
   const lineEnd = lineEndIndex < 0 ? value.length : lineEndIndex;
   const currentLine = value.slice(lineStart, lineEnd);
@@ -123,7 +151,7 @@ export function applyMarkdownAction(
     next = value.slice(0, replaceStart) + insertion + value.slice(replaceEnd);
     selectionStart = replaceStart + (unwrap ? 0 : fence.length + 1);
     selectionEnd = selectionStart + content.length;
-    onChange(next);
+    editTextarea(input, next, onChange, selectionStart, selectionEnd);
     requestAnimationFrame(() => { if (input.isConnected) { input.focus({ preventScroll: true }); input.setSelectionRange(selectionStart, selectionEnd); } });
     return;
   }
@@ -137,7 +165,7 @@ export function applyMarkdownAction(
     next = `${value.slice(0, lineStart)}${replacement}${value.slice(lineEnd)}`;
     selectionStart = lineStart + indent.length + (checked === undefined ? 6 : 0);
     selectionEnd = lineStart + replacement.length;
-    onChange(next);
+    editTextarea(input, next, onChange, selectionStart, selectionEnd);
     requestAnimationFrame(() => {
       input.focus();
       input.setSelectionRange(selectionStart, selectionEnd);
@@ -194,7 +222,7 @@ export function applyMarkdownAction(
     selectionEnd = selectionStart + content.length;
   }
 
-  onChange(next);
+  editTextarea(input, next, onChange, selectionStart, selectionEnd);
   requestAnimationFrame(() => {
     input.focus();
     input.setSelectionRange(selectionStart, selectionEnd);

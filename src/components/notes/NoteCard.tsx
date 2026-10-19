@@ -6,6 +6,8 @@ import { formatReminderTime, type NoteReminder } from "../../features/reminders/
 import "./noteCard.css";
 import { useMemo } from "react";
 import { notePreview } from "../../features/notes/notePreview";
+import { SearchHighlight } from './SearchHighlight';
+import { searchSnippet } from '../../features/notes/noteSearch';
 
 const relativeTime = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 
@@ -17,6 +19,7 @@ export function NoteCard({
   onTogglePinned,
   reminder,
   onEditReminder,
+  search = '',
 }: {
   note: Note;
   folderConfig?: NoteFolder;
@@ -25,6 +28,7 @@ export function NoteCard({
   onTogglePinned: () => void;
   reminder?: NoteReminder;
   onEditReminder: () => void;
+  search?: string;
 }) {
   const preview = useMemo(() => notePreview(note.body), [note.body]);
   const ageSeconds =
@@ -42,6 +46,8 @@ export function NoteCard({
     <article
       data-context-note={note.id}
       role="button"
+      aria-label={note.title || 'Untitled Note'}
+      aria-pressed={selected}
       tabIndex={0}
       onClick={(event) => {
         const target = event.target as HTMLElement;
@@ -60,7 +66,7 @@ export function NoteCard({
       className={`note-card note-card-compact ${selected ? "selected" : ""}`}
     >
       <div className="note-card-title">
-        <h2>{note.title || "Untitled Note"}</h2>
+        <h2><SearchHighlight text={note.title || "Untitled Note"} query={search}/></h2>
         <button
           className={`card-pin ${note.pinned ? "is-pinned" : ""}`}
           onClick={(event) => {
@@ -73,7 +79,7 @@ export function NoteCard({
           <Icon name="pin" size={14} />
         </button>
       </div>
-      {preview.trim() ? (
+      {search.trim() && note.body.trim() ? <p className="note-search-snippet"><SearchHighlight text={searchSnippet(note.body, search)} query={search}/></p> : preview.trim() ? (
         <div className="note-card-preview">
           <MarkdownPreview value={preview} />
         </div>
