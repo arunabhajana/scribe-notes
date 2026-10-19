@@ -55,7 +55,9 @@ const { parseScribeBackup } = await import(await transferModule("portableData", 
 const helper = moduleUrl(ts.transpileModule(helperSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText);
 let source = await readFile(new URL("../src/components/editor/MarkdownPreview.tsx", import.meta.url), "utf8");
 source = source.replace('from "./inlineLinkPreview"', `from "${helper}"`)
-  .replace(/from ['"]\.\.\/\.\.\/features\/notes\/codeFences(?:\.ts)?['"]/, `from "${new URL('../src/features/notes/codeFences.ts', import.meta.url).href}"`)
+  // The renderer is loaded from a data URL here, which cannot resolve relative
+  // imports. Resolve its real note helpers, including newly added ones, to files.
+  .replace(/from ['"]\.\.\/\.\.\/features\/notes\/([\w/-]+)(?:\.ts)?['"]/g, (_match, name) => `from "${new URL(`../src/features/notes/${name}.ts`, import.meta.url).href}"`)
   .replace('import { isTauri } from "@tauri-apps/api/core";', 'const isTauri = () => false;')
   .replace('import { openUrl } from "@tauri-apps/plugin-opener";', 'const openUrl = async () => {};')
   .replace('import "./linkPreviews.css";', '');
