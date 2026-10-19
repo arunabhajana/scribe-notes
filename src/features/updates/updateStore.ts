@@ -15,18 +15,22 @@ type State = {
   downloaded: number; total: number | null; error: string | null; checkedAt: number | null;
   configured: boolean | null; automatic: boolean; toast: boolean; dialog: boolean;
   workspaceId: string | null; localOnly: boolean; notice: string | null; diagnostic: string | null;
+  showChangelog: boolean;
 };
 const read = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
 const write = (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* In-memory controls still work. */ } };
 const checkKey = () => `scribe-updates:last-check:v2:${state.workspaceId ?? 'entry'}`;
 let state: State = { phase: 'idle', version: null, summary: '', changelog: null, downloaded: 0, total: null,
   error: null, checkedAt: null, configured: null, automatic: false, toast: false, dialog: false,
-  workspaceId: null, localOnly: false, notice: null, diagnostic: null };
+  workspaceId: null, localOnly: false, notice: null, diagnostic: null, showChangelog: false };
 const listeners = new Set<() => void>();
 let update: Update | null = null;
 let busy = false;
 let scopeRevision = 0;
-const cooldown = 6 * 60 * 60 * 1000;
+export const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000;
+// In-memory throttling permits a fresh check on every application launch.
+// Persisted timestamps from the previous session must not suppress startup.
+let lastAutomaticAttempt = 0;
 function patch(next: Partial<State>) { state = { ...state, ...next }; listeners.forEach(listener => listener()); }
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 export function useUpdates() { return useSyncExternalStore(subscribe, () => state); }
@@ -37,22 +41,25 @@ export const updateActions = {
     if (state.workspaceId === workspaceId && state.localOnly === localOnly && state.automatic === automatic) return;
     scopeRevision++;
     const changed = state.workspaceId !== workspaceId || state.localOnly !== localOnly;
+    if (changed) lastAutomaticAttempt = 0;
     patch({ workspaceId, localOnly, automatic, ...(changed ? { error: null, notice: null, diagnostic: null, checkedAt: null, toast: false } : {}) });
   },
-  async check(manual = true) {
-    if (busy || state.phase === 'ready' || state.phase === 'installing') return;
+  async check(manual = true, fresh = false) {
+    if (busy) return false;
+    if (state.phase === 'ready' || state.phase === 'installing') return;
     if (!isTauri()) { if (manual) patch({ configured: false, error: null, diagnostic: null, notice: 'Update checks are available in the installed Windows app.' }); return; }
     if (!navigator.onLine) { if (manual) patch({ error: 'You’re offline. Connect to the internet to check for updates. Your local notes are still available.', notice: null, diagnostic: null }); return; }
     if (!manual) {
       if (!state.automatic) return;
-      const last = Number(read(checkKey()));
-      if (Number.isFinite(last) && last > 0 && Date.now() - last >= 0 && Date.now() - last < cooldown) return;
+      const age = Date.now() - lastAutomaticAttempt;
+      if (!fresh && lastAutomaticAttempt > 0 && age >= 0 && age < UPDATE_CHECK_INTERVAL) return;
     }
     busy = true;
     const revision = scopeRevision;
     const requestCheckKey = checkKey();
     const previousPhase = state.phase;
     const started = performance.now();
+    lastAutomaticAttempt = Date.now();
     let stage = 'configuration';
     patch({ phase: 'checking', error: null, notice: null, diagnostic: null });
     try {
@@ -74,19 +81,27 @@ export const updateActions = {
         const log = updateChangelog(candidate.rawJson.changelog, candidate.version);
         patch({ phase: 'available', version: candidate.version, summary: log?.summary ?? candidate.body?.slice(0, 240) ?? 'A new version of Scribe is ready.',
           changelog: log, checkedAt: now, toast: manual || read('scribe-updates:later:v1') !== candidate.version });
+        if (read('scribe-updates:later:v1') !== candidate.version) {
+          // Native delivery obeys desktop notification settings and only shows
+          // a banner in the background. A delivery failure never breaks updates.
+          void invoke('show_update_notification', { version: candidate.version, summary: state.summary.slice(0, 1000) }).catch(() => undefined);
+        }
       } else patch({ phase: 'idle', version: null, summary: '', changelog: null, toast: false, checkedAt: now });
     } catch (cause) {
       if (revision !== scopeRevision) { patch({ phase: previousPhase }); return; }
       const failure = updateCheckFailure(cause);
       patch({ phase: previousPhase, error: failure.kind === 'error' ? failure.message : null, notice: failure.kind === 'info' ? failure.message : null,
         diagnostic: formatUpdateDiagnostic(cause, performance.now() - started, stage, state.localOnly, state.automatic) });
-    } finally { busy = false; }
+    } finally {
+      busy = false;
+      void invoke('set_update_check_schedule', { enabled: Boolean(state.workspaceId && state.automatic) }).catch(() => undefined);
+    }
   },
   later() {
     if (state.version) write('scribe-updates:later:v1', state.version);
     patch({ toast: false, dialog: false });
   },
-  open() { patch({ dialog: true, toast: false }); },
+  open(showChangelog = false) { patch({ dialog: true, toast: false, showChangelog }); },
   close() { if (state.phase !== 'installing') patch({ dialog: false }); },
   setAutomatic(value: boolean, expectedWorkspaceId = state.workspaceId) {
     if (!expectedWorkspaceId || state.workspaceId !== expectedWorkspaceId) throw new Error('The workspace changed. Reopen About to change this preference.');

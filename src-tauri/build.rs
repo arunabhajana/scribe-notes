@@ -8,6 +8,8 @@ fn main() {
             "get_device_info",
             "updater_configured",
             "check_app_update",
+            "set_update_check_schedule",
+            "show_update_notification",
             "prepare_app_update",
             "finish_app_update",
             "save_export_file",

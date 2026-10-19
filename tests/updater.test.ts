@@ -32,6 +32,55 @@ describe('updater lifecycle', () => {
     await updateActions.check(true);
     expect(mocks.check).toHaveBeenCalledTimes(2);
   });
+  it('checks on startup even when an earlier session checked recently', async () => {
+    localStorage.setItem('scribe-updates:last-check:v2:online-test', String(Date.now()));
+    mocks.check.mockResolvedValue(null);
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('online-test', false);
+    await updateActions.check(false);
+    expect(mocks.check).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith('set_update_check_schedule', { enabled: true });
+  });
+  it('allows the next automatic check after thirty minutes', async () => {
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    mocks.check.mockResolvedValue(null);
+    const { updateActions, UPDATE_CHECK_INTERVAL } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('online-test', false);
+    await updateActions.check(false);
+    clock.mockReturnValue(now + UPDATE_CHECK_INTERVAL - 1);
+    await updateActions.check(false);
+    expect(mocks.check).toHaveBeenCalledOnce();
+    clock.mockReturnValue(now + UPDATE_CHECK_INTERVAL);
+    await updateActions.check(false);
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+  });
+  it('checks freshly on reopening but never bypasses offline-profile consent', async () => {
+    mocks.check.mockResolvedValue(null);
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    updateActions.setWorkspace('online-test', false);
+    await updateActions.check(false);
+    await updateActions.check(false, true);
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+    updateActions.setWorkspace('offline-test', true);
+    await updateActions.check(false, true);
+    expect(mocks.check).toHaveBeenCalledTimes(2);
+  });
+  it('requests a native notification without downloading or installing', async () => {
+    const update = candidate(); mocks.check.mockResolvedValue(update);
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    await updateActions.check();
+    expect(mocks.invoke).toHaveBeenCalledWith('show_update_notification', { version: '1.2.3', summary: 'Brief update' });
+    expect(update.download).not.toHaveBeenCalled();
+    expect(update.install).not.toHaveBeenCalled();
+  });
+  it('does not prompt natively again for an update deferred with Later', async () => {
+    const update = candidate(); mocks.check.mockResolvedValue(update);
+    const { updateActions } = await import('../src/features/updates/updateStore');
+    await updateActions.check(); updateActions.later(); mocks.invoke.mockClear();
+    await updateActions.check();
+    expect(mocks.invoke).not.toHaveBeenCalledWith('show_update_notification', expect.anything());
+  });
   it('never installs from a check or Later; the pending update remains downloadable', async () => {
     const update = candidate(); mocks.check.mockResolvedValue(update);
     const { updateActions } = await import('../src/features/updates/updateStore');

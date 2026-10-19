@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "version": "0.3.1",
+  "title": "Stay up to date, even in the background",
+  "summary": "More timely update checks and useful Windows notifications make new Scribe releases easier to discover.",
+  "sections": [
+    {
+      "type": "feature",
+      "items": [
+        "When desktop notifications are enabled, updates found while Scribe is in the background can show a Windows notification with Install update and View changelog buttons.",
+        "Notification actions bring Scribe forward to review the update, read its changes or continue installation. Downloads and restarting still require your confirmation."
+      ]
+    },
+    {
+      "type": "improved",
+      "items": [
+        "With automatic checks enabled, Scribe checks on every launch and when explicitly reopened from its shortcut or tray, then every 30 minutes while it stays running.",
+        "Background checks continue when Scribe is hidden in the system tray. Returning online or bringing Scribe back after sleep catches up when a check is due.",
+        "Update notifications avoid repeated alerts for the same version. Choosing Later keeps that update available in About without prompting again for it.",
+        "Offline profiles still start with automatic checks off. The explanation in About now clearly describes the schedule and background notifications."
+      ]
+    },
+    {
+      "type": "fixed",
+      "items": [
+        "A check made in an earlier session no longer delays update checks for several hours after reopening Scribe.",
+        "Opening an older update notification still provides a useful screen to check the latest release, even if its details are no longer loaded."
+      ]
+    }
+  ]
+}
